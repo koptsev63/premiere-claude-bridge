@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Claude Bridge</title>
+<style>
+  body { font-family: -apple-system, system-ui, "Segoe UI", sans-serif; background: #232323; color: #d4d4d4; margin: 0; padding: 12px; font-size: 13px; }
+  h2 { font-size: 14px; margin: 0 0 10px 0; font-weight: 600; }
+  .status { padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; font-size: 12px; }
+  .connected { background: #1f3d1f; color: #7fdf7f; }
+  .disconnected { background: #3d1f1f; color: #ff8080; }
+  .connecting { background: #3d3818; color: #e0c060; }
+  .row { display: flex; gap: 6px; margin-bottom: 4px; align-items: center; font-size: 11px; }
+  .label { opacity: 0.55; min-width: 60px; }
+  .val { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .log { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; opacity: 0.7; max-height: 100px; overflow-y: auto; padding: 6px; background: #181818; border-radius: 3px; margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+  button { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3d3d3d; padding: 4px 10px; border-radius: 3px; font-size: 11px; cursor: pointer; margin-right: 4px; }
+  button:hover { background: #3a3a3a; }
+</style>
+</head>
+<body>
+  <h2>Claude Bridge</h2>
+  <div id="status" class="status connecting">Loading host script…</div>
+  <div class="row"><span class="label">WS:</span><span id="ws" class="val">ws://127.0.0.1:9876</span></div>
+  <div class="row"><span class="label">Calls:</span><span id="calls" class="val">0</span></div>
+  <div class="row"><span class="label">Last:</span><span id="last" class="val">—</span></div>
+  <div class="row" style="margin-top:8px"><button id="reconnect">Reconnect</button><button id="ping">Ping host</button></div>
+  <div id="log" class="log"></div>
+  <script src="js/CSInterface.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

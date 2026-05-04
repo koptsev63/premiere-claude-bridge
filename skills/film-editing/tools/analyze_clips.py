@@ -182,7 +182,7 @@ def whisper_transcribe(src: Path, max_chars: int = 300) -> str:
     return ""
 
 
-def process_clip(src: Path, out_dir: Path, do_whisper: bool) -> dict:
+def process_clip(src: Path, out_dir: Path, do_whisper: bool, do_horizon: bool = True) -> dict:
     name = src.stem
     info = probe(src)
     dur = info.get("duration", 0)
@@ -209,6 +209,17 @@ def process_clip(src: Path, out_dir: Path, do_whisper: bool) -> dict:
         "strip": strip_path.name,
     }
 
+    if do_horizon:
+        try:
+            from horizon_detect import estimate_tilt, correction_filter
+            tilt = estimate_tilt(src, n_samples=3)
+            rec["horizon_tilt_deg"] = tilt
+            if tilt is not None:
+                fix = correction_filter(tilt, threshold_deg=0.5)
+                rec["horizon_correction_filter"] = fix  # None if within threshold
+        except ImportError:
+            rec["horizon_tilt_deg"] = None  # opencv not installed
+
     if do_whisper and has_voice_quick(src, audio.get("audio_peak_db")):
         rec["speech_text"] = whisper_transcribe(src)
     else:
@@ -222,6 +233,13 @@ def write_html(records: list, out_path: Path, title: str = "Clip Log"):
     for r in sorted(records, key=lambda x: x.get("name", "")):
         speech = r.get("speech_text") or ""
         speech_html = f'<div class="speech">🎙 {speech[:160]}…</div>' if speech else ""
+        tilt = r.get("horizon_tilt_deg")
+        if tilt is None:
+            tilt_html = ""
+        elif abs(tilt) < 0.5:
+            tilt_html = f'<span class="tilt-ok" title="within ±0.5°">⊟ {tilt:+.1f}°</span>'
+        else:
+            tilt_html = f'<span class="tilt-bad" title="needs correction">⚠ tilt {tilt:+.1f}°</span>'
         rows.append(f"""
         <div class="card">
           <div class="head">
@@ -233,7 +251,7 @@ def write_html(records: list, out_path: Path, title: str = "Clip Log"):
           <div class="meta">
             <span>motion: <b>{r.get('motion_score', 0)}</b></span>
             <span>peak: <b>{r.get('audio_peak_db', 'n/a')} dB</b> @ {r.get('audio_peak_time_sec', 'n/a')}s</span>
-            <span>mean: {r.get('audio_mean_db', 'n/a')} dB</span>
+            <span>{tilt_html}</span>
           </div>
           {speech_html}
         </div>
@@ -254,6 +272,8 @@ def write_html(records: list, out_path: Path, title: str = "Clip Log"):
   .strip {{ width:100%; height:auto; margin-top:6px; border-radius:4px; display:block; }}
   .meta {{ display:flex; justify-content:space-between; gap:8px; font-size:11px; opacity:0.75; margin-top:8px; flex-wrap:wrap; }}
   .meta b {{ color:#fc6; }}
+  .tilt-ok {{ color:#7c7; font-family:monospace; }}
+  .tilt-bad {{ color:#f96; font-family:monospace; font-weight:600; }}
   .speech {{ font-size:11px; color:#aef; margin-top:6px; padding:6px; background:#0d2030; border-radius:3px; line-height:1.4; }}
 </style></head><body>
 <h1>{title} · {len(records)} clips</h1>

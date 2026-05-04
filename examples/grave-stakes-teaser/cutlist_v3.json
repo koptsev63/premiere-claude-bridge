@@ -1,0 +1,31 @@
+{
+  "sequence_name": "Teaser_v3_DataDriven",
+  "preset": "AVCHD 1080p25.sqpreset",
+  "fps": 25,
+  "resolution": "1920x1080",
+  "total_duration_sec": 61,
+  "cuts": [
+    {"clip": "00118.MTS", "in": 2, "out": 8, "offset": 0, "label": "HOOK-field-breath"},
+    {"clip": "00149.MTS", "in": 4, "out": 9, "offset": 6, "label": "REVEAL-start"},
+    {"clip": "00130.MTS", "in": 0.5, "out": 5.5, "offset": 11, "label": "COMEDY-shirt"},
+    {"clip": "00185.MTS", "in": 12, "out": 15, "offset": 16, "label": "action-185 (#2 motion-rank)"},
+    {"clip": "00215.MTS", "in": 46, "out": 49, "offset": 19, "label": "action-Paraclitos (#4)"},
+    {"clip": "00165.MTS", "in": 28, "out": 35, "offset": 22, "label": "CENTER-pit"},
+    {"clip": "00199.MTS", "in": 24, "out": 27, "offset": 29, "label": "pit-followthrough"},
+    {"clip": "00173.MTS", "in": 15, "out": 18, "offset": 32, "label": "STAKES-ambulance (#1 motion-rank)"},
+    {"clip": "00154.MTS", "in": 148, "out": 155, "offset": 35, "label": "BREATH-golden"},
+    {"clip": "00195.MTS", "in": 4, "out": 10, "offset": 42, "label": "EMOTION-interview"},
+    {"clip": "00221.MTS", "in": 3, "out": 8, "offset": 48, "label": "trophy-setup"},
+    {"clip": "00221.MTS", "in": 42, "out": 49, "offset": 53, "label": "PAYOFF-winner"}
+  ],
+  "markers": [
+    {"name": "★ HOOK", "time": 0, "comment": "Establishing"},
+    {"name": "★ COMEDY", "time": 11, "comment": "Krematorij joke"},
+    {"name": "★ ACTION", "time": 16, "comment": "Tight action montage 6s"},
+    {"name": "★ PIT", "time": 22, "comment": "High-angle climax"},
+    {"name": "★ STAKES", "time": 32, "comment": "AMBULANCE - real consequences"},
+    {"name": "★ BREATH", "time": 35, "comment": "Golden hour outro"},
+    {"name": "★ EMOTION", "time": 42, "comment": "Interview close-up"},
+    {"name": "★ PAYOFF", "time": 54, "comment": "Winner = same guy from comedy"}
+  ]
+}

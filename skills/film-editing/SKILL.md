@@ -276,14 +276,34 @@ python3 skills/watch/scripts/watch.py "/path/to/clip.MTS" --start 28 --end 35
 ```
 Then in the editing thread: read the frames, pick the in/out, call `pi.setInPoint(...)` via the bridge.
 
-**Get a real transcript of the interview clip used in Grave Stakes (Hungarian):**
+**Get a real transcript of the interview clip used in Grave Stakes (Hungarian) — three backends, no key needed if you have local whisper:**
+
 ```bash
-# Set GROQ_API_KEY in ~/.config/watch/.env first
-python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --no-frames-mode-not-supported
-# Or just normal call — script returns transcript regardless of frames
+# 1. Local backend (no API key, runs offline). Recommended for non-English:
+python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" \
+    --whisper local --language Hungarian
+
+# 2. Groq cloud (faster, ~$0.0002/min, needs key in ~/.config/watch/.env):
 python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --whisper groq
+
+# 3. OpenAI cloud (slower, ~$0.006/min, needs key):
+python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --whisper openai
+
+# Default (no --whisper flag): tries Groq → OpenAI → local in order.
 ```
+
 The transcript appears in the markdown report. Use the timestamped lines to pick which 6-second slice of the interview lands on the timeline.
+
+**Local backend setup (one-time, zero ongoing cost):**
+
+```bash
+pip install -U openai-whisper
+# Default model is "medium" (~1.5GB, downloaded on first run).
+# Override with: WATCH_LOCAL_WHISPER_MODEL=small  (244MB, faster, decent quality)
+#                WATCH_LOCAL_WHISPER_MODEL=large-v3  (3GB, best, slower)
+```
+
+For Grave Stakes' noisy field-recorded Hungarian, `small --language Hungarian` was tested and produces usable transcripts in ~30s on M-series Mac. `medium` and `large-v3` improve accuracy further but take 2-5× longer.
 
 **Reference-driven cutdown:**
 ```bash
@@ -298,8 +318,13 @@ Claude will return a beat sheet you can encode as a recipe in `skills/trailer-br
 # macOS — auto-installs ffmpeg + yt-dlp via brew
 python3 skills/watch/scripts/setup.py
 
-# Set Whisper API key (Groq preferred — cheaper/faster, handles non-English well)
-echo 'GROQ_API_KEY=...' > ~/.config/watch/.env
+# Pick ONE Whisper backend:
+
+# (a) Free, offline, no key — recommended default. Handles any language well:
+pip install -U openai-whisper
+
+# (b) Cloud (faster for short clips), Groq (cheap) or OpenAI:
+echo 'GROQ_API_KEY=gsk_...' > ~/.config/watch/.env
 chmod 600 ~/.config/watch/.env
 ```
 

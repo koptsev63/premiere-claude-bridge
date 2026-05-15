@@ -40,9 +40,23 @@ def main() -> int:
     )
     ap.add_argument(
         "--whisper",
-        choices=["groq", "openai"],
+        choices=["groq", "openai", "local"],
         default=None,
-        help="Force a specific Whisper backend. Default: prefer Groq, fall back to OpenAI.",
+        help=(
+            "Force a specific Whisper backend. Default order: Groq (key) > OpenAI (key) > local. "
+            "`local` runs openai-whisper offline — no key needed, slower for short clips, "
+            "much better than `whisper-1` on non-English. Requires `pip install openai-whisper`."
+        ),
+    )
+    ap.add_argument(
+        "--language",
+        type=str,
+        default=None,
+        help=(
+            "Language hint for the local backend (ISO-639-1 like `hu`, `ru`, `es`, "
+            "or English name `Hungarian`). Strongly recommended for non-English audio — "
+            "auto-detection is unreliable on noisy field recordings. Ignored by cloud APIs."
+        ),
     )
     args = ap.parse_args()
 
@@ -125,6 +139,7 @@ def main() -> int:
                     work / "audio.mp3",
                     backend=backend,
                     api_key=api_key,
+                    language=args.language,
                 )
                 transcript_segments = filter_range(all_segments, start_sec, end_sec) if focused else all_segments
                 transcript_text = format_transcript(transcript_segments)

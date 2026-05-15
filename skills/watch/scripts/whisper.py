@@ -31,12 +31,33 @@ GROQ_MODEL = "whisper-large-v3"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
 OPENAI_MODEL = "whisper-1"
 
+# Local backend (openai-whisper CLI installed via pip / brew). Zero cost,
+# zero key, works offline. Slower than Groq for short clips, but for any
+# non-English language model >= "medium" produces dramatically better
+# results than the cloud `whisper-1` and is comparable to Groq's
+# `whisper-large-v3`. Override model with WATCH_LOCAL_WHISPER_MODEL env var.
+LOCAL_WHISPER_MODEL = os.environ.get("WATCH_LOCAL_WHISPER_MODEL", "medium")
+LOCAL_WHISPER_BIN = "whisper"  # PEP-8: rely on $PATH lookup
+
+
+def _local_whisper_available() -> bool:
+    """True if `whisper` CLI (openai-whisper) is on PATH."""
+    return shutil.which(LOCAL_WHISPER_BIN) is not None
+
 
 def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, None]:
-    """Return (backend, api_key). Prefers Groq, falls back to OpenAI.
+    """Return (backend, api_key). Order of preference:
+       Groq (cloud, fastest, has key) → OpenAI (cloud, has key) → local (offline).
 
-    If `preferred` is "groq" or "openai", only that backend's key is considered.
+    If `preferred` is "groq", "openai", or "local", only that backend is considered.
+    For the "local" backend we return ("local", "local") as a pseudo-key so the
+    rest of the pipeline can use the same (backend, key) interface.
     """
+    if preferred == "local":
+        if _local_whisper_available():
+            return "local", "local"
+        return None, None
+
     def _from_env(name: str) -> str | None:
         value = os.environ.get(name)
         return value.strip() if value else None
@@ -78,6 +99,10 @@ def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, 
                     break
         if value:
             return backend, value
+
+    # No cloud key found — fall back to local CLI if available.
+    if preferred is None and _local_whisper_available():
+        return "local", "local"
 
     return None, None
 
@@ -240,6 +265,62 @@ def _retry_after(exc: urllib.error.HTTPError) -> float | None:
         return None
 
 
+def transcribe_local(
+    audio_path: Path,
+    work_dir: Path,
+    language: str | None = None,
+    model: str | None = None,
+) -> list[dict]:
+    """Run the openai-whisper CLI locally, parse its JSON output into segments.
+
+    No API key, no network. Slower than Groq for short clips, but for any
+    non-English language the local "medium" or "large-v3" model produces far
+    better results than OpenAI's hosted `whisper-1` and rivals Groq's
+    `whisper-large-v3` for ~zero cost.
+
+    `language`: ISO-639-1 code or English name ("Hungarian", "ru", "es"…).
+                When None, whisper auto-detects (slower, less reliable).
+    `model`: override the model name (default LOCAL_WHISPER_MODEL = medium).
+    """
+    if not _local_whisper_available():
+        raise SystemExit(
+            f"Local whisper backend selected but `{LOCAL_WHISPER_BIN}` is not on PATH. "
+            "Install with: pip install -U openai-whisper  (or `pipx install openai-whisper`)"
+        )
+
+    out_dir = work_dir / "whisper_local"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        LOCAL_WHISPER_BIN,
+        str(audio_path),
+        "--model", model or LOCAL_WHISPER_MODEL,
+        "--output_format", "json",
+        "--output_dir", str(out_dir),
+        "--fp16", "False",  # MPS / CPU safe; FP16 only works on CUDA
+        "--verbose", "False",
+    ]
+    if language:
+        cmd.extend(["--language", language])
+
+    print(f"[watch] running local whisper ({model or LOCAL_WHISPER_MODEL})…", file=sys.stderr)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(
+            f"Local whisper failed: {result.stderr.strip() or result.stdout.strip()}"
+        )
+
+    json_path = out_dir / (audio_path.stem + ".json")
+    if not json_path.exists():
+        raise SystemExit(f"Local whisper produced no JSON at {json_path}")
+
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Local whisper JSON parse failed: {exc}")
+
+    return _segments_from_response(data)
+
+
 def _segments_from_response(data: dict) -> list[dict]:
     """Convert Whisper verbose_json into our {start, end, text} segment format."""
     out: list[dict] = []
@@ -266,23 +347,45 @@ def transcribe_video(
     audio_out: Path,
     backend: str | None = None,
     api_key: str | None = None,
+    language: str | None = None,
 ) -> tuple[list[dict], str]:
-    """Run the full flow: extract audio → upload → parse segments.
+    """Run the full flow: extract audio → transcribe → parse segments.
 
     Returns (segments, backend_used). Raises SystemExit on any failure.
+
+    `language`: optional language hint (ISO-639-1 or English name). Only used
+    by the local backend (cloud APIs auto-detect). Strongly recommended for
+    non-English audio because Whisper's auto-detection is unreliable on noisy
+    field recordings.
     """
     if backend is None or api_key is None:
         detected_backend, detected_key = load_api_key()
         backend = backend or detected_backend
         api_key = api_key or detected_key
 
-    if not backend or not api_key:
+    if not backend:
         setup_py = Path(__file__).resolve().parent / "setup.py"
         raise SystemExit(
-            "No Whisper API key available. Set GROQ_API_KEY (preferred) or OPENAI_API_KEY "
-            "in the environment or in ~/.config/watch/.env. "
+            "No Whisper backend available. Either set GROQ_API_KEY (preferred — fast, cheap) "
+            "or OPENAI_API_KEY in ~/.config/watch/.env, or install the local CLI with "
+            "`pip install openai-whisper` for a free offline fallback. "
             f"Run `python3 {setup_py}` to configure."
         )
+
+    if backend == "local":
+        # Local backend doesn't need a key; pseudo-key from load_api_key.
+        print("[watch] extracting audio for local whisper…", file=sys.stderr)
+        audio_path = extract_audio(video_path, audio_out)
+        size_kb = audio_path.stat().st_size / 1024
+        print(f"[watch] audio: {size_kb:.0f} kB — running local whisper offline…", file=sys.stderr)
+        segments = transcribe_local(audio_path, audio_out.parent, language=language)
+        if not segments:
+            raise SystemExit("Local whisper returned no transcript segments")
+        print(f"[watch] transcribed {len(segments)} segments via local whisper", file=sys.stderr)
+        return segments, f"local ({LOCAL_WHISPER_MODEL})"
+
+    if not api_key:
+        raise SystemExit(f"Whisper backend `{backend}` selected but no API key found.")
 
     print(f"[watch] extracting audio for Whisper ({backend})…", file=sys.stderr)
     audio_path = extract_audio(video_path, audio_out)

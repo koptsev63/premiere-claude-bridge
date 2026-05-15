@@ -96,10 +96,21 @@ def _read_env_key(name: str) -> str | None:
 
 
 def _have_api_key() -> tuple[bool, str | None]:
+    """Detect any usable Whisper backend.
+
+    Order of preference:
+      groq (cloud, fastest, has key) → openai (cloud, has key) → local (offline CLI).
+
+    The "local" backend uses the openai-whisper CLI (`pip install openai-whisper`).
+    No key required, runs offline. Counts as "ready" because /watch can use it
+    without any API setup.
+    """
     if _read_env_key("GROQ_API_KEY"):
         return True, "groq"
     if _read_env_key("OPENAI_API_KEY"):
         return True, "openai"
+    if _which("whisper"):
+        return True, "local"
     return False, None
 
 

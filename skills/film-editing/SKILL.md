@@ -250,7 +250,70 @@ Before designing a cutlist:
 
 ---
 
-## XIV. Reference
+## XIV. Real video perception via the bundled `/watch` skill
+
+The honest limitation called out in §XIII — "the LLM sees stop-frames, not motion" — is **partially closed** by vendoring [bradautomates/claude-video](https://github.com/bradautomates/claude-video) into `skills/watch/`. See `skills/watch/ATTRIBUTION.md` for the full credit.
+
+`/watch` does what our 6-frame motion strip can't:
+- Pulls **30–100 frames** per clip (auto-scaled to duration), not 6
+- Pulls a **timestamped transcript** — native captions if available, Whisper API (Groq or OpenAI) as fallback
+- Lets Claude `Read` every frame as a multimodal image and align to the transcript
+
+### When to use `/watch` from inside an editing session
+
+| Editing task | Without `/watch` | With `/watch` |
+|---|---|---|
+| Verify a candidate cut | one mid-frame thumbnail | `--start ss --end ss+dur` → ~30 frames + transcript over the cut window |
+| Find the decisive moment in a clip | guess from one frame + `audio_peak_time_sec` | scan ~60 frames, hear what's said, pick precisely |
+| Read interview content | broken `tiny` Whisper (see §XIII) | `--whisper groq` runs `whisper-large-v3` (handles Hungarian, Russian, etc.) |
+| Study a reference trailer | n/a | `/watch <youtube-url> "what's the structure?"` |
+
+### Concrete recipes
+
+**Find decisive moment in a clip before placing it:**
+```bash
+python3 skills/watch/scripts/watch.py "/path/to/clip.MTS" --start 28 --end 35
+```
+Then in the editing thread: read the frames, pick the in/out, call `pi.setInPoint(...)` via the bridge.
+
+**Get a real transcript of the interview clip used in Grave Stakes (Hungarian):**
+```bash
+# Set GROQ_API_KEY in ~/.config/watch/.env first
+python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --no-frames-mode-not-supported
+# Or just normal call — script returns transcript regardless of frames
+python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --whisper groq
+```
+The transcript appears in the markdown report. Use the timestamped lines to pick which 6-second slice of the interview lands on the timeline.
+
+**Reference-driven cutdown:**
+```bash
+# Vladimir wants the new teaser to feel like the Sundance trailer for Anora
+python3 skills/watch/scripts/watch.py "https://youtu.be/<anora-trailer>" "describe the cut structure beat by beat with timestamps"
+```
+Claude will return a beat sheet you can encode as a recipe in `skills/trailer-bridge/`.
+
+### Setup (one-time)
+
+```bash
+# macOS — auto-installs ffmpeg + yt-dlp via brew
+python3 skills/watch/scripts/setup.py
+
+# Set Whisper API key (Groq preferred — cheaper/faster, handles non-English well)
+echo 'GROQ_API_KEY=...' > ~/.config/watch/.env
+chmod 600 ~/.config/watch/.env
+```
+
+After that the editing skill can call `/watch` on any clip in the project bin.
+
+### Cost discipline
+
+- Each `/watch` call burns ~30–100 image tokens. On a 108-clip raw folder, watching all of them = ~5 000 frames = significant context pressure.
+- **Don't watch everything.** Use `analyze_clips.py` first (motion + audio + horizon) to rank, then `/watch` only the top 10–15 candidates.
+- For long clips, always use `--start`/`--end` once you know roughly where the action is.
+
+---
+
+## XV. Reference
 
 - Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing*, 2nd ed., Silman-James Press, 2001 (Russian: «В мгновение ока», аудиокнига Кирилла Никитенко 2024)
 - Murch's Sydney lecture (1988) — origin of the Rule of Six

@@ -128,24 +128,42 @@ Encodes Walter Murch's *In the Blink of an Eye* as decision rules:
 - Russian↔English terminology mapping
 
 Plus:
-- `tools/analyze_clips.py` — folder-of-clips → HTML contact sheet with motion scores, audio peaks, 6-frame motion strips per clip. Optional Whisper speech-to-text. Lets the LLM "see" approximate motion through frame strips.
+- `tools/analyze_clips.py` — folder-of-clips → HTML contact sheet with motion scores, audio peaks, **horizon tilt detection**, 6-frame motion strips per clip. Optional Whisper speech-to-text.
+- `tools/horizon_detect.py` — sky-ground segmentation + Hough fallback for per-clip tilt angle, with auto-correction filter generation.
+
+### `watch/` *(vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video), MIT)*
+
+Closes the "stop-frame only" gap of the bridge. Lets Claude actually watch a clip:
+- Downloads via `yt-dlp` (URL) or accepts local path
+- Extracts **30–100 auto-scaled frames** (vs our 6-frame strip)
+- Pulls a **timestamped transcript** — captions or Whisper API (Groq `whisper-large-v3` preferred — handles Hungarian, Russian, Spanish, etc.)
+- Hands frames + transcript to Claude as multimodal input
+
+When designing a teaser, the recommended flow is:
+1. `analyze_clips.py` → cheap pass over the whole folder (motion + audio + horizon)
+2. Pick 10–15 candidates from the HTML contact sheet
+3. `/watch` only those candidates to verify decisive moments and pick precise in/out
+
+See `skills/watch/ATTRIBUTION.md` for credit and `skills/film-editing/SKILL.md` §XIV for the integrated workflow.
 
 ---
 
 ## Honest limitations
 
-The bridge gives Claude full programmatic control of Premiere. But Claude **cannot**:
+The bridge gives Claude full programmatic control of Premiere. With the `watch` skill bundled, the previous "stop-frames only" limitation is **largely closed** — Claude can now extract 30–100 frames per clip and a real transcript. What remains:
 
-- **Watch clips in real time.** Frame extraction gives stop-motion approximation only.
-- **Hear audio for emotional intent.** Whisper transcribes words, not pacing.
-- **Pick the "best" take by micro-expression** — that's a human editor's job.
-- **Invent dramaturgy from raw footage.** Structure must be specified.
+- **Sub-frame timing intuition.** Murch-level "trim 8 frames" calls still need a human editor.
+- **Micro-expression nuance.** Frames + transcript get you 80% of the way; the last 20% is taste.
+- **Dramaturgy from nothing.** Structure must be specified — the skill won't invent the through-line.
 
-Claude **can**:
+Claude **can** (with both skills active):
 - **Auto-log** large folders (108 clips analyzed in ~12 min on M1)
+- **Watch any clip in detail** when needed (`/watch <path> --start ss --end ss+dur`)
 - **Build structural assemblies** from your selects with rule-based pacing
 - **Iterate cutlists** — 3 variants in seconds for you to pick
-- **Handle technical chores** — gap removal, audio normalization, marker placement, AME export, multi-format reformat
+- **Read interview content** in any language (via Groq Whisper)
+- **Study reference trailers** by URL and apply the structure to your material
+- **Handle technical chores** — gap removal, horizon auto-level, audio normalization, marker placement, AME export
 
 Position it as: senior assistant editor + automation, not director's editor.
 

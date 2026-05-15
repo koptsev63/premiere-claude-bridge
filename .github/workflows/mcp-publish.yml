@@ -1,0 +1,57 @@
+name: Publish to MCP Registry
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.2.0)"
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required by mcp-publisher OIDC trust
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VER="${GITHUB_REF#refs/tags/v}"
+            echo "version=$VER" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync server.json version with tag
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          tmp=$(mktemp)
+          jq --arg v "$VER" '.version = $v | .packages[0].version = $v' server.json > "$tmp"
+          mv "$tmp" server.json
+          echo "--- updated server.json ---"
+          cat server.json
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher-linux-amd64" -o /usr/local/bin/mcp-publisher
+          chmod +x /usr/local/bin/mcp-publisher
+          mcp-publisher --version
+
+      - name: Authenticate (GitHub OIDC)
+        run: mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: mcp-publisher publish
+
+      - name: Summary
+        run: |
+          echo "✅ Published premiere-claude-bridge ${{ steps.ver.outputs.version }} to MCP Registry"
+          echo "→ https://registry.modelcontextprotocol.io/"

@@ -1,0 +1,15 @@
+# Analysis tools dependencies
+# Install in a venv: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# Image and contact-sheet generation
+pillow>=10.0.0
+
+# Numerical work + horizon detection
+numpy>=1.26.0
+opencv-python-headless>=4.8.0
+
+# Local Whisper (no API key required)
+openai-whisper>=20231117
+
+# YouTube / web video download (used by skills/watch)
+yt-dlp>=2024.0.0

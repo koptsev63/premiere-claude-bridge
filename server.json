@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.koptsev63/premiere-claude-bridge",
+  "description": "Control Adobe Premiere Pro from Claude Code (or any MCP client). Walter Murch's editing operating system baked in. Auto-log 100+ raw clips in 12 minutes; build sequences via natural-language prompts; analyze clips with motion + audio + horizon detection; watch any clip end-to-end via bundled /watch skill (free local Whisper).",
+  "version": "0.2.0",
+  "repository": {
+    "url": "https://github.com/koptsev63/premiere-claude-bridge",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/koptsev63/premiere-claude-bridge",
+  "packages": [
+    {
+      "registryType": "github",
+      "identifier": "koptsev63/premiere-claude-bridge",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio",
+        "command": "node",
+        "args": ["mcp-server/server.js"]
+      },
+      "runtimeHint": "node",
+      "environmentVariables": [
+        {
+          "name": "PREMIERE_BRIDGE_PORT",
+          "description": "WebSocket port for the CEP panel to connect to (default: 9876)",
+          "default": "9876",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "remotes": []
+}

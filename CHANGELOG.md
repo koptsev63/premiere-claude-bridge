@@ -2,14 +2,18 @@
 
 ## [0.2.0] - 2026-05-15
 
-### Added — `skills/watch/` (vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video))
+### Added — `skills/watch/` (vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video) + extended)
 
 Closes the "stop-frames only" honest limitation called out in v0.1. Lets Claude actually watch a clip:
 
 - `yt-dlp` download (URL or local path)
 - `ffmpeg` frame extraction (~30–100 frames auto-scaled to clip duration, 2 fps cap)
-- Timestamped transcript: native captions if available, else **Groq `whisper-large-v3`** (preferred — handles Hungarian, Russian, etc. — fixes the broken `tiny` model from v0.1) or OpenAI Whisper-1
+- Timestamped transcript via three Whisper backends with auto-fallback:
+  1. **`local` (openai-whisper CLI)** — our extension on top of upstream. **No API key, runs offline, free.** Default model `medium`, override via `WATCH_LOCAL_WHISPER_MODEL=small|large-v3`. Tested on Hungarian field-recorded interview from Grave Stakes — produces real transcript where the v0.1 `tiny` model returned garbage.
+  2. **Groq `whisper-large-v3`** (cloud, fastest, ~$0.0002/min)
+  3. **OpenAI `whisper-1`** (cloud, slowest, ~$0.006/min)
 - Section-focused mode via `--start`/`--end` flags
+- New `--language` flag passed through to local backend (ISO-639-1 or English name; auto-detection is unreliable on noisy field audio)
 - Frames + transcript handed back as multimodal input — Claude `Read`s each frame path
 
 Full attribution preserved in `skills/watch/LICENSE`, `skills/watch/.claude-plugin/plugin.json`, and a new `skills/watch/ATTRIBUTION.md`. The `watch` skill is MIT-licensed and is **not** a fork — clean vendor copy. Upgrade path documented in ATTRIBUTION.

@@ -9,7 +9,7 @@
 [![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](#status)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-![architecture](docs/img/architecture.png)
+![premiere-claude-bridge — control Adobe Premiere Pro from Claude](docs/img/social-card.png)
 
 **What you get in one sentence.** A bridge that lets Claude (or any MCP client) drive Premiere Pro on your Mac/PC the same way an assistant editor would — import dailies, build sequences, set in/out points, place markers, queue AME exports — but driven by natural-language prompts and an opinionated editing skill drawn from Walter Murch's *In the Blink of an Eye*.
 
@@ -221,6 +221,8 @@ Look for [`good first issue`](https://github.com/koptsev63/premiere-claude-bridg
 ---
 
 ## Architecture
+
+![How Claude drives Premiere — three processes, four hops](docs/img/architecture.png)
 
 See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
 

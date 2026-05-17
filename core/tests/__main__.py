@@ -15,6 +15,7 @@ from core.tests import (
     test_cutlist,
     test_probe,
     test_review_loop,
+    test_value,
 )
 
 MODULES = [
@@ -25,6 +26,7 @@ MODULES = [
     test_conform,
     test_probe,
     test_cleanup,
+    test_value,
 ]
 
 

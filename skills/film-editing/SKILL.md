@@ -338,55 +338,76 @@ After that the editing skill can call `/watch` on any clip in the project bin.
 
 ---
 
-## XVI. Universal NLE core + the review loop
+## XVI. The automated pipeline (`core/`)
 
-The editing decision is **NLE-agnostic**. You do not cut "in Premiere" — you
-produce one `Cutlist` and a backend renders it. This is the v1.0 direction
-([epic #6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)); see
-[`core/README.md`](../../core/README.md).
+The editing decision is **NLE-agnostic**: produce one `Cutlist`, a backend
+renders it. The full chain, in order, with the module that owns each step.
+See [`core/README.md`](../../core/README.md), epics
+[#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6) (core) and
+[#7](https://github.com/koptsev63/premiere-claude-bridge/issues/7) (roadmap:
+color, variant board, voice-directed turnkey).
 
-### The one cutlist
+| # | Step | Module | What it gives you |
+|---|---|---|---|
+| 1 | Analyze | `skills/film-editing/tools/analyze_clips.py` | `report.json`: motion, audio_peak(+time), horizon tilt+filter, **shake_score**, duration |
+| 2 | Value ("meat") | `core.value.ValuePool` | composite rank + explicit `meat_tag`; `protected()` is never dropped; `anchors()` reserved for PIT/PAYOFF |
+| 3 | Variants | `core.variants.build_variants` | **DRIVE + BREATH** — two contrasting cuts, both `is_clean` by construction, length-aware. Two, because the director picks the feel |
+| 4 | Conform | `core.conform` | bare clip names → real media on this machine (+ proxy) |
+| 5 | Cleanup | `core.cleanup.corrections_for_cutlist` | horizon leveled whenever flagged; stabilization for **relative outliers only** |
+| 6 | Render | `core.render` | anamorphic-safe geometry (un-squish) + horizon rotate; **never** ffmpeg deshake |
+| 7 | Stabilize | `ResolveAdapter.apply_corrections()` → `TimelineItem.Stabilize()` | Resolve's **own** pro stabilizer (Similarity/Perspective), live in DaVinci |
+| 8 | Backend | `core.probe.select_adapter` / `core.adapters` | Premiere (ExtendScript via bridge) / Resolve (Python API, Studio) / FCPXML (round-trip) |
+| 9 | Review loop | `core.review_loop` | `analyze_cutlist` (deterministic Murch) → `CutlistPatch` → re-render, with `history`/`diff()` |
+| 10 | **QC gate** | `core.qc` | mandatory: geometry no-squish + residual-shake; **fail-closed** |
 
-`core/cutlist.py` — the same JSON shape as
-`examples/grave-stakes-teaser/cutlist_v3.json`, validated (out>in, no
-overlap) and round-tripped losslessly through OpenTimelineIO. Decide the cut
-once here.
+Progress is measured, not vibed: `examples/grave-stakes-teaser/benchmark/`
+scores every version with `analyze_cutlist` (v3 not-clean → v4 clean → v5
+two clean variants).
 
-### Backends (same verb set)
+### The review loop (operationalizes §VIII)
 
-| Backend | How | Constraint |
-|---|---|---|
-| Premiere | `PremiereAdapter` compiles the cutlist to ExtendScript → run via `mcp__premiere__pr_eval_jsx` | the existing bridge |
-| DaVinci Resolve | `ResolveAdapter` — direct official Python API | **Resolve Studio** only; enable external scripting |
-| Final Cut | `FcpxmlAdapter` — writes FCPXML | round-trip (open + export by hand) |
-
-Consult `core.capabilities` before promising an action — a round-trip
-backend cannot be driven live; Resolve's AI tools are not scriptable.
-
-### The review loop — self-critique, NLE-neutral
-
-This operationalizes §VIII ("watch a cut, walk away, watch again") so it runs
-the same regardless of editor:
-
-1. **Assemble.** `core.adapters.get_adapter(<backend>).apply_cutlist(cl)` — or,
-   with no NLE, `core.review_loop.render_rough_cut(cl, media_dir, out)`
-   (ffmpeg, the way the Grave Stakes teasers were actually built).
-2. **Perceive.** Run `ReviewLoop.watch_plan()` — one `/watch` window per cut.
-   `Read` the frames + transcript (§XIV). This is where taste lives — yours.
-3. **Measure.** `core.review_loop.analyze_cutlist(cl)` gives the deterministic
-   Murch arithmetic: the §VII 2-4× ratio rule, §X monotony runs, beat-type
-   pacing flags. Objective inputs to your critique, not a substitute for it.
-4. **Patch.** Encode the fix as a `CutlistPatch` (adjust/drop/reorder/markers).
-   `.apply()` returns a NEW validated cutlist — the old version is kept in
-   `ReviewLoop.history`, so you can `diff()` versions.
-5. **Re-render** the patched cutlist to ANY backend. Repeat until
-   `analysis.is_clean()` AND the emotion (Rule 1) is right — and emotion is
-   never decided by the analyzer, only by you watching it.
+Assemble → **perceive** (`ReviewLoop.watch_plan()` + `/watch`, §XIV — this is
+where taste lives, yours) → **measure** (`analyze_cutlist`: §VII 2-4× ratio,
+§X monotony, beat-pacing — objective inputs, not a substitute for taste) →
+**patch** (`CutlistPatch`, immutable, validated) → re-render to any backend.
+Repeat until `is_clean()` **and** the emotion (Rule 1) is right — emotion is
+never decided by the analyzer.
 
 ```bash
 python -m core.cutlist validate examples/grave-stakes-teaser/cutlist_v3.json
-python -m core.tests        # core suite (cutlist/adapters/review loop)
+python -m core.probe                       # which NLE is reachable now
+python -m core.tests                       # full core suite (must be green)
 ```
+
+---
+
+## XVII. Hard rules (non-negotiable — learned from real defects)
+
+These were paid for in shipped mistakes. Do not relearn them.
+
+1. **Anamorphic is the default trap.** Source `.MTS` is 1440×1080 **SAR
+   4:3** — it must display 1920×1080. A naive `scale=1920:1080` squishes
+   faces while the container DAR still reads 16:9, so a thumbnail check
+   misses it. `core.render` applies pixel aspect *before* fit, always.
+   `core.qc.qc_geometry` exists solely to catch a regression here.
+2. **ffmpeg `deshake` is banned.** It crawls/jitters — worse than the
+   untouched handheld. Real stabilization is Resolve's
+   `TimelineItem.Stabilize()`. A standalone stabilized MP4 needs libvidstab
+   (2-pass vidstab) — a tracked follow-up; **never fake it with deshake**.
+3. **Stabilize relative outliers only**, never blanket. Handheld
+   documentary energy is intentional; over-smoothing kills it (Rule 1/3 >
+   technical polish). `core.cleanup` uses median + k·MAD.
+4. **Self-verification is mandatory and fail-closed.** Run `core.qc` with
+   the OpenCV venv before saying "done"; "can't verify" ≠ pass. *Also* read
+   a **full-resolution** frame yourself — a tiled thumbnail sheet hid the
+   squish once. The QC gate has already caught my own measurement bugs;
+   trust it over a clean-looking metric.
+5. **Two variants, not one.** DRIVE/BREATH — the director chooses the feel.
+   Taste is never the system's call.
+6. **Interpreter map.** Resolve `fusionscript` binds CPython 3.9–3.13 (not
+   3.14); otio file-IO needs 3.12/3.13; shake/qc need the analysis venv
+   (OpenCV). Wrong interpreter = false "can't verify", not a real verdict.
+7. **Report verified vs pending.** Never claim a fix you did not measure.
 
 ---
 
@@ -398,4 +419,7 @@ python -m core.tests        # core suite (cutlist/adapters/review loop)
 
 ---
 
-**Last updated:** 2026-05-04. Maintained as part of the `premiere-claude-bridge` open-source release.
+**Last updated:** 2026-05-18 (§XVI automated pipeline + §XVII hard rules:
+anamorphic un-squish, Resolve-native Stabilize over banned ffmpeg deshake,
+relative-outlier stabilization, mandatory fail-closed QC, two-variant pick).
+Maintained as part of the `premiere-claude-bridge` open-source release.

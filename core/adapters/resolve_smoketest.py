@@ -88,18 +88,32 @@ def main(argv: list[str] | None = None) -> int:
     tl = a._project.GetCurrentTimeline()
     items = tl.GetItemListInTrack("video", 1) if tl else []
     markers = tl.GetMarkers() if tl else {}
+    start_f = int(tl.GetStartFrame()) if tl else 0
+    end_f = int(tl.GetEndFrame()) if tl else 0
+    try:
+        tl_fps = float(tl.GetSetting("timelineFrameRate")) if tl else 0.0
+    except Exception:  # noqa: BLE001
+        tl_fps = 0.0
+    starts = [it.GetStart() for it in items]
     report = {
         "timeline": tl.GetName() if tl else None,
         "timeline_count": a._project.GetTimelineCount(),
+        "timeline_fps": tl_fps,
+        "content_frames": end_f - start_f,
         "clips_on_V1": len(items),
         "clip_names": [it.GetName() for it in items],
+        # rate-derived, not hardcoded: a 14 s marker is round(14 * fps)
         "marker_frames": sorted(markers.keys()) if markers else [],
+        "all_clips_within_timeline": all(s >= start_f for s in starts),
     }
     print(json.dumps(report, indent=2, default=str))
     ok = (
         report["clips_on_V1"] == 3
         and report["timeline"] == "PCB_smoketest"
-        and report["marker_frames"] == [0, 350]  # 14s * 25fps
+        and report["content_frames"] > 0          # not the frame-0 bug
+        and report["all_clips_within_timeline"]    # placed in the real range
+        and 0 in report["marker_frames"]
+        and round(14 * tl_fps) in report["marker_frames"]
     )
     print("\nVERIFIED ✓" if ok else "\nMISMATCH — inspect report above")
     return 0 if ok else 5

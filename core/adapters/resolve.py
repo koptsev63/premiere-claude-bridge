@@ -124,6 +124,7 @@ class ResolveAdapter(NLEAdapter):
         self._media_pool = None
         self._timeline = None
         self._fps = 25.0
+        self._tl_start = 0
 
     # ---- verb set ------------------------------------------------------ #
 
@@ -180,10 +181,10 @@ class ResolveAdapter(NLEAdapter):
             "mediaPoolItem": media_handle,
             "startFrame": start,
             "endFrame": start + dur_frames - 1,
-            # recordFrame honors the cutlist `offset` (gaps). Documented
-            # minimal keys are mediaPoolItem/startFrame/endFrame; recordFrame
-            # is best-effort for offset placement on Resolve 18+.
-            "recordFrame": round(timeline_offset * fps),
+            # recordFrame is an ABSOLUTE timeline frame. The timeline's
+            # content begins at GetStartFrame() (e.g. 86400 @ 01:00:00:00),
+            # so the cutlist offset must be added to that, not to 0.
+            "recordFrame": self._tl_start + round(timeline_offset * fps),
         }
         ok = self._media_pool.AppendToTimeline([clip_info])
         if not ok:
@@ -213,13 +214,36 @@ class ResolveAdapter(NLEAdapter):
     # ---- live preparation hook ---------------------------------------- #
 
     def _prepare_live(self, cutlist: Cutlist) -> None:
-        self._fps = float(cutlist.fps)
+        # Match the new timeline to the cutlist fps *before* creating it,
+        # otherwise Resolve uses the project default (often 24) and every
+        # frame number we compute is off.
+        want = cutlist.fps
+        want_s = str(int(want)) if float(want).is_integer() else str(want)
+        try:
+            self._project.SetSetting("timelineFrameRate", want_s)
+        except Exception:  # noqa: BLE001 - non-fatal; we read the real rate
+            pass
+
         tl = self._media_pool.CreateEmptyTimeline(cutlist.sequence_name)
         if tl is None:
             raise RuntimeError(
                 f"CreateEmptyTimeline({cutlist.sequence_name!r}) failed"
             )
         self._timeline = tl
+
+        # Use the timeline's ACTUAL rate + start frame for all math.
+        try:
+            self._fps = float(tl.GetSetting("timelineFrameRate"))
+        except Exception:  # noqa: BLE001
+            self._fps = float(cutlist.fps)
+        try:
+            # Timeline content starts at the timeline's start frame
+            # (e.g. 86400 == 01:00:00:00 @ 24fps). recordFrame is ABSOLUTE,
+            # so clips placed at frame 0 land an hour before the visible
+            # start — that was the "empty timeline" bug.
+            self._tl_start = int(tl.GetStartFrame())
+        except Exception:  # noqa: BLE001
+            self._tl_start = 0
 
     # ---- alternative: native OTIO import ------------------------------ #
 

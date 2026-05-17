@@ -46,8 +46,27 @@ python -m core.cutlist roundtrip examples/grave-stakes-teaser/cutlist_v3.json
 Run the tests (no pytest dependency):
 
 ```bash
-python -m core.tests.test_cutlist
+python -m core.tests          # full suite: 93 passed / 0 failed / 1 skipped
 ```
+
+## Verifying the Resolve adapter
+
+The Resolve path can't be CI-tested (no headless Resolve). Any Studio user
+self-verifies in one command:
+
+```bash
+# read-only: connect + project info, changes nothing
+python -m core.adapters.resolve_smoketest
+
+# full: build a 3-clip timeline from real media (use a scratch project)
+python -m core.adapters.resolve_smoketest --build "/path/to/footage"
+```
+
+**Verified end-to-end** May 2026 against **DaVinci Resolve Studio 21
+Public Beta** (macOS), Python 3.9 / 3.11 / 3.13: connect, get_project_info,
+CreateEmptyTimeline, media import, clip placement, markers — frame math
+exact (a 14 s marker landed on frame 350 @ 25 fps). Requires
+Preferences → System → General → "External scripting using" = Local.
 
 ## Dependency / Python note
 
@@ -62,3 +81,10 @@ code degrades gracefully: file helpers raise a clear `OtioUnavailable` with
 this hint instead of a cryptic crash, and the test suite *skips* (does not
 fail) the file round-trip on such interpreters while still hard-asserting the
 in-memory lossless round-trip.
+
+The **Resolve adapter** has its own interpreter constraint: Resolve's
+`fusionscript` binds CPython ~3.9–3.13. The repo's analysis venv is 3.14 and
+will **not** attach — run anything that drives Resolve with python3.13 /
+3.11 / 3.9. The adapter still imports cleanly on 3.14; only a live
+`connect()` needs a compatible interpreter, and it fails with a clear
+`ResolveUnavailable` if the binding can't load.

@@ -200,7 +200,7 @@ Position it as: **senior assistant editor + automation, not director's editor.**
 - [ ] **v0.4 — multicam audio sync** — match camera angles by audio waveform xcorr, build multicam clips programmatically
 - [ ] **v0.5 — face/sentiment detection** — mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
 - [ ] **v0.6 — MCP Registry publish** — official listing + GitHub Action for auto-release
-- [~] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 90 tests green. Remaining: conform/proxy relink, capability-probe.
+- [~] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 93 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
 

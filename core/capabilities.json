@@ -20,7 +20,7 @@
     "triggered_export": true,
     "native_otio": true,
     "unavailable_features": ["resolve_neural_engine_ai"],
-    "notes": "Official Python/Lua scripting API. EXTERNAL scripting (what an MCP server needs) requires Resolve Studio; the free version restricts scripting to the internal console (since 19.1 UIManager GUIs are Studio-only too). Resolve 20's AI tools are mostly NOT exposed to the scripting API. Imports .otio natively via MediaPool.ImportTimelineFromFile. Requires Preferences > System > General > 'External scripting using' = Local/Network."
+    "notes": "Official Python/Lua scripting API. EXTERNAL scripting (what an MCP server needs) requires Resolve Studio; the free version restricts scripting to the internal console (since 19.1 UIManager GUIs are Studio-only too). Resolve 20's AI tools are mostly NOT exposed to the scripting API. Imports .otio natively via MediaPool.ImportTimelineFromFile. Requires Preferences > System > General > 'External scripting using' = Local/Network. fusionscript binds CPython ~3.9-3.13 (not 3.14). Verified end-to-end on Resolve Studio 21 Public Beta, macOS, Python 3.9/3.11/3.13."
   },
   "fcpxml": {
     "display_name": "Final Cut Pro (FCPXML)",

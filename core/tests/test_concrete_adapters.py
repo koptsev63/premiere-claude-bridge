@@ -43,7 +43,14 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 def test_resolve_guard() -> None:
-    print("Resolve adapter — graceful guard (no Studio here)")
+    # Deterministic + side-effect-free: never touches a live Resolve (the
+    # unit suite must not mutate the user's project). Live end-to-end
+    # verification is the opt-in `core.adapters.resolve_smoketest`.
+    print("Resolve adapter — guard logic (deterministic, no live Resolve)")
+    from unittest.mock import patch
+
+    from core.adapters.resolve import _SETUP_HINT, _load_resolve
+
     check(
         "import did not pull DaVinciResolveScript",
         "DaVinciResolveScript" not in sys.modules,
@@ -54,25 +61,40 @@ def test_resolve_guard() -> None:
         "capabilities say Studio required",
         a.capabilities.requires_paid_tier == "DaVinci Resolve Studio",
     )
-    raised = ""
-    try:
-        a.connect()
-    except ResolveUnavailable as exc:
-        raised = str(exc)
-    check("connect() raises ResolveUnavailable", bool(raised))
     check(
-        "error message is actionable (mentions Studio)",
-        "Studio" in raised and "External scripting" in raised,
-        raised[:80],
+        "ResolveUnavailable is a RuntimeError",
+        issubclass(ResolveUnavailable, RuntimeError),
     )
-    # apply_cutlist must surface the same guarded failure, not a crash
-    cl = Cutlist.load(EXAMPLE)
-    guarded = False
-    try:
-        a.apply_cutlist(cl)
-    except ResolveUnavailable:
-        guarded = True
-    check("apply_cutlist guarded too", guarded)
+    check(
+        "setup hint is actionable",
+        "Studio" in _SETUP_HINT and "External scripting" in _SETUP_HINT,
+    )
+
+    # Force the unavailable path deterministically (module import fails),
+    # regardless of whether Resolve happens to be installed/running.
+    with patch.dict(sys.modules, {"DaVinciResolveScript": None}):
+        raised = ""
+        try:
+            _load_resolve()
+        except ResolveUnavailable as exc:
+            raised = str(exc)
+        check("_load_resolve() raises ResolveUnavailable", bool(raised))
+        check(
+            "error message mentions Studio + External scripting",
+            "Studio" in raised and "External scripting" in raised,
+            raised[:80],
+        )
+        guarded = False
+        try:
+            ResolveAdapter().connect()
+        except ResolveUnavailable:
+            guarded = True
+        check("connect() surfaces the guard, not a crash", guarded)
+
+    check(
+        "no real DaVinciResolveScript left imported",
+        sys.modules.get("DaVinciResolveScript") is None,
+    )
 
 
 def test_premiere_jsx() -> None:

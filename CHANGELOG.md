@@ -27,7 +27,12 @@ is the Murch operating system on top, not the driver underneath.
   - `ResolveAdapter` — direct official Python scripting API. Lazy, guarded
     bootstrap; raises `ResolveUnavailable` with an actionable hint instead
     of a cryptic ImportError. **Requires Resolve Studio** (external
-    scripting is disabled in the free version).
+    scripting is disabled in the free version). **Verified end-to-end**
+    against DaVinci Resolve Studio 21 Public Beta (macOS) on Python
+    3.9/3.11/3.13: connect, project info, CreateEmptyTimeline, media
+    import, clip placement, markers — frame math exact (14 s → frame 350
+    @ 25 fps). Re-runnable by any Studio user via
+    `python -m core.adapters.resolve_smoketest`.
   - `FcpxmlAdapter` — native FCPXML 1.10 writer (round-trip; no otio
     file-IO dependency).
   - Shared `apply_cutlist()` orchestration consults the matrix and degrades
@@ -38,19 +43,23 @@ is the Murch operating system on top, not the driver underneath.
   validated `CutlistPatch`, `ReviewLoop` history/diff. Taste stays with the
   LLM by design; the harness only does the deterministic parts.
 - **`core/tests/`** — dependency-free runner (`python -m core.tests`),
-  values pinned to the real example. **90 checks: 90 passed, 0 failed,
-  1 skipped** (the skip is documented below).
+  values pinned to the real example. **93 passed, 0 failed, 1 skipped**
+  (the skip is documented below).
 - `skills/film-editing/SKILL.md` §XVI documents the core + the review loop
   so the editing brain uses it.
 
-### Known constraint
+### Known constraints (Python interpreter)
 
-`.otio` **file** I/O needs Python 3.12 or 3.13. opentimelineio's JSON layer
-raises `bad any cast` on CPython 3.14 (upstream otio C++ binding issue — it
-cannot parse even its own builtin manifest). In-memory `to_otio`/`from_otio`
-work on any Python with otio; the file helpers raise a clear
-`OtioUnavailable` and the suite *skips* (does not fail) the file round-trip
-on such interpreters while still hard-asserting the in-memory one.
+- `.otio` **file** I/O needs Python 3.12 or 3.13. opentimelineio's JSON
+  layer raises `bad any cast` on CPython 3.14 (upstream otio C++ binding
+  issue — it cannot parse even its own builtin manifest). In-memory
+  `to_otio`/`from_otio` work on any Python with otio; the file helpers
+  raise a clear `OtioUnavailable` and the suite *skips* (does not fail)
+  the file round-trip there while still hard-asserting the in-memory one.
+- The **Resolve adapter** needs Python ~3.9–3.13 for a live `connect()`:
+  Resolve's `fusionscript` does not bind CPython 3.14 (the repo's analysis
+  venv). The adapter imports cleanly on 3.14; only attaching needs a
+  compatible interpreter and fails with a clear `ResolveUnavailable`.
 
 ## [0.2.0] - 2026-05-15
 

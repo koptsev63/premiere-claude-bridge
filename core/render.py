@@ -26,21 +26,23 @@ NORMALIZE = (
     "scale=1920:1080:force_original_aspect_ratio=decrease,"
     "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25"
 )
-# Stabilize the RIGHT way: deshake, then zoom 12% and crop back so the
-# wobbling motion-compensation edge is pushed off the frame.
-STABILIZE = (
-    "deshake=edge=clamp,"
-    "scale='trunc(iw*1.12/2)*2':'trunc(ih*1.12/2)*2',crop=1920:1080"
-)
+# NOTE on stabilization: ffmpeg `deshake` is a primitive single-pass
+# filter (~2000s tech) — it crawls/jitters and looked worse than the
+# original handheld. It is deliberately NOT used here. Real
+# stabilization is Resolve's own professional engine, applied live via
+# ResolveAdapter.apply_corrections() -> TimelineItem.Stabilize()
+# (verified against the shipped scripting API). A standalone stabilized
+# MP4 without Resolve would need an ffmpeg built with libvidstab
+# (2-pass vidstab) — tracked as a follow-up; not faked with `deshake`.
 
 
 def segment_vf(correction: Any | None) -> str:
-    """Full per-segment filter chain. Always ends `setsar=1` because
-    concat requires identical SAR and trunc/rotate can drift it."""
+    """Per-segment filter chain: geometry (un-squish) + horizon rotate.
+    Stabilization is intentionally delegated to Resolve's engine (see the
+    NOTE above) — we never apply ffmpeg `deshake`. Always ends
+    `setsar=1` (concat needs identical SAR; trunc/rotate drift it)."""
     vf = NORMALIZE
     if correction is not None:
-        if getattr(correction, "stabilize", False):
-            vf += "," + STABILIZE
         hv = getattr(correction, "horizon_vf", None)
         if hv:
             vf += "," + hv

@@ -48,14 +48,16 @@ def test_normalize_always_unsquishes() -> None:
     check("fits 1920x1080", "1920:1080" in vf)
 
 
-def test_stabilize_has_zoom_crop() -> None:
-    print("render — stabilized clip gets deshake + zoom-crop (no edge wobble)")
-    vf = segment_vf(FakeCorr(stabilize=True))
-    check("deshake present", "deshake" in vf)
-    check("zoom before crop (border pushed off-frame)",
-          "1.12" in vf and "crop=1920:1080" in vf, vf)
-    plain = segment_vf(FakeCorr(stabilize=False))
-    check("non-stabilized clip has NO deshake", "deshake" not in plain)
+def test_no_ffmpeg_deshake_ever() -> None:
+    print("render — ffmpeg deshake is NEVER used (Resolve does stabilization)")
+    # Primitive deshake looked worse than the source; stabilization is
+    # delegated to Resolve's engine via the adapter, not faked in ffmpeg.
+    vf_stab = segment_vf(FakeCorr(stabilize=True))
+    vf_plain = segment_vf(FakeCorr(stabilize=False))
+    check("stabilize-flagged clip has NO deshake", "deshake" not in vf_stab)
+    check("plain clip has NO deshake", "deshake" not in vf_plain)
+    check("stabilize flag does not alter the ffmpeg chain",
+          vf_stab == vf_plain, "stabilization must be Resolve-side only")
 
 
 def test_horizon_rotate_appended() -> None:
@@ -75,7 +77,8 @@ def test_build_plan_shape() -> None:
     check("ffmpeg invocation", argv[0] == "ffmpeg")
     check("one -i per segment", argv.count("-i") == 3)
     check("concat n=3", "concat=n=3:v=1:a=0" in j)
-    check("stabilized b.MTS chain has deshake", "deshake" in j)
+    check("NO ffmpeg deshake anywhere (Resolve stabilizes)",
+          "deshake" not in j)
     check("tilted c.MTS chain has rotate",
           "rotate=0.01:fillcolor=black" in j)
     check("every segment forced setsar=1",
@@ -96,7 +99,7 @@ def test_empty_segments_rejected() -> None:
 def main() -> int:
     for fn in (
         test_normalize_always_unsquishes,
-        test_stabilize_has_zoom_crop,
+        test_no_ffmpeg_deshake_ever,
         test_horizon_rotate_appended,
         test_build_plan_shape,
         test_empty_segments_rejected,

@@ -16,13 +16,29 @@ What the score measures (objective only — taste/emotion stays human, see
 
 | Version | Cuts | Total | Ratio | ratio_ok | Monotony | Beat flags | is_clean |
 |---|---|---|---|---|---|---|---|
-| v3 (data-driven, prior) | 12 | 61 s | 2.33 | yes | none | **1** (`pit-followthrough` underpaced) | **no** |
-| v4 (analyzer-iterated)  | 9  | ~35 s | 3.50 | yes | none | **0** | **yes** |
+| v3 (data-driven, prior)   | 12 | 61 s | 2.33 | yes | none | **1** (`pit-followthrough` underpaced) | **no** |
+| v4 (analyzer-iterated)    | 9  | ~35 s | 3.50 | yes | none | **0** | **yes** |
+| v5 DRIVE (auto, 2-variant)| 8  | 30.5 s | 3.00 | yes | none | **0** | **yes** |
+| v5 BREATH (auto, 2-variant)| 8 | 38.5 s | 4.00 | yes | none | **0** | **yes** |
 
 v4's first draft was *also* flagged (ratio 1.75, monotone, 6 beat flags) —
 the analyzer rejected it, the cut was revised against that critique, and the
 second draft passed. That loop is the point: the machine does the
 arithmetic, a person still decides if it *feels* right.
+
+**v5 is the first fully-automated generation.** From the 108-clip analysis
+the pipeline now: scores clip *value* (`core.value` — the "meat", with an
+optional human/LLM tag), builds **two contrasting Murch-clean variants**
+(`core.variants` — DRIVE tight/aggressive vs BREATH atmospheric, both
+`is_clean` by construction), `core.conform`s clip refs to real media, and
+`core.cleanup` applies per-clip technical fixes: horizon leveling whenever
+the analyzer flagged a tilt, and stabilization for *relative outliers only*
+(median + k·MAD — handheld doc energy is intentional, not blanket-smoothed).
+On this footage v5 corrected exactly 1 tilted clip (00171, −1.9°) and
+stabilized 2 genuine shake outliers (00215, 00149) of 8, leaving 5 clean.
+Both variants render with their own Suno instrumental and push live to
+Resolve (horizon rotation applied via the scripting API). The human picks
+which *feels* right — the cut quality is no longer the bottleneck; taste is.
 
 ## Reproduce / re-score
 

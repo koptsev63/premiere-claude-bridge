@@ -1,0 +1,91 @@
+{
+  "sequence_name": "Grave_Stakes_Teaser_v5_drive",
+  "fps": 25,
+  "resolution": "1920x1080",
+  "total_duration_sec": 30.5,
+  "cuts": [
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00172.MTS",
+      "in": 0.0,
+      "out": 4.0,
+      "offset": 0.0,
+      "label": "HOOK-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00215.MTS",
+      "in": 46.92,
+      "out": 50.92,
+      "offset": 4.0,
+      "label": "COMEDY-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00183.MTS",
+      "in": 40.15,
+      "out": 42.15,
+      "offset": 8.0,
+      "label": "ACTION-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00171.MTS",
+      "in": 7.55,
+      "out": 10.05,
+      "offset": 10.0,
+      "label": "ACTION-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00149.MTS",
+      "in": 18.25,
+      "out": 21.25,
+      "offset": 12.5,
+      "label": "ACTION-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00173.MTS",
+      "in": 14.91,
+      "out": 20.91,
+      "offset": 15.5,
+      "label": "PIT-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00199.MTS",
+      "in": 25.55,
+      "out": 28.55,
+      "offset": 21.5,
+      "label": "STAKES-drive"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00185.MTS",
+      "in": 11.23,
+      "out": 17.23,
+      "offset": 24.5,
+      "label": "PAYOFF-drive"
+    }
+  ],
+  "markers": [
+    {
+      "name": "HOOK",
+      "time": 0.0,
+      "comment": "drive hook"
+    },
+    {
+      "name": "COMEDY",
+      "time": 4.0,
+      "comment": "drive comedy"
+    },
+    {
+      "name": "PIT",
+      "time": 15.5,
+      "comment": "drive pit"
+    },
+    {
+      "name": "STAKES",
+      "time": 21.5,
+      "comment": "drive stakes"
+    },
+    {
+      "name": "PAYOFF",
+      "time": 24.5,
+      "comment": "drive payoff"
+    }
+  ]
+}

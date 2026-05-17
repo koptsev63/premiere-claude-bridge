@@ -7,6 +7,34 @@ per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
 
+### Added — automated editing pipeline
+
+End-to-end generation, dogfooded to produce **v5** on the Grave Stakes
+footage (two contrasting Murch-clean teasers, see
+`examples/grave-stakes-teaser/benchmark/`):
+
+- **`skills/film-editing/tools/shake_detect.py`** — OpenCV phase-correlation
+  camera-shake metric (no libvidstab). Honest calibration:
+  `flag_stabilization_relative()` flags only outliers (median + k·MAD),
+  never blanket — handheld doc energy is intentional. Wired into
+  `analyze_clips.py`.
+- **`core/cleanup.py`** — per-clip technical corrections from the analysis
+  report: horizon leveling (always when flagged) + outlier-only
+  stabilization. `ResolveAdapter.apply_corrections()` undoes tilt live via
+  the scripting API; deshake stays in the ffmpeg path (Resolve's
+  stabilizer isn't cleanly scriptable). 11 tests.
+- **`core/value.py`** — the "meat" model: composite value
+  (audio-peak + motion − conditional shake penalty) + an explicit
+  human/LLM `meat_tag` override; `ValuePool` protects the strong material
+  and reserves anchors for the emotional-center beats. 15 tests.
+- **`core/variants.py`** — two contrasting strategies (DRIVE vs BREATH),
+  both `is_clean` by construction; length-aware assignment (a clip too
+  short for its beat is skipped *with a note* — physics > value >
+  protection). 19 tests.
+- **`core/probe.py`** — capability probe + `select_adapter()`;
+  live-verified. **`core/conform.py`** — clip relink to real media.
+- Full suite: **168 passed / 0 failed / 1 skipped**.
+
 ### Added — `core/`
 
 - **`core/cutlist.py`** — the cutlist intermediate representation. Same JSON

@@ -1,0 +1,91 @@
+{
+  "sequence_name": "Grave_Stakes_Teaser_v5_breath",
+  "fps": 25,
+  "resolution": "1920x1080",
+  "total_duration_sec": 38.5,
+  "cuts": [
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00172.MTS",
+      "in": 0.0,
+      "out": 6.0,
+      "offset": 0.0,
+      "label": "HOOK-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00215.MTS",
+      "in": 46.37,
+      "out": 51.37,
+      "offset": 6.0,
+      "label": "COMEDY-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00199.MTS",
+      "in": 25.55,
+      "out": 28.55,
+      "offset": 11.0,
+      "label": "ACTION-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00171.MTS",
+      "in": 7.55,
+      "out": 10.05,
+      "offset": 14.0,
+      "label": "ACTION-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00183.MTS",
+      "in": 40.15,
+      "out": 42.15,
+      "offset": 16.5,
+      "label": "ACTION-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00185.MTS",
+      "in": 10.68,
+      "out": 17.68,
+      "offset": 18.5,
+      "label": "PIT-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00149.MTS",
+      "in": 17.15,
+      "out": 22.15,
+      "offset": 25.5,
+      "label": "STAKES-breath"
+    },
+    {
+      "clip": "/Users/kopetan_kakao/Desktop/Grave stakes/Videos/00173.MTS",
+      "in": 13.81,
+      "out": 21.81,
+      "offset": 30.5,
+      "label": "PAYOFF-breath"
+    }
+  ],
+  "markers": [
+    {
+      "name": "HOOK",
+      "time": 0.0,
+      "comment": "breath hook"
+    },
+    {
+      "name": "COMEDY",
+      "time": 6.0,
+      "comment": "breath comedy"
+    },
+    {
+      "name": "PIT",
+      "time": 18.5,
+      "comment": "breath pit"
+    },
+    {
+      "name": "STAKES",
+      "time": 25.5,
+      "comment": "breath stakes"
+    },
+    {
+      "name": "PAYOFF",
+      "time": 30.5,
+      "comment": "breath payoff"
+    }
+  ]
+}

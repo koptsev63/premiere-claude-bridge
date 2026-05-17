@@ -12,6 +12,7 @@ from core.tests import (
     test_concrete_adapters,
     test_conform,
     test_cutlist,
+    test_probe,
     test_review_loop,
 )
 
@@ -21,6 +22,7 @@ MODULES = [
     test_concrete_adapters,
     test_review_loop,
     test_conform,
+    test_probe,
 ]
 
 

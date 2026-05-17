@@ -222,6 +222,16 @@ def process_clip(src: Path, out_dir: Path, do_whisper: bool, do_horizon: bool = 
         except ImportError:
             rec["horizon_tilt_deg"] = None  # opencv not installed
 
+    try:
+        from shake_detect import estimate_shake, needs_stabilization
+        shake, shake_method = estimate_shake(src, n_samples=24)
+        rec["shake_score"] = shake
+        rec["shake_method"] = shake_method
+        rec["needs_stabilization"] = needs_stabilization(shake)
+    except ImportError:
+        rec["shake_score"] = None  # opencv not installed
+        rec["needs_stabilization"] = False
+
     if do_whisper and has_voice_quick(src, audio.get("audio_peak_db")):
         rec["speech_text"] = whisper_transcribe(src)
     else:

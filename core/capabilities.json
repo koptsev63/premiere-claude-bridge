@@ -1,0 +1,36 @@
+{
+  "_comment": "Capability matrix for every NLE backend. The editing brain reads this to decide what a backend can do and degrade gracefully. Facts verified May 2026 (DaVinci Resolve scripting docs, Blackmagic forum, opentimelineio adapters).",
+  "premiere": {
+    "display_name": "Adobe Premiere Pro",
+    "live_control": true,
+    "requires_paid_tier": null,
+    "round_trip_only": false,
+    "markers": true,
+    "triggered_export": true,
+    "native_otio": false,
+    "unavailable_features": [],
+    "notes": "Driven via the CEP panel + ExtendScript bridge in this repo. No official desktop automation API; CEP PlayerDebugMode is enough for dev/personal use. Export via Adobe Media Encoder."
+  },
+  "resolve": {
+    "display_name": "DaVinci Resolve",
+    "live_control": true,
+    "requires_paid_tier": "DaVinci Resolve Studio",
+    "round_trip_only": false,
+    "markers": true,
+    "triggered_export": true,
+    "native_otio": true,
+    "unavailable_features": ["resolve_neural_engine_ai"],
+    "notes": "Official Python/Lua scripting API. EXTERNAL scripting (what an MCP server needs) requires Resolve Studio; the free version restricts scripting to the internal console (since 19.1 UIManager GUIs are Studio-only too). Resolve 20's AI tools are mostly NOT exposed to the scripting API. Imports .otio natively via MediaPool.ImportTimelineFromFile. Requires Preferences > System > General > 'External scripting using' = Local/Network."
+  },
+  "fcpxml": {
+    "display_name": "Final Cut Pro (FCPXML)",
+    "live_control": false,
+    "requires_paid_tier": null,
+    "round_trip_only": true,
+    "markers": true,
+    "triggered_export": false,
+    "native_otio": true,
+    "unavailable_features": ["live_control", "triggered_export"],
+    "notes": "No live scripting API. Integration is FCPXML file exchange: generate/ingest a project file, the human opens it in Final Cut and exports. opentimelineio ships an fcpx_xml adapter."
+  }
+}

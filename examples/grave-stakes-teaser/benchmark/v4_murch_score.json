@@ -1,0 +1,13 @@
+{
+  "version": "v4",
+  "sequence": "Grave_Stakes_Teaser_v4",
+  "cuts": 9,
+  "total_sec": 35.5,
+  "shortest": 2.0,
+  "longest": 7.0,
+  "ratio": 3.5,
+  "ratio_ok": true,
+  "monotony_runs": [],
+  "beat_pacing_flags": [],
+  "is_clean": true
+}

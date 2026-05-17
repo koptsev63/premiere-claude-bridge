@@ -1,0 +1,15 @@
+{
+  "version": "v3",
+  "sequence": "Teaser_v3_DataDriven",
+  "cuts": 12,
+  "total_sec": 60.0,
+  "shortest": 3.0,
+  "longest": 7.0,
+  "ratio": 2.333,
+  "ratio_ok": true,
+  "monotony_runs": [],
+  "beat_pacing_flags": [
+    "cut[6] 'pit-followthrough' is 3s; 'pit' beats want 6-8s (\u00a7VII)"
+  ],
+  "is_clean": false
+}

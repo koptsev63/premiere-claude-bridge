@@ -5,3 +5,10 @@ mcp-server/node_modules/
 __pycache__/
 *.pyc
 /tmp/
+
+# generated NLE project files (FcpxmlAdapter writes to cwd) — never commit
+/*.fcpxml
+/*.otio
+# local credentials must never enter this public repo
+*.env
+.env

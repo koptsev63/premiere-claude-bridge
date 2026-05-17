@@ -1,5 +1,57 @@
 # Changelog
 
+## [Unreleased] — universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
+
+The editing brain is now NLE-agnostic. A cut is decided once as a `Cutlist`;
+per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
+Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
+is the Murch operating system on top, not the driver underneath.
+
+### Added — `core/`
+
+- **`core/cutlist.py`** — the cutlist intermediate representation. Same JSON
+  shape as `examples/grave-stakes-teaser/cutlist_v3.json`, formalized:
+  validation (out>in, no overlap, no negatives) and **lossless
+  OpenTimelineIO round-trip** (verified in-memory against the real example),
+  plus structural reconstruction (gap-honoring) and a CLI
+  (`validate`/`to-otio`/`from-otio`/`roundtrip`). `opentimelineio` is an
+  *optional* dependency.
+- **`core/capabilities.{json,py}`** — per-backend matrix
+  (live_control, requires_paid_tier, round_trip_only, markers,
+  triggered_export, native_otio, unavailable_features). Facts verified
+  May 2026.
+- **`core/adapters/`** — one verb set, three drivers:
+  - `PremiereAdapter` compiles a cutlist to ExtendScript run via
+    `mcp__premiere__pr_eval_jsx` (Premiere has no live API; the bridge is
+    the link).
+  - `ResolveAdapter` — direct official Python scripting API. Lazy, guarded
+    bootstrap; raises `ResolveUnavailable` with an actionable hint instead
+    of a cryptic ImportError. **Requires Resolve Studio** (external
+    scripting is disabled in the free version).
+  - `FcpxmlAdapter` — native FCPXML 1.10 writer (round-trip; no otio
+    file-IO dependency).
+  - Shared `apply_cutlist()` orchestration consults the matrix and degrades
+    gracefully (round-trip backends get a project file, never live calls).
+- **`core/review_loop.py`** — NLE-neutral self-review: deterministic Murch
+  arithmetic (`analyze_cutlist`: §VII 2-4× ratio, §X monotony, beat-type
+  pacing), `/watch` plan, NLE-free ffmpeg rough assembler, immutable
+  validated `CutlistPatch`, `ReviewLoop` history/diff. Taste stays with the
+  LLM by design; the harness only does the deterministic parts.
+- **`core/tests/`** — dependency-free runner (`python -m core.tests`),
+  values pinned to the real example. **90 checks: 90 passed, 0 failed,
+  1 skipped** (the skip is documented below).
+- `skills/film-editing/SKILL.md` §XVI documents the core + the review loop
+  so the editing brain uses it.
+
+### Known constraint
+
+`.otio` **file** I/O needs Python 3.12 or 3.13. opentimelineio's JSON layer
+raises `bad any cast` on CPython 3.14 (upstream otio C++ binding issue — it
+cannot parse even its own builtin manifest). In-memory `to_otio`/`from_otio`
+work on any Python with otio; the file helpers raise a clear
+`OtioUnavailable` and the suite *skips* (does not fail) the file round-trip
+on such interpreters while still hard-asserting the in-memory one.
+
 ## [0.2.0] - 2026-05-15
 
 ### Added — `skills/watch/` (vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video) + extended)

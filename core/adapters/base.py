@@ -150,6 +150,7 @@ class NLEAdapter(abc.ABC):
             return res
 
         self.connect()
+        self._prepare_live(cutlist)
         handles: dict[str, str] = {}
         for cut in cutlist.cuts:
             if cut.clip not in handles:
@@ -174,6 +175,14 @@ class NLEAdapter(abc.ABC):
                 f"{len(cutlist.markers)} markers skipped"
             )
         return res
+
+    def _prepare_live(self, cutlist: Cutlist) -> None:
+        """Hook between connect() and the place loop (live backends only).
+
+        Default no-op. Resolve uses it to create/select the target
+        timeline before clips are appended; Premiere uses it to open the
+        JSX program. Keeps the shared orchestration in one place.
+        """
 
     def _project_ext(self) -> str:
         return "xml"

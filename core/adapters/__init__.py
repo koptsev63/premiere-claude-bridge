@@ -19,23 +19,29 @@ from core.adapters.base import CutlistResult, NLEAdapter, DryRunAdapter
 __all__ = ["NLEAdapter", "DryRunAdapter", "CutlistResult", "get_adapter"]
 
 
-def get_adapter(backend: str, **kwargs) -> NLEAdapter:
-    """Return an adapter instance for the backend, importing lazily."""
-    if backend == "premiere":
+def get_adapter(name: str, **kwargs) -> NLEAdapter:
+    """Return an adapter instance for `name`, importing lazily.
+
+    `name` is the selector ('premiere'|'resolve'|'fcpxml'|'dryrun').
+    Extra kwargs are forwarded to the adapter constructor — e.g.
+    get_adapter("dryrun", backend="resolve") for a dry-run adapter that
+    reports the Resolve capability row.
+    """
+    if name == "premiere":
         from core.adapters.premiere import PremiereAdapter
 
         return PremiereAdapter(**kwargs)
-    if backend == "resolve":
+    if name == "resolve":
         from core.adapters.resolve import ResolveAdapter
 
         return ResolveAdapter(**kwargs)
-    if backend == "fcpxml":
+    if name == "fcpxml":
         from core.adapters.fcpxml import FcpxmlAdapter
 
         return FcpxmlAdapter(**kwargs)
-    if backend == "dryrun":
+    if name == "dryrun":
         return DryRunAdapter(**kwargs)
     raise KeyError(
-        f"unknown backend {backend!r}; "
+        f"unknown adapter {name!r}; "
         f"known: premiere, resolve, fcpxml, dryrun"
     )

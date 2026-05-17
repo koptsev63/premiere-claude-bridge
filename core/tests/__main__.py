@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import sys
 
-from core.tests import test_adapters, test_cutlist
+from core.tests import test_adapters, test_concrete_adapters, test_cutlist
 
-MODULES = [test_cutlist, test_adapters]
+MODULES = [test_cutlist, test_adapters, test_concrete_adapters]
 
 
 def main() -> int:

@@ -212,10 +212,12 @@ def process_clip(src: Path, out_dir: Path, do_whisper: bool, do_horizon: bool = 
     if do_horizon:
         try:
             from horizon_detect import estimate_tilt, correction_filter
-            tilt = estimate_tilt(src, n_samples=3)
-            rec["horizon_tilt_deg"] = tilt
-            if tilt is not None:
-                fix = correction_filter(tilt, threshold_deg=0.5)
+            # estimate_tilt -> Tuple[Optional[float], str] (angle, method)
+            tilt_angle, tilt_method = estimate_tilt(src, n_samples=3)
+            rec["horizon_tilt_deg"] = tilt_angle
+            rec["horizon_method"] = tilt_method
+            if tilt_angle is not None:
+                fix = correction_filter(tilt_angle, threshold_deg=0.5)
                 rec["horizon_correction_filter"] = fix  # None if within threshold
         except ImportError:
             rec["horizon_tilt_deg"] = None  # opencv not installed

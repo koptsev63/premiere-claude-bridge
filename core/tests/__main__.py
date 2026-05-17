@@ -14,6 +14,8 @@ from core.tests import (
     test_conform,
     test_cutlist,
     test_probe,
+    test_qc,
+    test_render,
     test_review_loop,
     test_value,
     test_variants,
@@ -29,6 +31,8 @@ MODULES = [
     test_cleanup,
     test_value,
     test_variants,
+    test_qc,
+    test_render,
 ]
 
 

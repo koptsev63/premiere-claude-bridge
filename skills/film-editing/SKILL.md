@@ -338,6 +338,58 @@ After that the editing skill can call `/watch` on any clip in the project bin.
 
 ---
 
+## XVI. Universal NLE core + the review loop
+
+The editing decision is **NLE-agnostic**. You do not cut "in Premiere" — you
+produce one `Cutlist` and a backend renders it. This is the v1.0 direction
+([epic #6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)); see
+[`core/README.md`](../../core/README.md).
+
+### The one cutlist
+
+`core/cutlist.py` — the same JSON shape as
+`examples/grave-stakes-teaser/cutlist_v3.json`, validated (out>in, no
+overlap) and round-tripped losslessly through OpenTimelineIO. Decide the cut
+once here.
+
+### Backends (same verb set)
+
+| Backend | How | Constraint |
+|---|---|---|
+| Premiere | `PremiereAdapter` compiles the cutlist to ExtendScript → run via `mcp__premiere__pr_eval_jsx` | the existing bridge |
+| DaVinci Resolve | `ResolveAdapter` — direct official Python API | **Resolve Studio** only; enable external scripting |
+| Final Cut | `FcpxmlAdapter` — writes FCPXML | round-trip (open + export by hand) |
+
+Consult `core.capabilities` before promising an action — a round-trip
+backend cannot be driven live; Resolve's AI tools are not scriptable.
+
+### The review loop — self-critique, NLE-neutral
+
+This operationalizes §VIII ("watch a cut, walk away, watch again") so it runs
+the same regardless of editor:
+
+1. **Assemble.** `core.adapters.get_adapter(<backend>).apply_cutlist(cl)` — or,
+   with no NLE, `core.review_loop.render_rough_cut(cl, media_dir, out)`
+   (ffmpeg, the way the Grave Stakes teasers were actually built).
+2. **Perceive.** Run `ReviewLoop.watch_plan()` — one `/watch` window per cut.
+   `Read` the frames + transcript (§XIV). This is where taste lives — yours.
+3. **Measure.** `core.review_loop.analyze_cutlist(cl)` gives the deterministic
+   Murch arithmetic: the §VII 2-4× ratio rule, §X monotony runs, beat-type
+   pacing flags. Objective inputs to your critique, not a substitute for it.
+4. **Patch.** Encode the fix as a `CutlistPatch` (adjust/drop/reorder/markers).
+   `.apply()` returns a NEW validated cutlist — the old version is kept in
+   `ReviewLoop.history`, so you can `diff()` versions.
+5. **Re-render** the patched cutlist to ANY backend. Repeat until
+   `analysis.is_clean()` AND the emotion (Rule 1) is right — and emotion is
+   never decided by the analyzer, only by you watching it.
+
+```bash
+python -m core.cutlist validate examples/grave-stakes-teaser/cutlist_v3.json
+python -m core.tests        # core suite (cutlist/adapters/review loop)
+```
+
+---
+
 ## XV. Reference
 
 - Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing*, 2nd ed., Silman-James Press, 2001 (Russian: «В мгновение ока», аудиокнига Кирилла Никитенко 2024)

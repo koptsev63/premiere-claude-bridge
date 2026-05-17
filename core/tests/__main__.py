@@ -9,6 +9,7 @@ import sys
 
 from core.tests import (
     test_adapters,
+    test_cleanup,
     test_concrete_adapters,
     test_conform,
     test_cutlist,
@@ -23,6 +24,7 @@ MODULES = [
     test_review_loop,
     test_conform,
     test_probe,
+    test_cleanup,
 ]
 
 

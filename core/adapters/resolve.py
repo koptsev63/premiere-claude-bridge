@@ -273,3 +273,35 @@ class ResolveAdapter(NLEAdapter):
             markers_added=len(cutlist.markers),
             warnings=["imported via native OTIO (single timeline import)"],
         )
+
+    # ---- technical corrections ---------------------------------------- #
+
+    def apply_corrections(self, corrections: dict) -> dict:
+        """Level tilted clips on the current timeline.
+
+        `corrections` is {clip_path: core.cleanup.Correction}. Resolve's
+        clip transform exposes RotationAngle via SetProperty, so we undo
+        horizon tilt here. Stabilization is intentionally NOT done in
+        Resolve (its stabilizer is an Inspector action, not a clean
+        scriptable property) — deshake stays in the ffmpeg render path.
+        Returns {clip_name: applied_rotation_deg}. Call after the timeline
+        is built (apply_cutlist).
+        """
+        tl = self._project.GetCurrentTimeline()
+        if tl is None:
+            raise RuntimeError("no current timeline for corrections")
+        by_name: dict[str, float] = {}
+        for path, c in corrections.items():
+            if getattr(c, "rotate_deg", 0):
+                by_name[Path(path).name] = c.rotate_deg
+
+        applied: dict[str, float] = {}
+        for item in tl.GetItemListInTrack("video", 1) or []:
+            deg = by_name.get(item.GetName())
+            if deg:
+                try:
+                    item.SetProperty("RotationAngle", deg)
+                    applied[item.GetName()] = deg
+                except Exception as e:  # noqa: BLE001
+                    applied[item.GetName()] = f"FAILED:{e!r}"
+        return applied

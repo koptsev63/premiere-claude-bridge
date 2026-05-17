@@ -200,9 +200,19 @@ Position it as: **senior assistant editor + automation, not director's editor.**
 - [ ] **v0.4 — multicam audio sync** — match camera angles by audio waveform xcorr, build multicam clips programmatically
 - [ ] **v0.5 — face/sentiment detection** — mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
 - [ ] **v0.6 — MCP Registry publish** — official listing + GitHub Action for auto-release
-- [ ] **v1.0 — Premiere alternatives** — same bridge for DaVinci Resolve (Lua API) and Final Cut Pro (FCPXML)
+- [ ] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6))
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
+
+### Why "universal NLE core" is not "the same bridge for every editor"
+
+The three editors integrate in fundamentally different ways, so v1.0 is an **adapter design**, not a copy of the Premiere bridge ([epic #6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)):
+
+- **The editing brain stays NLE-agnostic.** `skills/film-editing/` (Murch's Rule of Six) and the `/watch` perception layer reason about footage and cuts, not about Premiere. They don't change.
+- **One cutlist, expressed in [OpenTimelineIO](https://opentimelineio.readthedocs.io/).** A cut is decided once as an OTIO timeline (the `cutlist_*.json` in the Grave Stakes example, formalized). OTIO is the industry interchange standard — Resolve reads/writes it natively, FCPXML has OTIO adapters, Premiere goes through this bridge.
+- **Thin per-NLE drivers, same verb set.** Premiere = the existing CEP/ExtendScript bridge. DaVinci Resolve = direct Python via the official scripting API (**requires Resolve Studio** — external scripting is disabled in the free version). Final Cut = FCPXML round-trip (file exchange, not live control).
+
+Net: a decision made once renders into any editor. Raw "AI controls Resolve" is already crowded ([several MCP servers exist](https://github.com/samuelgursky/davinci-resolve-mcp)); the differentiator here is the editing operating system on top, not the driver underneath.
 
 ---
 

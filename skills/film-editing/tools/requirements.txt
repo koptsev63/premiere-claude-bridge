@@ -13,3 +13,11 @@ openai-whisper>=20231117
 
 # YouTube / web video download (used by skills/watch)
 yt-dlp>=2024.0.0
+
+# Universal NLE core — cutlist <-> OpenTimelineIO interchange (core/cutlist.py).
+# Optional: loading/validating/saving a cutlist works without it; only OTIO
+# conversion and the Resolve/FCP adapters need it.
+# NOTE: .otio FILE I/O needs Python 3.12 or 3.13 — opentimelineio's JSON layer
+# raises "bad any cast" on CPython 3.14 (upstream issue). In-memory conversion
+# works on any Python that can import opentimelineio.
+opentimelineio>=0.17

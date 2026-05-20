@@ -13,6 +13,7 @@ from core.tests import (
     test_concrete_adapters,
     test_conform,
     test_cutlist,
+    test_library,
     test_probe,
     test_qc,
     test_render,
@@ -33,6 +34,7 @@ MODULES = [
     test_variants,
     test_qc,
     test_render,
+    test_library,
 ]
 
 

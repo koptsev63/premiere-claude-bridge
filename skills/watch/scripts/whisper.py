@@ -296,6 +296,7 @@ def transcribe_local(
         "--model", model or LOCAL_WHISPER_MODEL,
         "--output_format", "json",
         "--output_dir", str(out_dir),
+        "--word_timestamps", "True",  # per-word times -> karaoke subtitles
         "--fp16", "False",  # MPS / CPU safe; FP16 only works on CUDA
         "--verbose", "False",
     ]

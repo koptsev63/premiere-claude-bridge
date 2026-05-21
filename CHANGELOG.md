@@ -35,6 +35,26 @@ footage (two contrasting Murch-clean teasers, see
   live-verified. **`core/conform.py`** — clip relink to real media.
 - Full suite: **168 passed / 0 failed / 1 skipped**.
 
+### Added — discovery + finishing (after assessing MIT peers video-use / claude-code-video-toolkit; ideas only)
+
+- **`core/library.py`** — smart media library: tag + search footage by
+  speech/tags/name, `find_lines()` a character's dialogue, `to_cutlist()`
+  pulls matches into a new sequence. NO face recognition (by what's said).
+- **`core/subtitles.py`** — transcript → SRT (deliverable) + styled ASS
+  karaoke (2-word chunks, MarginV-90 safe-zone; approach credited to
+  browser-use/video-use, MIT). `skills/watch` whisper now emits
+  `--word_timestamps` so karaoke has real word times.
+- **`core/overlays.py`** — lower-thirds / title / brand via ffmpeg
+  drawtext; `from_markers()` auto-titles from the cutlist's beats.
+
+### Audit (full static + dynamic pass)
+
+pyflakes clean; removed dead code + the leftover `deshake` drift in
+`cleanup.vf_chain` (stabilization is Resolve-side only). Secret scan of
+tree + git history clean (no leaked keys/tokens in this public repo).
+E2E verified through the committed core modules on real footage
+(12/12 pipeline steps). Suite: **258 passed / 0 failed / 1 skipped**.
+
 ### Added — `core/`
 
 - **`core/cutlist.py`** — the cutlist intermediate representation. Same JSON

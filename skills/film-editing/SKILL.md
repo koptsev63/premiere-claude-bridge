@@ -360,6 +360,14 @@ color, variant board, voice-directed turnkey).
 | 9 | Review loop | `core.review_loop` | `analyze_cutlist` (deterministic Murch) → `CutlistPatch` → re-render, with `history`/`diff()` |
 | 10 | **QC gate** | `core.qc` | mandatory: geometry no-squish + residual-shake; **fail-closed** |
 
+Discovery + finishing modules (not strictly sequential):
+
+| Step | Module | What it gives you |
+|---|---|---|
+| Library | `core.library.MediaLibrary` | tag + search the footage by speech/tags/name, `find_lines()` a character's dialogue, and `to_cutlist()` pulls matches into a NEW sequence (Denis's "split by character / don't lose it"). NO face recognition — by what's said. |
+| Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). |
+| Overlays | `core.overlays` | lower-thirds / title / brand (lime #C8FF00) via ffmpeg `drawtext`; `from_markers(cutlist)` auto-titles from the edit's own beats. |
+
 Progress is measured, not vibed: `examples/grave-stakes-teaser/benchmark/`
 scores every version with `analyze_cutlist` (v3 not-clean → v4 clean → v5
 two clean variants).

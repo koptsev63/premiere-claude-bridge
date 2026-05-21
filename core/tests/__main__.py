@@ -14,6 +14,7 @@ from core.tests import (
     test_conform,
     test_cutlist,
     test_library,
+    test_overlays,
     test_probe,
     test_qc,
     test_render,
@@ -37,6 +38,7 @@ MODULES = [
     test_render,
     test_library,
     test_subtitles,
+    test_overlays,
 ]
 
 

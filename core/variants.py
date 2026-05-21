@@ -149,7 +149,6 @@ def build_variants(
                          "is_clean": bool}}.
     """
     pool = ValuePool(report, meat_tags)
-    by = pool.by_clip()
     protected = {v.clip for v in pool.protected()}
 
     metas: list[ClipMeta] = []

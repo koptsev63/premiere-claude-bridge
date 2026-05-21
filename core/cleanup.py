@@ -15,8 +15,11 @@ is corrected whenever the analyzer flagged a tilt (a crooked frame is
 almost always a defect).
 
 `corrections_for_cutlist()` -> {clip_ref: Correction}. Consumers:
-  * ffmpeg render  -> Correction.vf_chain()  (deshake,rotate=…)
-  * ResolveAdapter -> Correction.rotate_deg  (clip RotationAngle)
+  * ffmpeg render  -> Correction.vf_chain()  (horizon rotate only)
+  * ResolveAdapter -> Correction.rotate_deg (RotationAngle) +
+                      Correction.stabilize (TimelineItem.Stabilize())
+ffmpeg `deshake` is banned (worse than source); stabilization is
+Resolve-side only.
 """
 
 from __future__ import annotations
@@ -43,13 +46,15 @@ class Correction:
     reasons: list[str] = field(default_factory=list)
 
     def vf_chain(self) -> str | None:
-        """ffmpeg -vf chain for this clip's segment, or None if clean."""
-        parts: list[str] = []
-        if self.stabilize:
-            parts.append("deshake=edge=clamp")
-        if self.horizon_vf:
-            parts.append(self.horizon_vf)
-        return ",".join(parts) if parts else None
+        """ffmpeg -vf chain for this clip's segment (horizon only), or None.
+
+        NOTE: stabilization is intentionally NOT here. ffmpeg `deshake`
+        was banned (worse than the source); real stabilization is
+        Resolve's engine via ResolveAdapter.apply_corrections()
+        -> TimelineItem.Stabilize(). The `stabilize` flag is consumed
+        there, not in the ffmpeg render path.
+        """
+        return self.horizon_vf or None
 
     @property
     def clean(self) -> bool:

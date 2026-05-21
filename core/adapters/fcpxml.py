@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import quoteattr
 
-from core.adapters.base import CutlistResult, NLEAdapter
+from core.adapters.base import NLEAdapter
 from core.cutlist import Cutlist
 
 

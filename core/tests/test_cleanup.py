@@ -90,17 +90,21 @@ def test_vf_chain_and_clean() -> None:
     check("tilted clip vf chain = rotate only",
           corr["/foot/00100.MTS"].vf_chain()
           == "rotate=-0.061087:fillcolor=black")
-    # force a clip that is BOTH shaky outlier and tilted
+    # a clip that is BOTH shaky outlier and tilted: vf_chain stays
+    # rotate-only (NO ffmpeg deshake — stabilization is Resolve-side),
+    # but the stabilize flag is still set for ResolveAdapter to consume.
     cl2 = Cutlist(sequence_name="x", fps=25,
                    cuts=[Cut(clip="/f/A.MTS", in_=0, out=1, offset=0)])
     rep2 = [{"clip": "A.MTS", "horizon_tilt_deg": 2.0,
              "horizon_correction_filter": "rotate=-0.034907:fillcolor=black",
              "shake_score": 999.0}]
     a = corrections_for_cutlist(cl2, rep2)["/f/A.MTS"]
-    check("deshake precedes rotate in chain",
-          a.vf_chain() == "deshake=edge=clamp,"
-                          "rotate=-0.034907:fillcolor=black",
+    check("vf_chain is rotate-only, never ffmpeg deshake",
+          a.vf_chain() == "rotate=-0.034907:fillcolor=black"
+          and "deshake" not in (a.vf_chain() or ""),
           a.vf_chain() or "")
+    check("but stabilize flag set for Resolve-side Stabilize()",
+          a.stabilize is True)
     absent = corr["/foot/zzz.MTS"]
     check("clip absent from report -> clean no-op",
           absent.clean and absent.vf_chain() is None)

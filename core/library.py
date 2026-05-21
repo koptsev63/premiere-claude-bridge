@@ -227,7 +227,6 @@ class MediaLibrary:
 def _main(argv: list[str] | None = None) -> int:
     import argparse
     import json
-    import sys
 
     p = argparse.ArgumentParser(prog="python -m core.library")
     p.add_argument("report", help="analysis report.json")

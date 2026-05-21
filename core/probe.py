@@ -128,8 +128,6 @@ def select_adapter(
 
 
 def _main(argv: list[str] | None = None) -> int:
-    import sys
-
     res = probe_all()
     for name in ("resolve", "premiere", "fcpxml"):
         print(res[name].line())

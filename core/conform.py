@@ -150,7 +150,6 @@ def conform_cutlist(
 
 def _main(argv: list[str] | None = None) -> int:
     import argparse
-    import sys
 
     p = argparse.ArgumentParser(
         prog="python -m core.conform",

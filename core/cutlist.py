@@ -40,7 +40,6 @@ work without it; only `to_otio` / `from_otio` / the `*-otio` CLI verbs need it.
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import sys
 from dataclasses import dataclass, field

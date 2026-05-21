@@ -185,7 +185,6 @@ def burn(video: str, subs: str, out: str) -> str:
 def _main(argv: list[str] | None = None) -> int:
     import argparse
     import json
-    import sys
 
     p = argparse.ArgumentParser(prog="python -m core.subtitles")
     p.add_argument("transcript", help="Whisper JSON (segments[, words])")

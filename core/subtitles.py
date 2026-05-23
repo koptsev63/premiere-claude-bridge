@@ -36,6 +36,7 @@ ASS_FORCE_STYLE = (
     "BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=90"
 )
 _PUNCT_END = re.compile(r"[.,!?;:…]$")
+_SENT_END = re.compile(r"[.!?…]+$")
 
 
 @dataclass
@@ -102,6 +103,31 @@ def chunk_words(words: list[dict], max_words: int = 2,
     return chunks
 
 
+def readable_chunks(words: list[dict], max_words: int = 8,
+                    max_gap: float = 0.8) -> list[Chunk]:
+    """Group words into readable subtitle lines (punctuation kept). Breaks on
+    a sentence end, on max_words, or on a time gap > max_gap (so dead-air-
+    tightened cuts read naturally). Built from WORDS, so a sentence split
+    across speech sub-cuts is never duplicated — each word lands once."""
+    def _mk(ws: list[dict]) -> Chunk:
+        return Chunk(" ".join(x["text"] for x in ws).strip(),
+                     ws[0]["start"], ws[-1]["end"])
+
+    chunks: list[Chunk] = []
+    cur: list[dict] = []
+    for w in words:
+        if cur and (w["start"] - cur[-1]["end"] > max_gap):
+            chunks.append(_mk(cur))
+            cur = []
+        cur.append(w)
+        if len(cur) >= max_words or _SENT_END.search(w["text"]):
+            chunks.append(_mk(cur))
+            cur = []
+    if cur:
+        chunks.append(_mk(cur))
+    return chunks
+
+
 def segment_chunks(transcript: dict[str, Any]) -> list[Chunk]:
     """Segment-level chunks (standard SRT). Fallback when no word times."""
     out: list[Chunk] = []
@@ -161,6 +187,105 @@ def write_srt(transcript: dict[str, Any], path: str | Path) -> str:
 def write_ass(transcript: dict[str, Any], path: str | Path,
               karaoke: bool = True) -> str:
     Path(path).write_text(to_ass(build(transcript, karaoke=karaoke)))
+    return str(path)
+
+
+_SRT_TIME = re.compile(
+    r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*"
+    r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})")
+
+
+def parse_srt(text: str) -> dict[str, Any]:
+    """An existing .srt -> Whisper-shaped transcript ({"segments": [...]}),
+    so a sidecar/delivery SRT can be reused as a source transcript."""
+    segs: list[dict] = []
+    blocks = re.split(r"\n\s*\n", text.strip())
+    for blk in blocks:
+        m = _SRT_TIME.search(blk)
+        if not m:
+            continue
+        a = (int(m[1]) * 3600 + int(m[2]) * 60 + int(m[3]) + int(m[4]) / 1000)
+        b = (int(m[5]) * 3600 + int(m[6]) * 60 + int(m[7]) + int(m[8]) / 1000)
+        body = blk[m.end():].strip().replace("\n", " ")
+        if body:
+            segs.append({"start": round(a, 3), "end": round(b, 3),
+                         "text": body})
+    return {"segments": segs}
+
+
+def timeline_transcript(cutlist: Any,
+                        transcripts: dict[str, dict]) -> dict[str, Any]:
+    """Map per-clip transcripts onto the assembled timeline.
+
+    `cutlist` is anything with `.cuts` (each cut: `.clip`, `.in_`, `.out`,
+    `.offset`). `transcripts` maps a clip key -> a Whisper-shaped transcript;
+    keys are matched against the cut's clip path, basename and stem. Every
+    segment/word inside a cut's [in_, out] window is clipped and shifted to its
+    timeline position (t_timeline = t_source - in_ + offset). Returns one merged
+    transcript in TIMELINE time — feed straight into build()/to_srt()/to_ass().
+    Works on a tightened (dead-air-removed) cutlist: each sub-cut maps its own
+    window, so subtitles follow the cut automatically.
+    """
+    def _lookup(clip: str) -> dict | None:
+        for k in (clip, Path(clip).name, Path(clip).stem):
+            if k in transcripts:
+                return transcripts[k]
+        return None
+
+    segs: list[dict] = []
+    for c in sorted(getattr(cutlist, "cuts", []), key=lambda x: x.offset):
+        tr = _lookup(c.clip)
+        if not tr:
+            continue
+        lo, hi, shift = c.in_, c.out, c.offset - c.in_
+        for seg in tr.get("segments", []):
+            ss, se = seg.get("start"), seg.get("end")
+            if ss is None or se is None:
+                continue
+            ss, se = float(ss), float(se)
+            if se <= lo or ss >= hi:           # segment outside this cut
+                continue
+            txt = (seg.get("text") or "").strip()
+            if not txt:
+                continue
+            words = []
+            for w in seg.get("words") or []:
+                ws, we = w.get("start"), w.get("end")
+                if ws is None or we is None:
+                    continue
+                ws, we = float(ws), float(we)
+                if we <= lo or ws >= hi:
+                    continue
+                wtxt = (w.get("word") or w.get("text") or "").strip()
+                if wtxt:
+                    words.append({"word": wtxt,
+                                  "start": round(max(lo, ws) + shift, 3),
+                                  "end": round(min(hi, we) + shift, 3)})
+            segs.append({"start": round(max(lo, ss) + shift, 3),
+                         "end": round(min(hi, se) + shift, 3),
+                         "text": txt, "words": words})
+    segs.sort(key=lambda s: s["start"])
+    return {"segments": segs}
+
+
+def write_timeline_srt(cutlist: Any, transcripts: dict[str, dict],
+                       path: str | Path) -> str:
+    """Auto-subtitles for the assembled cut, SRT. Built from word timestamps
+    when present (so dead-air-tightened cuts never duplicate a split sentence);
+    falls back to segment-level when there are no word times."""
+    tt = timeline_transcript(cutlist, transcripts)
+    words = _words(tt)
+    chunks = readable_chunks(words) if words else segment_chunks(tt)
+    Path(path).write_text(to_srt(chunks))
+    return str(path)
+
+
+def write_timeline_ass(cutlist: Any, transcripts: dict[str, dict],
+                       path: str | Path, karaoke: bool = True) -> str:
+    """Auto-subtitles for the assembled cut, styled ASS (karaoke needs words)."""
+    Path(path).write_text(
+        to_ass(build(timeline_transcript(cutlist, transcripts),
+                     karaoke=karaoke)))
     return str(path)
 
 

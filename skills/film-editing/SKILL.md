@@ -301,7 +301,7 @@ the reasons are the rules above:
 | Story-by-meaning | ✅ process | transcribe → read → sequence (not metrics) |
 | Speech-to-text | ⚠️ use `small`/`medium` + `--language` | Whisper (`tiny`/`base` garble dialect+mat) |
 | OCR (signage, T-shirts) | 🚧 planned | tesseract on motion-strip frames |
-| Auto silent-trim (kill dead air) | 🚧 planned | ffmpeg silencedetect → trim per clip |
+| Auto silent-trim (kill dead air) | ✅ shipped | `core.silence` — ffmpeg silencedetect → speech segments; `tighten_cutlist` repacks. Дед: 38-51% of a talking take was dead air |
 | Optical flow direction | 🚧 planned | ffmpeg mestimate filter for match-cut |
 | Multicam sync | 🚧 planned | audio waveform xcorr |
 | Face recognition | ⛔ out of scope | privacy boundary — search by *what's said*, not faces |
@@ -423,8 +423,9 @@ Discovery + finishing modules (not strictly sequential):
 | Step | Module | What it gives you |
 |---|---|---|
 | Library | `core.library.MediaLibrary` | tag + search the footage by speech/tags/name, `find_lines()` a character's dialogue, and `to_cutlist()` pulls matches into a NEW sequence (Denis's "split by character / don't lose it"). NO face recognition — by what's said. |
-| Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). |
+| Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). **Auto-align:** `timeline_transcript(cutlist, transcripts)` maps per-clip transcripts onto the assembled — or dead-air-tightened — cut, so subtitles follow the edit; `parse_srt` reuses an existing SRT as the source. |
 | Overlays | `core.overlays` | lower-thirds / title / brand (lime #C8FF00) via ffmpeg `drawtext`; `from_markers(cutlist)` auto-titles from the edit's own beats. |
+| Dead air | `core.silence` | detect silence (ffmpeg `silencedetect`) → keep speech-dense regions; `tighten_cutlist` removes pauses inside takes so a rambling talking head goes tight. Loudness-gated, not semantic — pair with the meaning pass. |
 
 Progress is measured, not vibed: `examples/grave-stakes-teaser/benchmark/`
 scores every version with `analyze_cutlist` (v3 not-clean → v4 clean → v5
@@ -474,6 +475,17 @@ These were paid for in shipped mistakes. Do not relearn them.
    3.14); otio file-IO needs 3.12/3.13; shake/qc need the analysis venv
    (OpenCV). Wrong interpreter = false "can't verify", not a real verdict.
 7. **Report verified vs pending.** Never claim a fix you did not measure.
+8. **ASR is a draft, not a subtitle.** Whisper on dialect/field audio misreads
+   words and drops particles — a lost «не» flips the meaning. After
+   transcription the agent must **read the text and fix it for sense** before
+   it becomes subtitles (Дед: «Скотт»→«скот, скотина»; restored a dropped «не»
+   that had reversed «тогда не болели» into «тогда болели»). Build subs from
+   word timestamps (`readable_chunks`) so a sentence split by dead-air removal
+   is never duplicated.
+9. **A talking cut is never silent.** `core.render(audio=True)` is the default;
+   only a b-roll/teaser that gets music laid under it renders `audio=False`.
+   After rendering, confirm the file actually carries an audio stream
+   (`ffprobe ... stream=codec_type`) — a silent sync cut is a defect.
 
 ---
 

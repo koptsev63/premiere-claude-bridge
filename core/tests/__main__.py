@@ -19,6 +19,7 @@ from core.tests import (
     test_qc,
     test_render,
     test_review_loop,
+    test_silence,
     test_subtitles,
     test_value,
     test_variants,
@@ -37,6 +38,7 @@ MODULES = [
     test_qc,
     test_render,
     test_library,
+    test_silence,
     test_subtitles,
     test_overlays,
 ]

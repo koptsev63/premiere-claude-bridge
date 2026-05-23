@@ -76,7 +76,8 @@ def test_build_plan_shape() -> None:
     j = " ".join(argv)
     check("ffmpeg invocation", argv[0] == "ffmpeg")
     check("one -i per segment", argv.count("-i") == 3)
-    check("concat n=3", "concat=n=3:v=1:a=0" in j)
+    check("concat n=3 keeps audio in sync (a=1)", "concat=n=3:v=1:a=1" in j)
+    check("maps + encodes audio", "-map [a]" in j and "-c:a aac" in j, j)
     check("NO ffmpeg deshake anywhere (Resolve stabilizes)",
           "deshake" not in j)
     check("tilted c.MTS chain has rotate",
@@ -96,6 +97,18 @@ def test_empty_segments_rejected() -> None:
     check("ValueError on no segments", raised)
 
 
+def test_audio_default_on_optional_off() -> None:
+    print("render — audio on by default, picture-only on request")
+    j_on = " ".join(build_render_plan(SEGS, {}, "/tmp/o.mp4"))
+    check("default keeps audio (a=1 + aac)",
+          "concat=n=3:v=1:a=1" in j_on and "-c:a aac" in j_on, j_on)
+    check("per-segment audio normalized for clean concat",
+          "aresample=48000" in j_on, j_on)
+    j_off = " ".join(build_render_plan(SEGS, {}, "/tmp/o.mp4", audio=False))
+    check("audio=False -> picture only (a=0, no aac)",
+          "concat=n=3:v=1:a=0" in j_off and "-c:a" not in j_off, j_off)
+
+
 def main() -> int:
     for fn in (
         test_normalize_always_unsquishes,
@@ -103,6 +116,7 @@ def main() -> int:
         test_horizon_rotate_appended,
         test_build_plan_shape,
         test_empty_segments_rejected,
+        test_audio_default_on_optional_off,
     ):
         fn()
     print(f"\n{_p} passed, {_f} failed")

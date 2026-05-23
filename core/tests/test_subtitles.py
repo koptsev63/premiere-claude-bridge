@@ -12,7 +12,10 @@ from core.subtitles import (
     Chunk,
     build,
     chunk_words,
+    parse_srt,
+    readable_chunks,
     segment_chunks,
+    timeline_transcript,
     to_ass,
     to_srt,
     _fmt_srt,
@@ -116,6 +119,69 @@ def test_degenerate() -> None:
     check("empty -> empty chunks", build({}, karaoke=True) == [])
 
 
+def test_parse_srt() -> None:
+    print("subtitles — parse an existing SRT back into a transcript")
+    srt = ("1\n00:00:01,000 --> 00:00:02,500\nПривет мир\n\n"
+           "2\n00:00:03,000 --> 00:00:04,000\nвторая строка\n")
+    tr = parse_srt(srt)
+    check("two segments", len(tr["segments"]) == 2, str(tr))
+    check("times parsed",
+          tr["segments"][0]["start"] == 1.0 and tr["segments"][0]["end"] == 2.5,
+          str(tr["segments"][0]))
+    check("text parsed", tr["segments"][0]["text"] == "Привет мир",
+          tr["segments"][0]["text"])
+
+
+def test_timeline_transcript() -> None:
+    print("subtitles — map per-clip transcript onto the timeline (auto-subs)")
+    from core.cutlist import Cut, Cutlist
+    trans = {"A.mp4": {"segments": [
+        {"start": 5.0, "end": 7.0, "text": "first",
+         "words": [{"word": "first", "start": 5.0, "end": 7.0}]},
+        {"start": 20.0, "end": 22.0, "text": "outside the window", "words": []},
+    ]}}
+    # cut takes A from in=4 to out=8, placed at offset 10 on the timeline
+    cl = Cutlist(sequence_name="t", fps=25,
+                 cuts=[Cut(clip="A.mp4", in_=4.0, out=8.0, offset=10.0)])
+    tt = timeline_transcript(cl, trans)
+    check("only in-window segment kept", len(tt["segments"]) == 1, str(tt))
+    seg = tt["segments"][0]
+    # 5.0 source -> 5-4+10 = 11.0 ; 7.0 -> 13.0
+    check("segment shifted to timeline",
+          seg["start"] == 11.0 and seg["end"] == 13.0, str(seg))
+    check("word shifted too", seg["words"][0]["start"] == 11.0,
+          str(seg["words"]))
+    # key matching by stem + full path
+    cl2 = Cutlist(sequence_name="t", fps=25,
+                  cuts=[Cut(clip="/path/to/A.mp4", in_=4.0, out=8.0,
+                            offset=0.0)])
+    tt2 = timeline_transcript(cl2, {"A": trans["A.mp4"]})
+    check("matches by stem across a full path", len(tt2["segments"]) == 1,
+          str(tt2))
+
+
+def test_readable_chunks() -> None:
+    print("subtitles — readable word-grouped lines (no dup under tightening)")
+    words = [
+        {"text": "Ну", "start": 0.0, "end": 0.2},
+        {"text": "мало,", "start": 0.2, "end": 0.6},
+        {"text": "кто", "start": 0.6, "end": 0.8},
+        {"text": "покупал?", "start": 0.8, "end": 1.2},   # sentence end -> break
+        {"text": "Скот", "start": 3.0, "end": 3.4},        # 1.8s gap -> break
+        {"text": "держит", "start": 3.4, "end": 3.9},
+    ]
+    chunks = readable_chunks(words, max_words=8, max_gap=0.8)
+    texts = [c.text for c in chunks]
+    check("sentence-end breaks a line",
+          texts[0] == "Ну мало, кто покупал?", str(texts))
+    check("time gap breaks a line", "Скот держит" in texts, str(texts))
+    check("punctuation kept", "покупал?" in texts[0], str(texts))
+    check("each word once (no duplication)",
+          " ".join(texts).count("покупал?") == 1, str(texts))
+    check("max_words splits long runs",
+          all(len(t.split()) <= 8 for t in texts), str(texts))
+
+
 def main() -> int:
     for fn in (
         test_srt_timecode,
@@ -124,6 +190,9 @@ def main() -> int:
         test_ass_style,
         test_build_fallback,
         test_degenerate,
+        test_parse_srt,
+        test_timeline_transcript,
+        test_readable_chunks,
     ):
         fn()
     print(f"\n{_p} passed, {_f} failed")

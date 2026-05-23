@@ -53,28 +53,45 @@ def build_render_plan(
     segments: list[dict[str, Any]],
     corrections: dict[str, Any] | None,
     out_path: str,
+    audio: bool = True,
 ) -> list[str]:
     """segments: [{src, ss, to, clip}]. corrections: {clip: Correction}.
-    Returns the ffmpeg argv (picture only, no audio)."""
+    Returns the ffmpeg argv. `audio=True` (default) concatenates each
+    segment's audio in sync — essential for talking/sync footage; a silent
+    render is almost never what you want. Set `audio=False` for a picture-only
+    cut (e.g. a b-roll teaser that gets music laid under it later). With
+    audio=True every input must carry an audio stream; per-segment audio is
+    resampled to a common 48k stereo float so mixed sources concat cleanly."""
     if not segments:
         raise ValueError("no segments to render")
     corrections = corrections or {}
     argv = ["ffmpeg", "-y"]
     for s in segments:
         argv += ["-ss", str(s["ss"]), "-to", str(s["to"]), "-i", s["src"]]
-    chains = []
-    for i, s in enumerate(segments):
-        c = corrections.get(s.get("clip"))
-        chains.append(f"[{i}:v:0]{segment_vf(c)}[v{i}]")
     n = len(segments)
-    fc = (";".join(chains) + ";"
-          + "".join(f"[v{i}]" for i in range(n))
-          + f"concat=n={n}:v=1:a=0[v]")
-    argv += [
-        "-filter_complex", fc, "-map", "[v]", "-r", "25",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-        "-pix_fmt", "yuv420p", out_path,
-    ]
+    vchains = [f"[{i}:v:0]{segment_vf(corrections.get(s.get('clip')))}[v{i}]"
+               for i, s in enumerate(segments)]
+    if audio:
+        achains = [f"[{i}:a:0]aresample=48000,"
+                   f"aformat=sample_fmts=fltp:channel_layouts=stereo[a{i}]"
+                   for i in range(n)]
+        fc = (";".join(vchains + achains) + ";"
+              + "".join(f"[v{i}][a{i}]" for i in range(n))
+              + f"concat=n={n}:v=1:a=1[v][a]")
+        argv += [
+            "-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-r", "25",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", out_path,
+        ]
+    else:
+        fc = (";".join(vchains) + ";"
+              + "".join(f"[v{i}]" for i in range(n))
+              + f"concat=n={n}:v=1:a=0[v]")
+        argv += [
+            "-filter_complex", fc, "-map", "[v]", "-r", "25",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+            "-pix_fmt", "yuv420p", out_path,
+        ]
     return argv
 
 
@@ -82,8 +99,9 @@ def render(
     segments: list[dict[str, Any]],
     corrections: dict[str, Any] | None,
     out_path: str,
+    audio: bool = True,
 ) -> str:
-    argv = build_render_plan(segments, corrections, out_path)
+    argv = build_render_plan(segments, corrections, out_path, audio=audio)
     r = subprocess.run(argv, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(

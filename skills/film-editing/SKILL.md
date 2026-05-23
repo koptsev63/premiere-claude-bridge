@@ -199,12 +199,13 @@ When Vladimir uses Russian terms, map to Murch concepts:
 ### Tool: `tools/analyze_clips.py`
 
 ```bash
-python3 skills/film-editing/tools/analyze_clips.py \
+# needs the OpenCV venv for shake + horizon (.venv/bin/python):
+.venv/bin/python skills/film-editing/tools/analyze_clips.py \
   /path/to/raw_footage \
-  /path/to/output_log [--whisper]
+  /path/to/output_log [--whisper] [--desc descriptions.json]
 ```
 
-Per clip, it produces:
+Per clip, two layers. **Machine layer** (measured by the program):
 
 | Output | What it captures | LLM use |
 |---|---|---|
@@ -213,25 +214,78 @@ Per clip, it produces:
 | `motion_score` | scene-change frequency | distinguish action clips from static b-roll |
 | `audio_peak_db` + `audio_peak_time_sec` | loudness peak + when | find applause, gasps, dialogue moments — these are emotional anchors |
 | `audio_mean_db` | average loudness | identify speech-bearing vs ambient-only clips |
+| `horizon_tilt_deg` + `horizon_correction_filter` | level check (OpenCV) | flag/level tilted shots — **unreliable on vertical video, do not auto-rotate portrait** |
+| `shake_score` + `needs_stabilization` | camera-shake (OpenCV, 24 samples) | rank jitter; feeds `core.value` |
 | `speech_text` (with `--whisper`) | transcript first 300 chars | exact dialogue + timing |
 
-Output bundle: `report.json` (machine-readable) + `report.html` (human contact sheet).
+**Meaning layer** (written by a person or by Claude looking at the thumbs, fed back via `--desc descriptions.json`, keyed by clip name):
+
+| Field | What it is | Why it exists |
+|---|---|---|
+| `desc_ru` | one line: what is actually in the shot, plain Russian | a metrics dump is not a usable log; the picture's *content* is the thing you cut on |
+| `tags` | keywords (дед, сарай, руки, природа, монолог…) | search/group; the cut is built from these, not from loudness |
+| `keep` | `true` = part of the story, `false` = junk to drop | the program cannot know a clip is "not from this story" — only eyes can |
+
+Output bundle: `report.json` (machine-readable, UTF-8) + `report.html` (contact
+sheet with desc/tags + a green **в историю** / red **лишнее** badge). Both are
+rewritten **after every clip**, so the table is viewable while the run goes.
 
 ### Mandatory editorial protocol with this data
 
-Before designing a cutlist:
+The metrics rank by loudness and movement. They have **no eyes and no
+meaning** — left alone they produce a chaotic dump that glues a market, a cow
+and a stranger together because all three read "loud + moving". Meaning is the
+agent's job, and it comes first.
 
-1. **Run the pipeline** on the source folder. ~12 min for 100 clips at 1080p.
-2. **Open `report.html`** in a browser. Sort by motion + audio peak.
-3. **Read each clip's `_strip.jpg`** — six frames give you a rough "how the action unfolds" view. A static b-roll clip is six identical frames; a true action clip has motion across the strip.
-4. **Mark candidate IN/OUT points using `audio_peak_time_sec`** — the peak is usually where the emotional anchor lives. Set the OUT to land on or just past the peak.
-5. **Cross-reference rankings against your gut picks** — if a clip you assumed was weak ranks high (or vice versa), look at its strip again. Often the in-point is wrong.
+1. **Run the pipeline** on the source folder (`.venv/bin/python`, ~15 min for
+   60 clips incl. shake/horizon). It writes the table after every clip.
+2. **SEE every clip.** Build contact sheets from the thumbs (ffmpeg
+   `tile=7x3`) and `Read` them. One mid-frame can lie (see Grave Stakes
+   below) — for anything ambiguous read its `_strip.jpg` or `/watch` it.
+3. **Classify: keep or drop.** Write `desc_ru` + `tags` + `keep` per clip and
+   feed back via `--desc`. Mark `keep:false` for anything **not in this
+   story** — the author's later life, another place/date, a stranger. (Дед:
+   8 of 63 were a husky, a European city, a café, a child — dropped.)
+4. **For talking footage, get the words, then order by meaning.** Loudness
+   never tells you *what he says*. Transcribe the talkers (`--whisper`, or the
+   `/watch` local backend, real `--language` + `--word_timestamps`), **read the
+   transcripts yourself**, and sequence the spoken beats by content/arc — that
+   is what "сложить по смыслу" means. Picture serves the words: market talk →
+   show the market; hard-labour talk → his hands, the shed.
+5. **Only now use the metrics** — for in/out and ranking *within* a kept,
+   meaningful group: `audio_peak_time_sec` as a candidate IN-anchor,
+   `shake`/`horizon` to flag fixes, `core.value` to order energy inside a beat.
+6. **Cross-reference rankings against your gut** — a clip that ranks high but
+   reads wrong usually has the wrong in-point; look at its strip again.
 
 ### Lessons from Grave Stakes case study
 
 - **Don't trust a single thumbnail.** The clip `00172.MTS` looked like a static "wooden frame on grass" from one mid-frame. The strip revealed: first half static, **second half a tight digger close-up at ss≈15+**. Almost dropped a strong clip.
 - **Audio peak ≠ visual peak.** For documentary footage, audio peaks (a clap, a shout, a tool strike) often mark the moment that ought to be in the cut. Use `audio_peak_time_sec` as a candidate IN-anchor.
 - **Whisper `tiny` model fails on noisy field audio in non-English languages.** For real dialogue extraction use `--model medium --language XX`. Plan for ~15 sec/min of audio per Whisper pass.
+
+### Lessons from the Дед case study
+
+63 phone clips of an old man in a Russian village (Aug 2019), lots of talk and
+dead air. A value-ranked auto-cut on this was rejected outright — twice — and
+the reasons are the rules above:
+
+- **A loudness/motion auto-cut on talking footage is a chaotic dump.** It had
+  no editorial logic and it glued in clips that were *not the story*. The
+  metric layer is blind; do not ship its order as a cut.
+- **The agent must SEE and CLASSIFY before cutting.** Contact sheets of all 63
+  revealed 8 clips that belonged to the author's later life (a husky in a flat,
+  a European street, a café, a child) — invisible to motion/audio, obvious to
+  eyes. Drop them via `keep:false`.
+- **"Сложить по смыслу" = transcribe, read, then sequence by content.** The
+  monologues were about repression, prisons, hard peasant labour, the market.
+  Only the transcript reveals that; loudness ranked the silent action clips on
+  top instead. Picture follows the words.
+- **The table must be COMPLETE.** A 12-clip subset is not a log of a 63-clip
+  shoot. Run all of it; every clip gets `desc_ru` + `tags` + `keep`.
+- **The horizon detector lies on vertical video.** One portrait clip read
+  −29.67°; auto-rotating it would have wrecked the frame. Trust horizon on
+  landscape only; never auto-rotate portrait.
 
 ### Roadmap for the analysis pipeline
 
@@ -241,12 +295,16 @@ Before designing a cutlist:
 | Audio peaks | ✅ shipped | ffmpeg astats + ametadata parse |
 | 6-frame motion strip | ✅ shipped | ffmpeg hstack |
 | HTML contact sheet | ✅ shipped | inline jinja-style template |
-| Speech-to-text | ⚠️ needs medium-model + language hint | Whisper |
+| Horizon tilt + filter | ✅ shipped | OpenCV (`.venv`), unreliable on portrait |
+| Shake score | ✅ shipped | OpenCV phase-correlation, 24 samples |
+| Russian desc + tags + keep/drop | ✅ shipped | `--desc` file, written by agent/person |
+| Story-by-meaning | ✅ process | transcribe → read → sequence (not metrics) |
+| Speech-to-text | ⚠️ use `small`/`medium` + `--language` | Whisper (`tiny`/`base` garble dialect+mat) |
 | OCR (signage, T-shirts) | 🚧 planned | tesseract on motion-strip frames |
-| Face count + sentiment | 🚧 planned | mediapipe / opencv |
-| Optical flow direction | 🚧 planned | ffmpeg mestimate filter for match-cut suggestion |
-| Auto silent-trim | 🚧 planned | ffmpeg silencedetect → trim deadwood per clip |
+| Auto silent-trim (kill dead air) | 🚧 planned | ffmpeg silencedetect → trim per clip |
+| Optical flow direction | 🚧 planned | ffmpeg mestimate filter for match-cut |
 | Multicam sync | 🚧 planned | audio waveform xcorr |
+| Face recognition | ⛔ out of scope | privacy boundary — search by *what's said*, not faces |
 
 ---
 
@@ -427,7 +485,12 @@ These were paid for in shipped mistakes. Do not relearn them.
 
 ---
 
-**Last updated:** 2026-05-18 (§XVI automated pipeline + §XVII hard rules:
-anamorphic un-squish, Resolve-native Stabilize over banned ffmpeg deshake,
+**Last updated:** 2026-05-22 (§XIII meaning layer: `analyze_clips --desc`
+adds Russian `desc_ru` + `tags` + `keep/drop` and shake/horizon to a complete
+per-clip table written incrementally; editorial protocol rewritten meaning-first
+— see → classify → transcribe → sequence by content, metrics last; Дед case
+study: why a loudness/motion auto-cut on talking footage is a dump and how the
+agent fixes it). Earlier: 2026-05-18 §XVI automated pipeline + §XVII hard rules
+(anamorphic un-squish, Resolve-native Stabilize over banned ffmpeg deshake,
 relative-outlier stabilization, mandatory fail-closed QC, two-variant pick).
 Maintained as part of the `premiere-claude-bridge` open-source release.

@@ -48,10 +48,14 @@ Claude: ✓ Imported 108 clips into bin '01_Source_MTS'
 
 ### Prerequisites
 
-- **Adobe Premiere Pro 2024+** on macOS or Windows
+You pick one **agent** and one **NLE** — the bridge connects them:
+
+- **Agent:** [Claude Code](https://claude.ai/download) **or** OpenAI **Codex** (both speak MCP) — or any MCP-compatible client
+- **NLE:** **Adobe Premiere Pro 2024+** **or** **DaVinci Resolve _Studio_** (the paid Studio — the free edition has no scripting API or stabilizer). Premiere runs on macOS/Windows; the Resolve path is tested on macOS.
 - **Node.js 20+** for the MCP server
-- **Claude Code** ([install](https://claude.ai/download)) or any MCP-compatible client
-- **Python 3.11+** + **ffmpeg** for the analysis tools
+- **Python 3.11+** + **ffmpeg** for the analysis tools (camera-shake + horizon need OpenCV: `pip install opencv-python-headless`)
+
+You drive it by **talking in plain language** — no commands to memorize. The terminal is only for the one-time install.
 
 ### 1. Clone and install
 

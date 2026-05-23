@@ -4,6 +4,9 @@ node_modules/
 mcp-server/node_modules/
 __pycache__/
 *.pyc
+# python virtualenv for the analysis tools (opencv, etc.) — never commit
+.venv/
+venv/
 /tmp/
 
 # generated NLE project files (FcpxmlAdapter writes to cwd) — never commit

@@ -7,6 +7,38 @@ per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
 
+### Added - OpenReel-inspired audio & edit-intelligence (June 2026)
+
+Five self-contained modules. Algorithms (not code) ported from the MIT browser
+editor OpenReel Video, each mapped to a real pain hit on the Дед / Grave Stakes
+footage. All run on the ffmpeg already required (zero new pip deps); numpy is an
+optional accelerator only.
+
+- **`core/ducking.py`** - music auto-lowers under speech. Speech intervals come
+  from our Whisper word timestamps (more precise than OpenReel's RMS guess) or
+  from `core.silence`; an S-curve attack/release envelope drives a music gain
+  that dips during dialog. Verified: -7.9 dB dip at reduction 0.6 (theory -8.0
+  dB). Wired into `core.render.render_with_ducked_music()`, replacing the
+  hand-balanced Grave Stakes mix. 20 tests.
+- **`core/denoise.py`** - 3-stage cleanup (rumble high-pass, afftdn broadband,
+  optional hum notch, level normalize) before speech-to-text, so Whisper
+  mis-hears fewer words. ~15 dB suppression on pure noise. Wired into the
+  Whisper path via `whisper.py --denoise`. 12 tests.
+- **`core/asr_verify.py`** - the transcript second pass we wanted: flags low
+  confidence, repetition loops, truncated tokens (the "Ско"->"скот" class),
+  impossible timing, mixed Cyrillic/Latin garble; `apply_corrections()` fixes
+  them. Wired into `subtitles.write_timeline_srt/ass(verify=, corrections=)`.
+  66 tests.
+- **`core/highlights.py`** - auto-pick best moments (energy + speech density,
+  snapped to scene cuts) into a render-ready `Cutlist`, for auto short versions.
+  Picks loud over quiet, verified. 16 tests.
+- **`core/beats.py`** - beat/BPM detection (RMS flux, adaptive threshold, BPM
+  voting) + `snap_cutlist_to_beats()` to cut a montage in time to music.
+  Recovers 120 BPM on a click track. 28 tests.
+- **`core/render.py`** - banding lesson baked in: always libx264 (never a
+  hardware/VideoToolbox encoder, which banded the flat-black Grave Stakes title
+  cards); optional `pix_fmt="yuv420p10le"` for gradient-heavy masters.
+
 ### Added — automated editing pipeline
 
 End-to-end generation, dogfooded to produce **v5** on the Grave Stakes

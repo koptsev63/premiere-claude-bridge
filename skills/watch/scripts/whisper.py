@@ -107,8 +107,30 @@ def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, 
     return None, None
 
 
-def extract_audio(video_path: str, out_path: Path) -> Path:
-    """Extract mono 16kHz 64kbps mp3 — ~480 kB/min, fits any Whisper limit."""
+# Denoise pre-pass (optional). Noisy phone/field audio makes Whisper mis-hear
+# words (a real bug on the "Дед" footage: "Ско" for "скот"). Cleaning the audio
+# before transcription cuts those errors. We reuse core.denoise.build_denoise_filter
+# (tested) when the package is importable, and fall back to a self-contained chain
+# so this script still runs standalone. Filter logic inspired by OpenReel Video (MIT).
+_DENOISE_FALLBACK = "highpass=f=80,afftdn=nf=-25:nr=12,dynaudnorm"
+
+
+def _denoise_chain() -> str:
+    """ffmpeg -af chain for ASR cleanup. Prefers the tested core.denoise builder."""
+    try:
+        repo_root = Path(__file__).resolve().parents[3]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from core.denoise import build_denoise_filter
+        return build_denoise_filter()
+    except Exception:
+        return _DENOISE_FALLBACK
+
+
+def extract_audio(video_path: str, out_path: Path, denoise: bool = False) -> Path:
+    """Extract mono 16kHz 64kbps mp3 — ~480 kB/min, fits any Whisper limit.
+    With denoise=True, apply a rumble/broadband/normalize cleanup pass first so
+    Whisper mis-hears fewer words on noisy field audio."""
     if shutil.which("ffmpeg") is None:
         raise SystemExit("ffmpeg is not installed. Install with: brew install ffmpeg")
 
@@ -120,6 +142,10 @@ def extract_audio(video_path: str, out_path: Path) -> Path:
         "-y",
         "-i", str(Path(video_path).resolve()),
         "-vn",
+    ]
+    if denoise:
+        cmd += ["-af", _denoise_chain()]
+    cmd += [
         "-acodec", "libmp3lame",
         "-ar", "16000",
         "-ac", "1",
@@ -349,6 +375,7 @@ def transcribe_video(
     backend: str | None = None,
     api_key: str | None = None,
     language: str | None = None,
+    denoise: bool = False,
 ) -> tuple[list[dict], str]:
     """Run the full flow: extract audio → transcribe → parse segments.
 
@@ -358,6 +385,10 @@ def transcribe_video(
     by the local backend (cloud APIs auto-detect). Strongly recommended for
     non-English audio because Whisper's auto-detection is unreliable on noisy
     field recordings.
+
+    `denoise`: when True, run a cleanup pass on the extracted audio before
+    transcription (recommended for noisy phone/field recordings; it reduces
+    Whisper mis-hearings).
     """
     if backend is None or api_key is None:
         detected_backend, detected_key = load_api_key()
@@ -376,7 +407,7 @@ def transcribe_video(
     if backend == "local":
         # Local backend doesn't need a key; pseudo-key from load_api_key.
         print("[watch] extracting audio for local whisper…", file=sys.stderr)
-        audio_path = extract_audio(video_path, audio_out)
+        audio_path = extract_audio(video_path, audio_out, denoise=denoise)
         size_kb = audio_path.stat().st_size / 1024
         print(f"[watch] audio: {size_kb:.0f} kB — running local whisper offline…", file=sys.stderr)
         segments = transcribe_local(audio_path, audio_out.parent, language=language)
@@ -389,7 +420,7 @@ def transcribe_video(
         raise SystemExit(f"Whisper backend `{backend}` selected but no API key found.")
 
     print(f"[watch] extracting audio for Whisper ({backend})…", file=sys.stderr)
-    audio_path = extract_audio(video_path, audio_out)
+    audio_path = extract_audio(video_path, audio_out, denoise=denoise)
     size_kb = audio_path.stat().st_size / 1024
     print(f"[watch] audio: {size_kb:.0f} kB — uploading to {backend} Whisper…", file=sys.stderr)
 
@@ -410,7 +441,8 @@ def transcribe_video(
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: whisper.py <video-path> [<audio-out.mp3>] [--backend groq|openai]", file=sys.stderr)
+        print("usage: whisper.py <video-path> [<audio-out.mp3>] "
+              "[--backend groq|openai|local] [--denoise]", file=sys.stderr)
         raise SystemExit(2)
 
     video = sys.argv[1]
@@ -418,6 +450,9 @@ if __name__ == "__main__":
     backend_override = None
     if "--backend" in sys.argv:
         backend_override = sys.argv[sys.argv.index("--backend") + 1]
+    denoise = "--denoise" in sys.argv
 
-    segments, backend = transcribe_video(video, audio_out, backend=backend_override)
+    segments, backend = transcribe_video(video, audio_out,
+                                         backend=backend_override,
+                                         denoise=denoise)
     print(json.dumps({"backend": backend, "segments": segments}, indent=2))

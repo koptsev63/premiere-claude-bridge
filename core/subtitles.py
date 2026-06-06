@@ -268,12 +268,35 @@ def timeline_transcript(cutlist: Any,
     return {"segments": segs}
 
 
+def _verified(tt: dict[str, Any], verify: bool,
+              corrections: dict | None) -> dict[str, Any]:
+    """Optional ASR second pass before captions are written. `verify=True`
+    flags likely mis-hearings (low confidence, repetition loops, truncated
+    tokens like 'Ско'->'скот', impossible timing, Cyrillic/Latin garble) and
+    prints a timecoded report. `corrections` (text->fix, or (seg,word)->fix)
+    is applied if given. Both are no-ops by default, so existing callers are
+    unchanged. See core.asr_verify."""
+    if corrections:
+        from core import asr_verify
+        tt = asr_verify.apply_corrections(tt, corrections)
+    if verify:
+        from core import asr_verify
+        suspects = asr_verify.flag_suspects(tt)
+        if suspects:
+            print(asr_verify.report(tt))
+    return tt
+
+
 def write_timeline_srt(cutlist: Any, transcripts: dict[str, dict],
-                       path: str | Path) -> str:
+                       path: str | Path, *, verify: bool = False,
+                       corrections: dict | None = None) -> str:
     """Auto-subtitles for the assembled cut, SRT. Built from word timestamps
     when present (so dead-air-tightened cuts never duplicate a split sentence);
-    falls back to segment-level when there are no word times."""
-    tt = timeline_transcript(cutlist, transcripts)
+    falls back to segment-level when there are no word times. Pass verify=True
+    to run the ASR sanity second pass (report only) and/or corrections to fix
+    known mis-hearings before writing."""
+    tt = _verified(timeline_transcript(cutlist, transcripts),
+                   verify, corrections)
     words = _words(tt)
     chunks = readable_chunks(words) if words else segment_chunks(tt)
     Path(path).write_text(to_srt(chunks))
@@ -281,11 +304,14 @@ def write_timeline_srt(cutlist: Any, transcripts: dict[str, dict],
 
 
 def write_timeline_ass(cutlist: Any, transcripts: dict[str, dict],
-                       path: str | Path, karaoke: bool = True) -> str:
-    """Auto-subtitles for the assembled cut, styled ASS (karaoke needs words)."""
-    Path(path).write_text(
-        to_ass(build(timeline_transcript(cutlist, transcripts),
-                     karaoke=karaoke)))
+                       path: str | Path, karaoke: bool = True, *,
+                       verify: bool = False,
+                       corrections: dict | None = None) -> str:
+    """Auto-subtitles for the assembled cut, styled ASS (karaoke needs words).
+    verify/corrections run the optional ASR second pass (see write_timeline_srt)."""
+    tt = _verified(timeline_transcript(cutlist, transcripts),
+                   verify, corrections)
+    Path(path).write_text(to_ass(build(tt, karaoke=karaoke)))
     return str(path)
 
 

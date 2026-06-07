@@ -88,3 +88,34 @@ will **not** attach — run anything that drives Resolve with python3.13 /
 3.11 / 3.9. The adapter still imports cleanly on 3.14; only a live
 `connect()` needs a compatible interpreter, and it fails with a clear
 `ResolveUnavailable` if the binding can't load.
+
+## Audio & edit-intelligence modules
+
+Algorithms ported from the MIT browser editor OpenReel Video, each tied to a
+real pain on the Дед / Grave Stakes footage. ffmpeg-only (no new pip deps).
+
+```bash
+# auto-duck music under speech (replaces hand-balancing a music bed)
+python -m core.ducking MUSIC OUT --video CUT.mp4 --reduction 0.5
+# clean noisy audio before transcription (fewer Whisper mis-hearings)
+python -m core.denoise IN OUT --asr
+python skills/watch/scripts/whisper.py CLIP.mp4 --denoise   # same, in the watch flow
+# verify a transcript, flag likely mis-hearings (exit 1 if any)
+python -m core.asr_verify transcript.json
+# auto-pick the best moments into a render-ready cutlist (short version)
+python -m core.highlights CLIP.mov --target 75 [--transcript t.json]
+# detect BPM / beats to cut a montage in time to music
+python -m core.beats TRACK.wav
+```
+
+- `core/ducking.py` - speech-aware music ducking (S-curve envelope from Whisper
+  word times or `core.silence`). Use `render.render_with_ducked_music()`.
+- `core/denoise.py` - rumble / broadband / hum / normalize pre-pass for ASR.
+- `core/asr_verify.py` - transcript second pass; `flag_suspects` +
+  `apply_corrections`. Hook via `subtitles.write_timeline_srt(verify=...)`.
+- `core/highlights.py` - energy + speech-density scoring, scene-cut snapping.
+- `core/beats.py` - beat/BPM detection + `snap_cutlist_to_beats()`.
+
+Encoder note: picture renders always use libx264. A hardware (VideoToolbox)
+H.264 encoder banded the flat-black Grave Stakes title cards; libx264 does not.
+For gradient-heavy masters pass `pix_fmt="yuv420p10le"` to `build_render_plan`.

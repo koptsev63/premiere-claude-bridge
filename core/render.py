@@ -26,6 +26,15 @@ NORMALIZE = (
     "scale=1920:1080:force_original_aspect_ratio=decrease,"
     "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25"
 )
+# NOTE on the encoder (banding lesson, June 2026): we always encode with
+# libx264 (software). A real defect on a GRAVE STAKES teaser was a flickering
+# purple/grey band over flat-black title cards. Root cause: DaVinci Resolve's
+# Apple VideoToolbox (hardware) H.264 encoder bands flat areas next to
+# high-contrast graphics. libx264 does not. Lesson baked in here: never swap to
+# a hardware encoder for graphics/flat-colour content. For gradient-heavy or
+# flat-colour masters, pass `pix_fmt="yuv420p10le"` (10-bit) to build_render_plan
+# for extra headroom against banding. The default stays yuv420p (8-bit).
+#
 # NOTE on stabilization: ffmpeg `deshake` is a primitive single-pass
 # filter (~2000s tech) — it crawls/jitters and looked worse than the
 # original handheld. It is deliberately NOT used here. Real
@@ -54,6 +63,7 @@ def build_render_plan(
     corrections: dict[str, Any] | None,
     out_path: str,
     audio: bool = True,
+    pix_fmt: str = "yuv420p",
 ) -> list[str]:
     """segments: [{src, ss, to, clip}]. corrections: {clip: Correction}.
     Returns the ffmpeg argv. `audio=True` (default) concatenates each
@@ -81,7 +91,7 @@ def build_render_plan(
         argv += [
             "-filter_complex", fc, "-map", "[v]", "-map", "[a]", "-r", "25",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", out_path,
+            "-pix_fmt", pix_fmt, "-c:a", "aac", "-b:a", "192k", out_path,
         ]
     else:
         fc = (";".join(vchains) + ";"
@@ -90,7 +100,7 @@ def build_render_plan(
         argv += [
             "-filter_complex", fc, "-map", "[v]", "-r", "25",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-            "-pix_fmt", "yuv420p", out_path,
+            "-pix_fmt", pix_fmt, out_path,
         ]
     return argv
 
@@ -100,8 +110,10 @@ def render(
     corrections: dict[str, Any] | None,
     out_path: str,
     audio: bool = True,
+    pix_fmt: str = "yuv420p",
 ) -> str:
-    argv = build_render_plan(segments, corrections, out_path, audio=audio)
+    argv = build_render_plan(segments, corrections, out_path, audio=audio,
+                             pix_fmt=pix_fmt)
     r = subprocess.run(argv, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(
@@ -109,4 +121,49 @@ def render(
         )
     if not Path(out_path).exists():
         raise RuntimeError("render produced no output file")
+    return out_path
+
+
+def render_with_ducked_music(
+    segments: list[dict[str, Any]],
+    corrections: dict[str, Any] | None,
+    music: str,
+    out_path: str,
+    *,
+    intervals: list[tuple[float, float]] | None = None,
+    ambient_gain: float = 0.30,
+    reduction: float = 0.5,
+    pix_fmt: str = "yuv420p",
+    keep_temp: bool = False,
+) -> str:
+    """Render the cut, then lay a music bed that auto-ducks under speech.
+
+    Replaces hand-balancing music vs ambient (the GRAVE STAKES way). Picture +
+    the cut's own sync audio (dialog/ambient) render first; then
+    `core.ducking.build_ducked_mix` derives speech intervals from that cut (or
+    uses `intervals` from Whisper word timestamps if given) and produces a mix
+    where the music sits full and dips under any speech, with the ambient kept
+    low underneath. The ducked mix is muxed back over the picture.
+
+    Ducking math is ported from OpenReel Video (MIT). Returns out_path.
+    """
+    from core import ducking  # local import: optional feature, avoid cycles
+
+    tmp_cut = str(Path(out_path).with_suffix(".cut.mp4"))
+    tmp_mix = str(Path(out_path).with_suffix(".mix.m4a"))
+    render(segments, corrections, tmp_cut, audio=True, pix_fmt=pix_fmt)
+    ducking.build_ducked_mix(
+        music, tmp_mix, video=tmp_cut, intervals=intervals,
+        ambient_gain=ambient_gain, reduction=reduction)
+    argv = ["ffmpeg", "-y", "-i", tmp_cut, "-i", tmp_mix,
+            "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
+            "-b:a", "256k", "-movflags", "+faststart", "-shortest", out_path]
+    r = subprocess.run(argv, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError("mux of ducked music failed:\n" + r.stderr[-2000:])
+    if not Path(out_path).exists():
+        raise RuntimeError("ducked render produced no output file")
+    if not keep_temp:
+        for t in (tmp_cut, tmp_mix):
+            Path(t).unlink(missing_ok=True)
     return out_path

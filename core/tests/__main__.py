@@ -9,10 +9,15 @@ import sys
 
 from core.tests import (
     test_adapters,
+    test_asr_verify,
+    test_beats,
     test_cleanup,
     test_concrete_adapters,
     test_conform,
     test_cutlist,
+    test_denoise,
+    test_ducking,
+    test_highlights,
     test_library,
     test_overlays,
     test_probe,
@@ -41,6 +46,12 @@ MODULES = [
     test_silence,
     test_subtitles,
     test_overlays,
+    # OpenReel-inspired audio/edit modules (June 2026)
+    test_ducking,
+    test_denoise,
+    test_highlights,
+    test_beats,
+    test_asr_verify,
 ]
 
 

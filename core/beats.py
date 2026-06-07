@@ -8,6 +8,7 @@ by ear before rendering.
 
 Pure, unit-tested core (no ffmpeg):
   rms_frames(samples, win, hop)           - RMS energy per analysis frame
+  onset_envelope(energies)                - half-wave flux (note attacks)
   adaptive_threshold(energies, sensitivity) - per-frame adaptive gate
   pick_onsets(energies, thresholds, min_gap_frames) - onset candidates
   estimate_bpm(onset_times, min_bpm, max_bpm) -> (bpm, confidence)
@@ -26,6 +27,7 @@ Ported from OpenReel Video (MIT) packages/core/src/audio/beat-detection-engine.t
 from __future__ import annotations
 
 import array
+import bisect
 import math
 import struct
 import subprocess
@@ -105,6 +107,27 @@ def rms_frames(
         mean_sq = sum(x * x for x in block) / win
         out.append(round(math.sqrt(mean_sq), 6))
         i += hop
+    return out
+
+
+def onset_envelope(energies: list[float]) -> list[float]:
+    """Half-wave-rectified first difference of the energy curve (onset flux).
+
+    Raw RMS over 75%-overlapping windows is too smooth for peak-picking on
+    continuous music: a sustained loud passage never produces the sharp local
+    rise pick_onsets needs, so detection finds zero onsets (verified on a real
+    Balkan brass track). The positive frame-to-frame increase isolates note
+    attacks, which is what we actually want. Same idea as a spectral-flux onset
+    envelope, kept in the energy domain to stay dependency-free.
+
+    Returns a list the same length as `energies` (first element is 0.0).
+    """
+    if not energies:
+        return []
+    out = [0.0]
+    for i in range(1, len(energies)):
+        d = energies[i] - energies[i - 1]
+        out.append(d if d > 0.0 else 0.0)
     return out
 
 
@@ -296,6 +319,46 @@ def _read_pcm_mono(path: str, sr: int = DEF_SR) -> list[float]:
     return samples
 
 
+def _beat_grid(onset_times: list[float], bpm: float, duration: float) -> list[float]:
+    """Even tempo grid at `bpm`, phase-aligned to the first detected onset.
+
+    For cutting to music we want regular BEAT times, not every note onset.
+    Build a steady grid from the BPM and lock its phase to the first onset,
+    extended back toward 0 so the whole track is covered.
+    """
+    if bpm <= 0 or not onset_times or duration <= 0:
+        return []
+    period = 60.0 / bpm
+    t0 = onset_times[0]
+    start = t0 - period * math.floor(t0 / period)
+    beats: list[float] = []
+    t = start
+    while t <= duration + 1e-6:
+        beats.append(round(t, 3))
+        t += period
+    return beats
+
+
+def _grid_confidence(beats: list[float], onset_times: list[float],
+                     period: float) -> float:
+    """Fraction of grid beats with a detected onset within +-15% of a beat.
+
+    An honest tempo-lock score: high when real note attacks land on the grid.
+    Replaces OpenReel's onset-count ratio, which scored a correct BPM as "low"
+    whenever music had more note onsets than beats (the normal case).
+    """
+    if not beats or not onset_times or period <= 0:
+        return 0.0
+    tol = period * 0.15
+    ot = sorted(onset_times)
+    hits = 0
+    for b in beats:
+        i = bisect.bisect_left(ot, b)
+        if any(0 <= j < len(ot) and abs(ot[j] - b) <= tol for j in (i - 1, i)):
+            hits += 1
+    return round(hits / len(beats), 3)
+
+
 def detect_beats(
     path: str,
     *,
@@ -320,30 +383,40 @@ def detect_beats(
     -------
     dict with keys:
       bpm         : float - estimated tempo
-      confidence  : float in [0, 1]
-      beats       : list[float] - beat timestamps in seconds, 3 decimals
+      confidence  : float in [0, 1] - tempo-lock score (onsets on the grid)
+      beats       : list[float] - even beat grid at the BPM, 3 decimals
       downbeats   : list[float] - every 4th beat (assumes 4/4 time)
+      onsets      : list[float] - raw detected note attacks (for inspection)
     """
     samples = _read_pcm_mono(path, sr)
     if not samples:
-        return {"bpm": 0.0, "confidence": 0.0, "beats": [], "downbeats": []}
+        return {"bpm": 0.0, "confidence": 0.0, "beats": [],
+                "downbeats": [], "onsets": []}
 
     energies = rms_frames(samples, win, hop)
-    thresholds = adaptive_threshold(energies, sensitivity)
+    # Detect on the onset-flux envelope, not raw RMS: continuous music is too
+    # smooth for peak-picking on RMS directly (it yields zero onsets).
+    flux = onset_envelope(energies)
+    thresholds = adaptive_threshold(flux, sensitivity)
     min_gap_frames = max(1, round(_MIN_ONSET_GAP_S * sr / hop))
-    onset_frames = pick_onsets(energies, thresholds, min_gap_frames)
+    onset_frames = pick_onsets(flux, thresholds, min_gap_frames)
 
     hop_s = hop / sr
     onset_times = [round(f * hop_s, 3) for f in onset_frames]
 
-    bpm, confidence = estimate_bpm(onset_times, min_bpm, max_bpm)
-    downbeats = onset_times[::4]
+    bpm, _ = estimate_bpm(onset_times, min_bpm, max_bpm)
+    duration = len(samples) / sr
+    beats = _beat_grid(onset_times, bpm, duration)
+    period = 60.0 / bpm if bpm > 0 else 0.0
+    confidence = _grid_confidence(beats, onset_times, period)
+    downbeats = beats[::4]
 
     return {
         "bpm": bpm,
-        "confidence": round(confidence, 3),
-        "beats": onset_times,
+        "confidence": confidence,
+        "beats": beats,
         "downbeats": downbeats,
+        "onsets": onset_times,
     }
 
 

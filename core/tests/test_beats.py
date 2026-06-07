@@ -9,8 +9,10 @@ import math
 import sys
 
 from core.beats import (
+    _beat_grid,
     adaptive_threshold,
     estimate_bpm,
+    onset_envelope,
     pick_onsets,
     rms_frames,
     snap_cutlist_to_beats,
@@ -271,6 +273,36 @@ def test_snap_empty_beats() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# onset_envelope (flux) + beat grid
+# --------------------------------------------------------------------------- #
+
+
+def test_onset_envelope_rectifies() -> None:
+    """Only positive frame-to-frame increases survive; drops become 0."""
+    env = onset_envelope([0.0, 0.5, 0.2, 0.9, 0.9])
+    check("flux half-wave rectified",
+          env == [0.0, 0.5, 0.0, 0.7, 0.0], f"{env}")
+
+
+def test_onset_envelope_length_and_empty() -> None:
+    check("flux length matches input", len(onset_envelope([1.0] * 7)) == 7)
+    check("flux of flat signal is all zero",
+          onset_envelope([0.3] * 5) == [0.0] * 5)
+    check("flux empty -> empty", onset_envelope([]) == [])
+
+
+def test_beat_grid_spacing() -> None:
+    """Grid is evenly spaced at 60/bpm and phase-aligned to the first onset."""
+    grid = _beat_grid([0.5, 1.2, 1.9], bpm=120.0, duration=3.0)
+    # period 0.5s, phase aligned to 0.5 -> 0.0,0.5,1.0,...
+    check("grid evenly spaced at the period",
+          all(abs((grid[i + 1] - grid[i]) - 0.5) < 1e-6
+              for i in range(len(grid) - 1)), f"{grid}")
+    check("grid covers the duration", grid[-1] <= 3.0 and grid[-1] >= 2.5)
+    check("grid empty when bpm is 0", _beat_grid([0.5], 0.0, 3.0) == [])
+
+
+# --------------------------------------------------------------------------- #
 # Runner
 # --------------------------------------------------------------------------- #
 
@@ -287,6 +319,11 @@ def main() -> int:
     test_adaptive_threshold_length()
     test_adaptive_threshold_empty()
     test_adaptive_threshold_stricter_at_low_sensitivity()
+
+    print("--- onset_envelope + beat grid ---")
+    test_onset_envelope_rectifies()
+    test_onset_envelope_length_and_empty()
+    test_beat_grid_spacing()
 
     print("--- pick_onsets ---")
     test_pick_onsets_basic()

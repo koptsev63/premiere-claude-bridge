@@ -97,6 +97,48 @@ def test_resolve_guard() -> None:
     )
 
 
+def test_resolve_frame_math() -> None:
+    """The off-by-one that cost a frame per clip on the V1 reel.
+
+    `AppendToTimeline` takes endFrame as EXCLUSIVE. Reading it as the last
+    included frame shortened every clip by one frame — 13 clips came back
+    64.767s instead of 65.200s at 30fps, and the subtitles drifted 0.43s
+    by the end. Stubbing the media pool keeps this deterministic and away
+    from anyone's live project.
+    """
+    print("Resolve adapter — frame math (endFrame is exclusive)")
+
+    class _Pool:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def AppendToTimeline(self, infos):  # noqa: N802 - Resolve's API name
+            self.calls.extend(infos)
+            return True
+
+    a = ResolveAdapter()
+    pool = _Pool()
+    a._media_pool = pool
+    a._fps = 30.0
+    a._tl_start = 86400
+    a.place_clip("clip", src_in=0.0, src_out=1.0, timeline_offset=0.0)
+    a.place_clip("clip", src_in=2.0, src_out=2.5, timeline_offset=1.0)
+
+    one, half = pool.calls
+    check("one second of source = 30 frames",
+          one["endFrame"] - one["startFrame"] == 30,
+          str(one))
+    check("half a second = 15 frames",
+          half["endFrame"] - half["startFrame"] == 15, str(half))
+    check("in point maps to its own frame", half["startFrame"] == 60,
+          str(half["startFrame"]))
+    check("13 clips no longer lose 13 frames",
+          sum(c["endFrame"] - c["startFrame"] for c in pool.calls) == 45,
+          str([c["endFrame"] - c["startFrame"] for c in pool.calls]))
+    check("recordFrame stays absolute (timeline starts at 01:00:00:00)",
+          half["recordFrame"] == 86400 + 30, str(half["recordFrame"]))
+
+
 def test_premiere_jsx() -> None:
     print("Premiere adapter — compiles ExtendScript")
     cl = Cutlist.load(EXAMPLE)
@@ -169,6 +211,7 @@ def test_fcpxml_roundtrip_backend() -> None:
 def main() -> int:
     for fn in (
         test_resolve_guard,
+        test_resolve_frame_math,
         test_premiere_jsx,
         test_fcpxml_roundtrip_backend,
     ):

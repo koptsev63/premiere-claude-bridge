@@ -119,3 +119,27 @@ python -m core.beats TRACK.wav
 Encoder note: picture renders always use libx264. A hardware (VideoToolbox)
 H.264 encoder banded the flat-black Grave Stakes title cards; libx264 does not.
 For gradient-heavy masters pass `pix_fmt="yuv420p10le"` to `build_render_plan`.
+
+## Finishing: the colour gate and the round trip
+
+Two modules from the August 2026 reel job, where the machine cut, the human
+recut, and the grade had to survive a director's eye.
+
+```bash
+# is this grade burnt — or is it invisible? (exit 1 = do not ship)
+python -m core.colorgate BASE.mov GRADED.mp4 --frames 8 --upto 60
+# what did the human actually approve in his project?
+python -m core.prproj "reel.prproj" --srt subs.srt [--track N] [--json]
+```
+
+- `core/colorgate.py` - two-sided gate. Upper: clipping, oversaturation, skin
+  Cr and saturation, each against the ungraded base with a relative headroom
+  and an absolute cap. Lower: mean CIE ΔE (floor 5.0) so a look nobody can see
+  fails as loudly as a burnt one. `check_grade()` measures, `judge()` decides
+  on stats you already have, `assert_ok()` raises. numpy optional.
+- `core/prproj.py` - reads a saved `.prproj` (gzipped XML): sequences, caption
+  cues per track, picture cuts. `conform_captions()` is the one call — it
+  picks the track the human worked on, stitches razor halves back against the
+  cut list, and resolves untouched lines from the sidecar **by order**
+  (transcript time ≠ cut time; overlap matching slides every line one cue
+  out). Feed the result to `subtitles.to_srt/to_ass`.

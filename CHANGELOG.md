@@ -7,6 +7,51 @@ per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
 
+### Added — colour gate + human-in-the-loop round trip (August 2026)
+
+Both modules come out of one production job: a vertical announcement reel,
+cut in Premiere, conformed and graded in Resolve, delivered as sequences in
+the director's own project. Everything here is calibrated on what he
+rejected, not on what the literature suggests.
+
+- **`core/colorgate.py`** — a grade now has to pass two gates. *Upper:*
+  clipping (% luma > 250), oversaturation (% S > .85 at V > .5), skin Cr and
+  skin saturation, each against the ungraded base with both a relative
+  headroom and an absolute cap. *Lower:* mean CIE ΔE against the base, so a
+  look nobody can see fails as loudly as a burnt one. Reproduces the
+  director's own calls on the reel: Kodak 2383 at full strength 5.47%
+  clipped and Fuji 3513 5.67% over a 1.59% base (ceiling 2.79%) — both
+  rejected; the timid grade he "did not notice at all" measured ΔE 3.23 —
+  rejected; the three looks he approved measured 5.57, 5.70 and 10.18 —
+  passed. Hence the ΔE floor sits at 5.0, not at the textbook 2.5 (that
+  threshold is for flat patches, and 3.23 was invisible on a moving
+  picture). ffmpeg-only, numpy is an optional accelerator. 32 tests.
+- **`core/prproj.py`** — the loop closes. A saved `.prproj` (gzipped XML) is
+  parsed back into sequences, caption cues and picture cuts, so renders
+  conform to the human's cut instead of the machine's original plan.
+  Verified against the reel: 29 raw caption items → the 23 lines actually on
+  screen, 16 of them retyped by the director, all matching the approved
+  version exactly. Two traps are handled explicitly: a cue with no text
+  block is *untouched*, not empty (Premiere keeps that text in the linked
+  caption file), and a razor half is only a razor half when it starts on a
+  picture cut — the naive "textless cue after an edited one" rule ate three
+  whole lines before the cut list was brought in. Sidecar text resolves by
+  order, never by overlap: transcript time and cut time are different
+  clocks, and overlap slid every line one cue out of place. 32 tests.
+
+### Fixed
+
+- **`core/adapters/resolve.py` — one frame lost per clip.** `AppendToTimeline`
+  treats `endFrame` as **exclusive**; the adapter passed `start + duration -
+  1`, so every clip came up a frame short. Measured on the reel: 13 clips
+  rendered 64.767s instead of 65.200s at 30fps — exactly 13 frames — and
+  subtitles built for the true timeline drifted 0.43s by the end. The error
+  scales with clip count, which is why it hides on short tests. Now covered
+  by a stubbed-media-pool unit test.
+- **`core/tests/test_denoise.py`** imported `pytest` without using it, so
+  `python -m core.tests` died on a clean checkout — the aggregate runner is
+  meant to have no pytest dependency. Suite now runs stdlib-only: 497 green.
+
 ### Added - OpenReel-inspired audio & edit-intelligence (June 2026)
 
 Five self-contained modules. Algorithms (not code) ported from the MIT browser

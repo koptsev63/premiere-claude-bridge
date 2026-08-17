@@ -417,6 +417,8 @@ color, variant board, voice-directed turnkey).
 | 8 | Backend | `core.probe.select_adapter` / `core.adapters` | Premiere (ExtendScript via bridge) / Resolve (Python API, Studio) / FCPXML (round-trip) |
 | 9 | Review loop | `core.review_loop` | `analyze_cutlist` (deterministic Murch) → `CutlistPatch` → re-render, with `history`/`diff()` |
 | 10 | **QC gate** | `core.qc` | mandatory: geometry no-squish + residual-shake; **fail-closed** |
+| 11 | **Colour gate** | `core.colorgate` | mandatory before showing a grade: burnt (clipping / oversat / skin) **and** invisible (mean ΔE, floor 5.0); `assert_ok()` **fail-closed** |
+| 12 | **Round trip** | `core.prproj` | reads the editor's saved `.prproj` back — his cues, his razors, his cut points — so subtitles and grade conform to *his* version |
 
 Discovery + finishing modules (not strictly sequential):
 
@@ -486,6 +488,38 @@ These were paid for in shipped mistakes. Do not relearn them.
    only a b-roll/teaser that gets music laid under it renders `audio=False`.
    After rendering, confirm the file actually carries an audio stream
    (`ffprobe ... stream=codec_type`) — a silent sync cut is a defect.
+10. **Deliver a project, not a file.** An .mp4 is a preview; the delivery is
+    sequences inside the editor's *own open project*, so he can drag a cut
+    himself. Check what is open (`pr_get_project_info`) before building
+    anything, build into that project, and never touch a sequence he has
+    edited — his version wins by default. Titles go on a real caption track
+    he can retype, not burned into the picture. When he saves, read his
+    version back with `core.prproj.conform_captions()` and conform the
+    renders to it.
+11. **Colour is gated, both ways** (`core.colorgate`). Every grade runs
+    `check_grade(base, graded)` before it is shown: clipping, oversaturation
+    and skin against the ungraded base *and* mean ΔE against it. A burnt
+    grade fails; so does an invisible one — the floor is ΔE 5.0, set by a
+    director who did not notice a 3.23 grade at all. Inspect frames large
+    (≥400px plus a face crop), never an 8-up thumbnail sheet: small previews
+    are exactly how blown highlights shipped once already.
+12. **Two grading traps.** *Never auto-white-balance on whole-frame
+    statistics* — a frame that is mostly wall pulls the wall neutral and
+    drags skin orange; correct exposure at half strength (clamp 0.9–1.15)
+    and leave balance to an eye. *Film-emulation LUTs (Kodak 2383, Fuji
+    3513) expect Cineon Log input* — the .cube header says so; fed Rec709
+    they blow the highlights. On Rec709 blend them at ≤55% and let the gate
+    walk the strength down, or build the look by hand (S-curve, teal in the
+    shadows, warmth in the highlights).
+13. **End cards go after the fade, on black.** A title over the last frame
+    lands on the speaker's face. Fade the picture, pad ~2.5s of black, put
+    the card there — it also gives a clean still to screenshot.
+14. **Two off-by-ones that hide on short tests.** Resolve's
+    `AppendToTimeline` takes `endFrame` **exclusive** (one frame lost per
+    clip: 13 clips = 0.43s and drifted subtitles). And a stock `brew ffmpeg`
+    can ship without `libass`/`drawtext`/`lut3d` — check `-filters` before
+    trusting a burn, use a full build if missing, feed labelled graphs
+    through `-filter_complex`, and keep filter paths free of spaces.
 
 ---
 
@@ -497,7 +531,13 @@ These were paid for in shipped mistakes. Do not relearn them.
 
 ---
 
-**Last updated:** 2026-05-22 (§XIII meaning layer: `analyze_clips --desc`
+**Last updated:** 2026-08-17 (§XVI pipeline steps 11–12: `core.colorgate`
+two-sided colour gate and `core.prproj` round trip; §XVII hard rules 10–14:
+deliver a project rather than a file, gate every grade both ways, the
+auto-WB and Cineon-Log LUT traps, end cards after the fade on black, and the
+two off-by-ones — Resolve's exclusive `endFrame` and ffmpeg builds without
+libass/lut3d. All from a vertical announcement reel cut, conformed, graded
+and delivered end to end in August 2026.) Earlier: 2026-05-22 (§XIII meaning layer: `analyze_clips --desc`
 adds Russian `desc_ru` + `tags` + `keep/drop` and shake/horizon to a complete
 per-clip table written incrementally; editorial protocol rewritten meaning-first
 — see → classify → transcribe → sequence by content, metrics last; Дед case

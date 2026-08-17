@@ -19,6 +19,8 @@
 - ✂️ **Build a 60-second teaser from natural-language prompts** ("make a 60-second cut: hook → absurd → action → breath → payoff")
 - 🎯 **Apply Murch's Rule of Six** — every cut decision ranked Emotion (51%) > Story (23%) > Rhythm (10%) > Eye-trace (7%) > 2D (5%) > 3D (4%)
 - 🎬 **Watch any clip end-to-end** — the bundled `/watch` skill extracts ~30-100 frames + transcript (free local Whisper or Groq cloud)
+- 🎨 **Colour that has to pass a gate** — every grade is measured against the ungraded base for blown highlights, oversaturation and skin pushed red, *and* for whether the look is visible at all. Calibrated on grades a director actually rejected ([`core/colorgate.py`](core/colorgate.py))
+- 🔁 **Your edits come back to the machine** — nudge the cuts, retype the captions, delete the title you hated, hit Save. The bridge reads your saved `.prproj` and conforms every render to your version instead of its own ([`core/prproj.py`](core/prproj.py))
 - 🤖 **No Adobe AI gating** — Adobe's official Creative Cloud connector explicitly cannot control desktop Premiere ([their docs say so](skills/film-editing/SKILL.md#xiii-analysis-pipeline-)). This bridge fills that gap.
 
 [**See full Grave Stakes case study →**](examples/grave-stakes-teaser/) (108 raw .MTS clips → 61-sec teaser, 7 minutes of work, 3 sequence iterations)
@@ -159,6 +161,32 @@ It worked on my actual *Grave Stakes* teaser. I wanted other directors and edito
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
 
+## The delivery loop (what actually ships a cut)
+
+A render is not a delivery. The editor has to be able to open the work,
+disagree with it, and move a cut — so the loop closes back on the machine:
+
+```
+cutlist → sequences in the editor's own project → he edits and saves →
+core.prproj reads his version → renders + grade conform to it →
+core.colorgate passes it or sends it back
+```
+
+| Module | What it is for |
+|---|---|
+| [`core/prproj.py`](core/prproj.py) | Reads a saved `.prproj`: sequences, caption cues, picture cuts. Razor halves are stitched back together against the cut list; untouched lines resolve from the sidecar by order, never by overlap (transcript time and cut time are different clocks) |
+| [`core/colorgate.py`](core/colorgate.py) | Two-sided colour gate. Upper: clipping, oversaturation, skin Cr and saturation against the base. Lower: mean CIE ΔE, so a look nobody can see fails too. `assert_ok()` raises instead of shipping |
+| [`core/qc.py`](core/qc.py) | Geometry and residual-shake gate on the rendered file |
+| [`core/`](core/README.md) | The rest of the pipeline: cutlist IR, adapters, subtitles, ducking, denoise, highlights, beats |
+
+```bash
+# does this grade burn the picture — or is it invisible?
+python -m core.colorgate base.mov graded.mp4 --frames 8 --upto 60
+
+# what did the human actually approve in there?
+python -m core.prproj "reel.prproj" --srt subs.srt
+```
+
 ## Skills
 
 ### `film-editing/`
@@ -204,7 +232,7 @@ Position it as: **senior assistant editor + automation, not director's editor.**
 - [ ] **v0.4 — multicam audio sync** — match camera angles by audio waveform xcorr, build multicam clips programmatically
 - [ ] **v0.5 — face/sentiment detection** — mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
 - [ ] **v0.6 — MCP Registry publish** — official listing + GitHub Action for auto-release
-- [~] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 93 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
+- [~] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 497 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
 
@@ -256,7 +284,7 @@ MIT — see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copy
 
 ## Status
 
-🟡 **Beta v0.2.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB). Currently in private testing with ~20 invited editors before public launch.
+🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish — a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Currently in private testing with ~20 invited editors before public launch.
 
 **Want a beta seat?** Subscribe to the dev TG channel [@koptsev_AI](https://t.me/koptsev_AI) — beta invitations + new skill packs announced there.
 

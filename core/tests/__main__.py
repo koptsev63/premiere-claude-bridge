@@ -12,6 +12,7 @@ from core.tests import (
     test_asr_verify,
     test_beats,
     test_cleanup,
+    test_colorgate,
     test_concrete_adapters,
     test_conform,
     test_cutlist,
@@ -21,6 +22,7 @@ from core.tests import (
     test_library,
     test_overlays,
     test_probe,
+    test_prproj,
     test_qc,
     test_render,
     test_review_loop,
@@ -52,6 +54,9 @@ MODULES = [
     test_highlights,
     test_beats,
     test_asr_verify,
+    # colour gate + human-in-the-loop round trip (August 2026)
+    test_colorgate,
+    test_prproj,
 ]
 
 

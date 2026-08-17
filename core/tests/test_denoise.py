@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import sys
 
-import pytest
-
 from core.denoise import (
     DEF_AFFTDN_NF,
     DEF_AFFTDN_NR,

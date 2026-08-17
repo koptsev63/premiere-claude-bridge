@@ -175,12 +175,18 @@ class ResolveAdapter(NLEAdapter):
     ) -> None:
         fps = self._fps
         start = round(src_in * fps)
-        # endFrame is the last source frame (inclusive); duration = end-start+1
+        # endFrame is EXCLUSIVE — the first frame *not* taken. Treating it
+        # as the last included frame silently drops one frame per clip.
+        # Measured on the V1 reel (August 2026): 13 clips came back as
+        # 64.767s instead of 65.200s at 30fps — exactly 13 frames short,
+        # and the subtitles built for the real timeline drifted 0.43s by
+        # the end. Not a rounding artefact: the error scales with the
+        # clip count.
         dur_frames = max(1, round((src_out - src_in) * fps))
         clip_info: dict[str, Any] = {
             "mediaPoolItem": media_handle,
             "startFrame": start,
-            "endFrame": start + dur_frames - 1,
+            "endFrame": start + dur_frames,
             # recordFrame is an ABSOLUTE timeline frame. The timeline's
             # content begins at GetStartFrame() (e.g. 86400 @ 01:00:00:00),
             # so the cutlist offset must be added to that, not to 0.

@@ -521,6 +521,60 @@ These were paid for in shipped mistakes. Do not relearn them.
     trusting a burn, use a full build if missing, feed labelled graphs
     through `-filter_complex`, and keep filter paths free of spaces.
 
+## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
+
+The order is not negotiable: **assemble on the raw source -> the director says
+"locked" -> subtitles generated from the sequence -> colour.** Subtitles built
+before the lock drift when he moves a cut; colour built before the lock is
+redone. His words: "we lock the edit on the raw source, and only then work on
+colour".
+
+1. **Probe before any decision.** `ffprobe -show_entries
+   "stream=codec_name,profile,pix_fmt,width,height,color_primaries,color_transfer,
+   r_frame_rate:stream_side_data=rotation"`. Working dimensions are those of the
+   *decoded* frame, never the coded ones - a clip that reports 1920x1080 with
+   `rotation=-90` is a 1080x1920 vertical. Reading frames without honouring
+   rotation produced a stretched picture, a false "his head is wider than a 9:16
+   frame" conclusion, and a crop that cut his face off.
+2. **A green picture in Premiere means the codec did not decode.** iPhone HEVC
+   Main 10 HLG (`color_transfer=arib-std-b67`, `bt2020`) does this. Two quick
+   fixes first (Preferences > Media > disable hardware HEVC decoding, clear the
+   media cache), 5 minutes maximum, then cut a mezzanine.
+3. **A mezzanine never grades.** It may change container, codec, chroma
+   subsampling, baked rotation and frame timing - nothing else. Keep the source
+   tags: `-color_trc arib-std-b67 -color_primaries bt2020 -colorspace bt2020nc
+   -movflags +write_colr`, and no colour filter at all: no `tonemap`, no
+   `zscale` transfer conversion, no `lut3d`/`eq`/`curves`/`colorbalance`.
+   Transcoding through `tonemap=hable` and handing that file to the director got
+   the verdict "you brought me a yellow source, that is wrong".
+   Neutrality gate, all four required: tags match the original; PSNR against the
+   original Y >= 50 dB (`-lavfi psnr -frames:v 300`); |YAVG delta| <= 0.5;
+   duration within one frame. A fast tell that a cast crept in: the skin share
+   of the frame (`colorgate.FrameStats.skin_share`) jumping above ~85% means the
+   wall itself drifted into flesh tones.
+4. **Assemble in frames and ticks only.** Accumulated float seconds leave
+   one-frame holes between clips - the director had to close them by hand and
+   called them "микропропуски". The next clip goes at the *actual* `seq.end` in
+   ticks, read back from the sequence, never at a number you added up yourself.
+   Safer still: lay the whole clip down and razor with ripple, where a hole is
+   structurally impossible. Tools: [`tools/build_sequence.jsx`](tools/build_sequence.jsx),
+   [`tools/verify_timeline.jsx`](tools/verify_timeline.jsx).
+5. **Gate every assembly before a human sees it.** Strict equality
+   `V1[i].end.ticks == V1[i+1].start.ticks` (zero tolerance), V1 clip count ==
+   A1 clip count, zero offline. `ok:false` means it is not ready.
+6. **Verify through the NLE's own picture, not through ffmpeg.** An API that
+   returns "ok" says nothing about what is on screen. After import and after
+   assembly, export one frame from the sequence
+   (`seq.exportAsMediaDirect(png, ".../PNG Sequence (Match Source).epr", 1)`)
+   and look at it. A green or black frame stops the job.
+7. **Colour lives in his sequence** - Lumetri on one adjustment layer per
+   variant - or, when he asks for something simpler, as ready-made LUTs plus a
+   labelled contact sheet built on *his* frame. Curate LUTs with the colour gate
+   and a pairwise ΔE >= 4.5 so no two options are the same look twice.
+8. **Rhythm beats polish.** A rough cut in his project by minute 10, then an
+   artefact or a status with an ETA every 15 minutes. Ninety minutes of silent
+   perfectionism was the worst failure of that day, ahead of every technical one.
+
 ---
 
 ## XV. Reference

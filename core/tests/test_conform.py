@@ -5,6 +5,7 @@ Run:  python -m core.tests.test_conform
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -119,15 +120,15 @@ def test_proxy_preference() -> None:
 
 def test_real_grave_stakes_optional() -> None:
     print("conform — real Grave Stakes folder (optional, env-dependent)")
-    videos = Path("/Users/kopetan_kakao/Desktop/Grave stakes/Videos")
+    videos = Path(os.environ.get("BRIDGE_EXAMPLE_FOOTAGE", ""))
     example = (
         Path(__file__).resolve().parents[2]
         / "examples"
         / "grave-stakes-teaser"
         / "cutlist_v3.json"
     )
-    if not videos.is_dir():
-        print("  SKIP  (footage folder not present on this machine)")
+    if not os.environ.get("BRIDGE_EXAMPLE_FOOTAGE") or not videos.is_dir():
+        print("  SKIP  (set BRIDGE_EXAMPLE_FOOTAGE to the example footage folder)")
         return
     cl = Cutlist.load(example)
     out, rep = conform_cutlist(cl, MediaResolver([str(videos)]))

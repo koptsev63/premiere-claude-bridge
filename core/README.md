@@ -143,3 +143,45 @@ python -m core.prproj "reel.prproj" --srt subs.srt [--track N] [--json]
   cut list, and resolves untouched lines from the sidecar **by order**
   (transcript time ≠ cut time; overlap matching slides every line one cue
   out). Feed the result to `subtitles.to_srt/to_ass`.
+
+## Runners, loudness and screen replacement
+
+Added in October 2026, from the jobs that followed the reel.
+
+```bash
+# Resolve from a shell: what is on the timeline, and what does frame N look like?
+python -m core.adapters.resolve_run dump
+python -m core.adapters.resolve_run still 0 120 480 --out frames/
+python -m core.adapters.resolve_run exec my_script.py
+# level the takes, normalise, gate (exit 1 = do not ship)
+python -m core.loudness MASTER.mov OUT.mp4 --shots 0,5.6,11.2 [--lufs -14 --tp -1]
+python -m core.loudness --check OUT.mp4 --shots 0,5.6,11.2
+# composite a clip into a screen in the plate
+python -m core.screen_comp PLATE.mp4 CONTENT.mp4 OUT.mp4 --config screen.json
+```
+
+- `core/adapters/resolve_run.py` - the script hatch and the eyes that
+  `ResolveAdapter` lacks. `dump()` + `gaps()` list every clip in
+  timeline-relative frames and find one-frame holes; `still()` reads the
+  viewer through the Gallery in seconds, `grab()` renders through Deliver and
+  removes only the render jobs it added; `run_script()` executes your code
+  with `resolve`, `pm`, `project`, `timeline`, `mp`, `fps` in scope. Same
+  interpreter constraint as the adapter (CPython 3.9-3.13).
+- `core/loudness.py` - `level_and_normalize()` pulls every shot to the median
+  gated RMS (clamp ±9 dB, gain changes at the join), optionally declicks the
+  joins, then applies one static gain and a 4x-oversampled limiter.
+  `check_delivery()` measures the written file; `judge()` decides on numbers
+  you already have; `assert_ok()` raises. Picture is stream-copied. ffmpeg
+  only, numpy optional.
+- `core/screen_comp.py` - `composite()` tracks the camera (ECC affine against
+  frame 0, screen masked out), warps the content into a quad and/or mask,
+  applies an optional glass/CRT `Look`, encodes tagged Rec.709 and then runs
+  `verify()` on the written file: frame count, track failures, plate error
+  and colour shift outside the screen, change inside it, colour tags. Needs
+  numpy + opencv (imported lazily). Its thresholds are engineering defaults,
+  not field-calibrated - the module docstring says where the gate is blind.
+- `core/qc.py` gained `qc_delivery()`: full decode with no decoder errors,
+  promised frame size and rate, audio stream present.
+
+The Premiere-side counterpart of `resolve_run exec` lives next to the MCP
+server: `node mcp-server/pk.js` (see the main README, "Direct path").

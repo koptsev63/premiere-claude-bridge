@@ -1,4 +1,5 @@
-"""Tests for the render QC gate (math + report logic, no ffmpeg).
+"""Tests for the render QC gate (math + report logic; the delivery check
+builds its own tiny files with ffmpeg and skips when ffmpeg is absent).
 
 Run:  python -m core.tests.test_qc
 """
@@ -8,7 +9,7 @@ from __future__ import annotations
 import sys
 
 from core.qc import QCFailure, QCReport, expected_display_size, \
-    qc_residual_shake
+    qc_delivery, qc_residual_shake
 
 _p = _f = 0
 
@@ -77,12 +78,64 @@ def test_residual_shake_fails_closed() -> None:
           "UNVERIFIED" in r.text(), r.text())
 
 
+def test_delivery() -> None:
+    print("qc - delivery integrity on synthetic files")
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    r = QCReport()
+    qc_delivery("/nonexistent/never.mp4", r)
+    check("a missing file fails, it is not skipped", not r.ok, r.text())
+    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
+        print("  SKIP  (ffmpeg/ffprobe not installed)")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        good, mute = Path(d, "good.mkv"), Path(d, "mute.mkv")
+        base = ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+                "testsrc2=s=160x90:r=25:d=2"]
+        tail = ["-c:v", "mpeg4", "-q:v", "5", "-g", "50"]
+        made = subprocess.run(
+            base + ["-f", "lavfi", "-i", "sine=frequency=440:duration=2"]
+            + tail + ["-c:a", "pcm_s16le", str(good)], capture_output=True)
+        subprocess.run(base + tail + [str(mute)], capture_output=True)
+        if made.returncode != 0:
+            print("  SKIP  (this ffmpeg build cannot make the test file)")
+            return
+        r = QCReport()
+        qc_delivery(good, r, expect_size=(160, 90), expect_fps=25)
+        check("a clean file passes every delivery check",
+              r.ok and len(r.checks) == 4, r.text())
+        r = QCReport()
+        qc_delivery(good, r, expect_size=(1080, 1920), expect_fps=30)
+        check("wrong size and wrong rate are both named",
+              "frame size" in r.text() and "frame rate" in r.text()
+              and not r.ok, r.text())
+        r = QCReport()
+        qc_delivery(mute, r)
+        check("a silent file fails", not r.ok and "silent" in r.text(),
+              r.text())
+        r = QCReport()
+        qc_delivery(mute, r, require_audio=False)
+        check("...unless silence was asked for", r.ok, r.text())
+        data = bytearray(good.read_bytes())
+        mid = len(data) // 2
+        data[mid:mid + 4000] = b"\x5a" * 4000
+        broken = Path(d, "broken.mkv")
+        broken.write_bytes(bytes(data))
+        r = QCReport()
+        qc_delivery(broken, r)
+        check("a damaged stream fails on decode",
+              not r.ok and "decodes" in r.text(), r.text())
+
+
 def main() -> int:
     for fn in (
         test_expected_display_size,
         test_report_logic,
         test_residual_shake_empty,
         test_residual_shake_fails_closed,
+        test_delivery,
     ):
         fn()
     print(f"\n{_p} passed, {_f} failed")

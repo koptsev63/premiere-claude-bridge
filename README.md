@@ -167,6 +167,37 @@ It worked on my actual *Grave Stakes* teaser. I wanted other directors and edito
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
 
+### Direct path when several Claude sessions fight for the port
+
+The MCP server owns one WebSocket port (9876) and the panel connects to
+whichever server instance got there first. With two or three Claude Code
+windows open there are two or three servers, and every one but the winner
+answers `panel not connected` while Premiere is perfectly fine.
+
+[`mcp-server/pk.js`](mcp-server/pk.js) does not use that port. It attaches to
+the panel's own Chromium debug endpoint (port 8088, declared in
+`cep-extension/.debug` and already enabled by the `PlayerDebugMode` install
+step) and calls `evalScript` the same way the panel does. Any number of
+sessions can use it at once.
+
+```bash
+node mcp-server/pk.js info                       # version, project, active sequence
+node mcp-server/pk.js eval 'app.project.name'    # one ExtendScript expression
+node mcp-server/pk.js file build_sequence.jsx    # a whole script
+echo 'app.version' | node mcp-server/pk.js eval -
+```
+
+Node 22+ needs no packages for it; older Node uses the `ws` that `npm install`
+already put in `mcp-server/`. Premiere must be running with the Claude Bridge
+panel open. The result is the string `evalScript` returns, so have your script
+`return JSON.stringify(...)`. Tell your agent: *"if `pr_status` says the panel
+is not connected, use `node mcp-server/pk.js`"*.
+
+The Resolve side has the same kind of hatch, plus eyes on the timeline:
+`python -m core.adapters.resolve_run exec script.py` runs your Python with
+`resolve`, `project`, `timeline` and `mp` preloaded, and `still` / `grab`
+return composited timeline frames as PNG.
+
 ## The delivery loop (what actually ships a cut)
 
 A render is not a delivery. The editor has to be able to open the work,
@@ -182,7 +213,10 @@ core.colorgate passes it or sends it back
 |---|---|
 | [`core/prproj.py`](core/prproj.py) | Reads a saved `.prproj`: sequences, caption cues, picture cuts. Razor halves are stitched back together against the cut list; untouched lines resolve from the sidecar by order, never by overlap (transcript time and cut time are different clocks) |
 | [`core/colorgate.py`](core/colorgate.py) | Two-sided colour gate. Upper: clipping, oversaturation, skin Cr and saturation against the base. Lower: mean CIE ΔE, so a look nobody can see fails too. `assert_ok()` raises instead of shipping |
-| [`core/qc.py`](core/qc.py) | Geometry and residual-shake gate on the rendered file |
+| [`core/qc.py`](core/qc.py) | Geometry and residual-shake gate on the rendered file, plus delivery integrity: decodes clean, promised size and rate, has sound |
+| [`core/loudness.py`](core/loudness.py) | Levels the shots against each other, then one static gain and a true-peak limiter to the delivery target. Gate: integrated LUFS, true peak, spread between shots |
+| [`core/screen_comp.py`](core/screen_comp.py) | Screen replacement: a clip composited into a phone, monitor or TV in the plate, riding an ECC camera track, with colour-exact Rec.709 I/O. Gate: the plate outside the screen must come back unchanged |
+| [`core/adapters/resolve_run.py`](core/adapters/resolve_run.py) | Resolve from a shell: timeline dump, composited frames as PNG (`still`, `grab`), and `exec` for your own script |
 | [`core/`](core/README.md) | The rest of the pipeline: cutlist IR, adapters, subtitles, ducking, denoise, highlights, beats |
 
 ```bash
@@ -191,6 +225,12 @@ python -m core.colorgate base.mov graded.mp4 --frames 8 --upto 60
 
 # what did the human actually approve in there?
 python -m core.prproj "reel.prproj" --srt subs.srt
+
+# even out the takes, hit -14 LUFS / -1 dBTP, and prove it (exit 1 = do not ship)
+python -m core.loudness master.mov deliver.mp4 --shots 0,5.6,11.2
+
+# put a clip inside the TV in the shot
+python -m core.screen_comp plate.mp4 content.mp4 out.mp4 --config screen.json
 ```
 
 ## Skills
@@ -238,7 +278,7 @@ Position it as: **senior assistant editor + automation, not director's editor.**
 - [ ] **v0.4 — multicam audio sync** — match camera angles by audio waveform xcorr, build multicam clips programmatically
 - [ ] **v0.5 — face/sentiment detection** — mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
 - [ ] **v0.6 — MCP Registry publish** — official listing + GitHub Action for auto-release
-- [~] **v1.0 — universal NLE core** — editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 497 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
+- [~] **v1.0 - universal NLE core** - editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 672 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
 
@@ -274,7 +314,7 @@ Look for [`good first issue`](https://github.com/koptsev63/premiere-claude-bridg
 
 See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
 
-- **Multi-instance-safe WS server** — if a previous Claude session holds port 9876, new instances retry every 3s until the holder dies. Without this, multiple Claude sessions silently break.
+- **Multi-instance-safe WS server** - if a previous Claude session holds port 9876, new instances retry every 3s until the holder dies. Without this, multiple Claude sessions silently break. While they wait, [`mcp-server/pk.js`](mcp-server/pk.js) reaches the panel through its debug port instead ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
 - **ExtendScript JSON polyfill** — Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
 - **Self-healing socket lookup** — adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
 

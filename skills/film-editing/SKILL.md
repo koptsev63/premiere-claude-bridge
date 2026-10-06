@@ -338,14 +338,14 @@ Then in the editing thread: read the frames, pick the in/out, call `pi.setInPoin
 
 ```bash
 # 1. Local backend (no API key, runs offline). Recommended for non-English:
-python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" \
+python3 skills/watch/scripts/watch.py "/path/to/Videos/00195.MTS" \
     --whisper local --language Hungarian
 
 # 2. Groq cloud (faster, ~$0.0002/min, needs key in ~/.config/watch/.env):
-python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --whisper groq
+python3 skills/watch/scripts/watch.py "/path/to/Videos/00195.MTS" --whisper groq
 
 # 3. OpenAI cloud (slower, ~$0.006/min, needs key):
-python3 skills/watch/scripts/watch.py "/Users/.../Videos/00195.MTS" --whisper openai
+python3 skills/watch/scripts/watch.py "/path/to/Videos/00195.MTS" --whisper openai
 
 # Default (no --whisper flag): tries Groq → OpenAI → local in order.
 ```
@@ -419,6 +419,8 @@ color, variant board, voice-directed turnkey).
 | 10 | **QC gate** | `core.qc` | mandatory: geometry no-squish + residual-shake; **fail-closed** |
 | 11 | **Colour gate** | `core.colorgate` | mandatory before showing a grade: burnt (clipping / oversat / skin) **and** invisible (mean ΔE, floor 5.0); `assert_ok()` **fail-closed** |
 | 12 | **Round trip** | `core.prproj` | reads the editor's saved `.prproj` back — his cues, his razors, his cut points — so subtitles and grade conform to *his* version |
+| 13 | **Loudness gate** | `core.loudness` | shots levelled against each other, then static gain + true-peak limiter; `check_delivery()` gates LUFS, true peak and shot-to-shot spread, **fail-closed** |
+| 14 | **Delivery integrity** | `core.qc.qc_delivery` | the file decodes clean end to end, has the promised size and rate, and has sound |
 
 Discovery + finishing modules (not strictly sequential):
 
@@ -427,6 +429,8 @@ Discovery + finishing modules (not strictly sequential):
 | Library | `core.library.MediaLibrary` | tag + search the footage by speech/tags/name, `find_lines()` a character's dialogue, and `to_cutlist()` pulls matches into a NEW sequence (Denis's "split by character / don't lose it"). NO face recognition — by what's said. |
 | Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). **Auto-align:** `timeline_transcript(cutlist, transcripts)` maps per-clip transcripts onto the assembled — or dead-air-tightened — cut, so subtitles follow the edit; `parse_srt` reuses an existing SRT as the source. |
 | Overlays | `core.overlays` | lower-thirds / title / brand (lime #C8FF00) via ffmpeg `drawtext`; `from_markers(cutlist)` auto-titles from the edit's own beats. |
+| Screen insert | `core.screen_comp` | a clip inside a phone / monitor / TV in the plate: ECC camera track, quad or mask, optional glass/CRT look, colour-exact Rec.709 I/O; the gate proves the plate outside the screen came back unchanged. Affine track only - no parallax, no occlusion. |
+| Eyes + hatch | `core.adapters.resolve_run`, `mcp-server/pk.js` | composited timeline frames from Resolve (`still`, `grab`), clip dump with `gaps()`, and a script runner on each side for what the typed tools do not cover. |
 | Dead air | `core.silence` | detect silence (ffmpeg `silencedetect`) → keep speech-dense regions; `tighten_cutlist` removes pauses inside takes so a rambling talking head goes tight. Loudness-gated, not semantic — pair with the meaning pass. |
 
 Progress is measured, not vibed: `examples/grave-stakes-teaser/benchmark/`
@@ -521,6 +525,41 @@ These were paid for in shipped mistakes. Do not relearn them.
     trusting a burn, use a full build if missing, feed labelled graphs
     through `-filter_complex`, and keep filter paths free of spaces.
 
+15. **`panel not connected` is usually a port race, not a dead bridge.** Each
+    Claude session starts its own MCP server; only one gets port 9876 and the
+    panel. Before telling anyone Premiere is unreachable, run
+    `node mcp-server/pk.js info` - it goes through the panel's debug port and
+    works from every session. Resolve has no such race:
+    `python -m core.adapters.resolve_run exec script.py`.
+16. **Never clear a queue you did not fill.** A frame grab that calls
+    `DeleteAllRenderJobs()` deletes the editor's own queued renders.
+    `resolve_run.grab` starts and deletes only its own job ids; do the same
+    in any script you write. `grab` leaves the render format on PNG - reload
+    the delivery preset before the real render.
+17. **Level the shots first, then normalise** (`core.loudness`). One
+    normalise pass over a cut made of several takes moves the average and
+    keeps every jump. Change the gain *at the join* and hold it for the shot;
+    easing back to unity at the edges puts the jump right on the cut. Static
+    gain plus a true-peak limiter, not a dynamic normaliser, for a single
+    voice. `check_delivery(out, cuts).assert_ok()` before the file leaves:
+    ±1 LU of the target, true peak under the ceiling, ≤ 2 dB between shots.
+18. **State the colour matrix on every pipe** (`core.screen_comp`). Decoding
+    a Rec.709 file through a default path and encoding the composite back
+    shifts the whole plate, and the shot no longer cuts with its neighbours.
+    Matrix and range go in explicitly on the way in *and* out; tags go on the
+    frames with `setparams` (the `-color_primaries` / `-color_trc` output
+    options alone are ignored for raw RGB input on current ffmpeg - check
+    with ffprobe, not by eye). The gate compares the plate outside the
+    screen before and after; it passes mechanics, not taste, so look at the
+    corners of a tracked insert yourself.
+
+19. **Master out of Resolve as ProRes; make the H.264 with ffmpeg.** On one
+    job Resolve's built-in H.264 export damaged occasional frames. Render
+    the master to ProRes, encode the delivery with libx264 (rule: never a
+    hardware encoder, see `core.render`), then run `core.qc.qc_delivery` -
+    a full decode with nothing on the error channel - on the file that is
+    actually sent.
+
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 
 The order is not negotiable: **assemble on the raw source -> the director says
@@ -585,7 +624,11 @@ colour".
 
 ---
 
-**Last updated:** 2026-08-17 (§XVI pipeline steps 11–12: `core.colorgate`
+**Last updated:** 2026-10-06 (§XVI steps 13-14 and two finishing modules;
+§XVII hard rules 15-19: the port race and the direct path, never clearing a
+render queue you did not fill, shots levelled before normalising, the
+colour matrix stated on every pipe, and ProRes out of Resolve with the H.264
+made by ffmpeg.) Earlier: 2026-08-17 (§XVI pipeline steps 11-12: `core.colorgate`
 two-sided colour gate and `core.prproj` round trip; §XVII hard rules 10–14:
 deliver a project rather than a file, gate every grade both ways, the
 auto-WB and Cineon-Log LUT traps, end cards after the fade on black, and the

@@ -21,7 +21,7 @@ Bridge health check. Returns whether the CEP panel is connected and basic Premie
   "build": "2",
   "project": {
     "name": "Grave_Stakes_Teaser.prproj",
-    "path": "/Users/.../Grave_Stakes_Teaser.prproj"
+    "path": "/path/to/Grave_Stakes_Teaser.prproj"
   },
   "activeSequence": {"name": "Teaser_v3_DataDriven", "id": "..."}
 }
@@ -84,7 +84,7 @@ Markers are typed as comments (visible as text bubbles in the timeline).
 Queue active sequence export to Adobe Media Encoder. Non-blocking.
 
 **Args:** `{outPath: string, eprPath: string}`
-- `outPath` — absolute path including filename and extension (e.g. `/Users/me/Desktop/teaser.mp4`)
+- `outPath` — absolute path including filename and extension (e.g. `/path/to/teaser.mp4`)
 - `eprPath` — absolute path to a `.epr` Adobe Media Encoder preset
 
 **Returns:** `{ok: true, jobID, outPath, eprPath}` — the job is queued; AME launches if not already running.
@@ -142,6 +142,35 @@ app.project.saveAs("/path/to/new.prproj");
 - `JSON.stringify` works because we ship a polyfill in `host.jsx`
 - The wrapper around your code wraps it in `(function(){ ... })()` — without explicit `return`, you get `undefined`
 - Error handling: wrap in `__safe(function(){...})` for friendly error JSON
+
+---
+
+## Without the MCP server: `pk.js`
+
+When a session's MCP server lost the race for port 9876, its `pr_*` tools
+report `panel not connected`. [`mcp-server/pk.js`](../mcp-server/pk.js) runs
+ExtendScript through the panel's Chromium debug port instead.
+
+```bash
+node mcp-server/pk.js info
+node mcp-server/pk.js eval '(function(){ return JSON.stringify({n: app.project.rootItem.children.numItems}); })()'
+node mcp-server/pk.js file skills/film-editing/tools/verify_timeline.jsx
+node mcp-server/pk.js targets        # what the debug port exposes
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PK_PORT` | from `cep-extension/.debug` (8088) | debug port |
+| `PK_HOST` | `127.0.0.1` | debug host |
+| `PK_TARGET` | `claude-bridge` | substring of the panel URL to attach to |
+| `PK_TIMEOUT` | `120000` | ms to wait for ExtendScript |
+
+Differences from `pr_eval_jsx`: your code is passed to `evalScript` as is, so
+write an expression (wrap statements in `(function(){ ... })()` yourself); the
+`JSON` polyfill and `__safe` from `host.jsx` are available because it is the
+same ExtendScript engine. A script error comes back as the literal string
+`EvalScript error.` and exit code 1 - catch inside the script if you need the
+message.
 
 ---
 

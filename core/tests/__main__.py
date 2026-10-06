@@ -20,12 +20,16 @@ from core.tests import (
     test_ducking,
     test_highlights,
     test_library,
+    test_loudness,
     test_overlays,
+    test_pk_runner,
     test_probe,
     test_prproj,
     test_qc,
     test_render,
+    test_resolve_run,
     test_review_loop,
+    test_screen_comp,
     test_silence,
     test_subtitles,
     test_value,
@@ -57,6 +61,11 @@ MODULES = [
     # colour gate + human-in-the-loop round trip (August 2026)
     test_colorgate,
     test_prproj,
+    # direct runners, loudness, screen replacement (October 2026)
+    test_pk_runner,
+    test_resolve_run,
+    test_loudness,
+    test_screen_comp,
 ]
 
 

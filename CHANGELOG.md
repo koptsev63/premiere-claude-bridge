@@ -1,11 +1,76 @@
 # Changelog
 
-## [Unreleased] — universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
+## [0.3.0] - 2026-10-06 — universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
 
 The editing brain is now NLE-agnostic. A cut is decided once as a `Cutlist`;
 per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
+
+### Added - direct runners, loudness, screen replacement (October 2026)
+
+Tools that were built on jobs after the reel and lived outside the repo.
+Ported with their job-specific parts turned into arguments; where the port
+found a defect in the original, the defect is named below instead of being
+carried over.
+
+- **`mcp-server/pk.js`** - the direct path into Premiere. The MCP server owns
+  one WebSocket port and the panel connects to whichever instance won the
+  race for it, so with several Claude sessions open most of them see `panel
+  not connected`. `pk.js` goes around: Chrome DevTools Protocol to the
+  panel's CEF debug port (8088, from `cep-extension/.debug`), one
+  `Runtime.evaluate` wrapping `evalScript` in a promise. `info`, `eval`,
+  `eval -`, `file`, `targets`. No new dependency: Node 22+ uses the built-in
+  WebSocket, older Node falls back to the `ws` already installed. Tested
+  against a fake debug endpoint (target selection, the wrapper, exit codes,
+  the closed-port message); **not** exercised against a live Premiere in
+  this change. 18 tests.
+- **`core/adapters/resolve_run.py`** - Resolve from a shell. `dump` (+
+  `gaps()` for one-frame holes), `still` and `grab` for composited timeline
+  frames as PNG, `exec` to run a script with `resolve`, `pm`, `project`,
+  `timeline`, `mp`, `fps` preloaded. One behaviour change from the private
+  tool: `grab` used to call `DeleteAllRenderJobs()` before and after, which
+  wiped whatever the editor had queued. It now starts and deletes only the
+  jobs it added. Stub-tested; not run against a live Resolve here. 36 tests.
+- **`core/loudness.py`** - level the shots, then normalise. Gated RMS per
+  shot pulled to the median (clamp ±9 dB), optional 12 ms declick at the
+  joins, one static gain to the target and a 4x-oversampled limiter at the
+  true-peak ceiling; picture is stream-copied. Gate: integrated within ±1 LU,
+  true peak under the ceiling, spread between shots ≤ 2 dB. Two things
+  changed on the way in. The original eased every shot back to unity gain at
+  its edges, which keeps the jump audible exactly on the cut - on a synthetic
+  three-take join 19 dB apart it left 3.1 dB of spread where the ±9 dB clamp
+  accounts for 0.7; the gain now changes at the join and holds. And `alimiter` delays the signal by its look-ahead unless told
+  to compensate: the first port landed the declick dip 5 ms late and the
+  test caught it, hence `latency=1`. 48 tests.
+- **`core/screen_comp.py`** - screen replacement. A clip composited into a
+  screen in a handheld plate: ECC affine camera track against frame 0 with
+  the screen masked out, content warped into a quad and/or a mask (the
+  original was axis-aligned only), optional glass/CRT look (bulge, black
+  lift, rim, kept reflections, glow, scanlines), all I/O through ffmpeg pipes
+  with the YCbCr matrix and range stated both ways. The gate compares the
+  written file with the plate: outside the screen it must come back the same
+  (mean abs error ≤ 2.5 levels, channel shift ≤ 1), inside it must have
+  changed. The gate earned its place on the first run: on current ffmpeg the
+  `-color_primaries` / `-color_trc` output options are ignored for frames
+  that arrive as raw RGB, so the file shipped tagged `bt709 / unset / unset`.
+  Fixed with `setparams` in the filter chain. Thresholds are engineering
+  defaults verified on synthetic footage, not field-calibrated. 69 tests.
+- **`core/qc.py` → `qc_delivery()`** - the hard-fail half of the private
+  acceptance script that `qc.py` did not have: the file decodes end to end
+  with nothing on the error channel, has the promised size and frame rate,
+  and carries an audio stream. 6 tests.
+
+Not ported, on purpose: the job-passport preflight and the 3x3 proof sheet
+(both are a schema for one kind of job; the generic remainder is `gaps()`
+above, and thumbnail sheets are what hard rules 4 and 11 warn against); the
+Resolve conform / b-roll / centring / master scripts built on that same
+passport (run your own through `resolve_run exec`); the subject matte,
+spot-removal and head-centring scripts (tied to one matting model and one
+framing convention); the private colour check and ΔE scripts (already here
+as `core.colorgate`); and the S-Log3 grading scripts (white-balance gains
+and look tables are hard-coded per job - a general version needs a
+neutral-patch input and a gate of its own first).
 
 ### Added — colour gate + human-in-the-loop round trip (August 2026)
 

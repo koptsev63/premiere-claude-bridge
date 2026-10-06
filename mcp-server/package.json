@@ -1,6 +1,6 @@
 {
   "name": "premiere-claude-bridge",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "private": true,
   "description": "MCP server bridging Claude Code to Adobe Premiere Pro via CEP panel + WebSocket",

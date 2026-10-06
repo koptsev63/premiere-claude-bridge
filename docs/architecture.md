@@ -117,7 +117,8 @@ Total round-trip on a healthy bridge: **~50-150ms** for typed tools, **~200-500m
 ## Known design constraints
 
 - **Single Premiere instance per machine** — port 9876 is hardcoded. If you run multiple Premiere instances, only the panel that connects first wins. Override via `PREMIERE_BRIDGE_PORT` env var if needed.
-- **CEP panel must be open** — if you close the Claude Bridge panel, the bridge dies. Make it part of your default workspace.
+- **One MCP server holds the panel** - every extra Claude session starts its own server, loses the race for 9876 and sees `panel not connected`. `mcp-server/pk.js` is the way around: it speaks Chrome DevTools Protocol to the panel's CEF debug port (8088, from `cep-extension/.debug`), sends one `Runtime.evaluate` that wraps `window.__adobe_cep__.evalScript` in a promise, and prints the result. No WebSocket server, no shared state, so sessions do not collide.
+- **CEP panel must be open** - if you close the Claude Bridge panel, the bridge dies (and so does the direct path: it attaches to that panel). Make it part of your default workspace.
 - **Long ExtendScript calls block other calls** — host.jsx is single-threaded. A `pr_export_ame` call returns immediately because AME is launched asynchronously, but a `pr_eval_jsx` doing 500-clip iteration will hold the lock.
 
 ---

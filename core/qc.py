@@ -20,6 +20,12 @@ Checks on the rendered file:
 3. A full-resolution inspection frame is written for the human/LLM to read
    (not a 8-up thumbnail).
 
+4. **Delivery integrity** (`qc_delivery`). The file a client opens has to
+   decode end to end without a single decoder complaint, be the size and
+   frame rate that were promised, and carry sound. None of that shows on
+   an inspection frame, so it is checked on the whole file. Loudness has
+   its own gate in `core.loudness`.
+
 `qc_geometry()` and `qc_residual_shake()` are pure-ish (probe + measure)
 and unit-tested via the math helper `expected_display_size()`.
 `assert_ok()` raises `QCFailure` — call it before saying "готово".
@@ -27,6 +33,7 @@ and unit-tested via the math helper `expected_display_size()`.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -157,6 +164,63 @@ def qc_residual_shake(
             f"src={src_score} -> out={sc} "
             f"(need <= {round(src_score * min_drop_ratio, 2)})",
         )
+
+
+def _parse_rate(rate: str) -> float:
+    try:
+        return float(Fraction(rate))
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def qc_delivery(
+    out_path: str | Path,
+    rep: QCReport,
+    expect_size: tuple[int, int] | None = None,
+    expect_fps: float | None = None,
+    require_audio: bool = True,
+) -> None:
+    """Does the finished file decode cleanly and match what was promised?
+
+    Decodes the whole file once (`-f null`); any line on ffmpeg's error
+    channel fails the check. `expect_size` is the displayed (w, h).
+    """
+    try:
+        dec = subprocess.run(
+            ["ffmpeg", "-v", "error", "-nostdin", "-i", str(out_path),
+             "-f", "null", "-"], capture_output=True, text=True)
+        pr = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "stream=codec_type,width,height,r_frame_rate", "-of", "json",
+             str(out_path)], capture_output=True, text=True)
+    except FileNotFoundError as e:
+        # fail CLOSED: no ffmpeg means nothing was verified
+        rep.add("delivery", False, f"UNVERIFIED - {e}")
+        return
+    err = dec.stderr.strip()
+    rep.add("decodes without errors", dec.returncode == 0 and not err,
+            err.splitlines()[0][:160] if err else "")
+    try:
+        streams = json.loads(pr.stdout).get("streams", [])
+    except ValueError:
+        streams = []
+    video = next((x for x in streams if x.get("codec_type") == "video"), None)
+    if video is None:
+        rep.add("video stream present", False, "no video stream found")
+        return
+    if expect_size is not None:
+        got = (video.get("width"), video.get("height"))
+        rep.add("frame size as promised", got == tuple(expect_size),
+                f"{got[0]}x{got[1]}, expected "
+                f"{expect_size[0]}x{expect_size[1]}")
+    if expect_fps is not None:
+        fps = _parse_rate(video.get("r_frame_rate", "0"))
+        rep.add("frame rate as promised", abs(fps - expect_fps) <= 0.01,
+                f"{fps:.3f} fps, expected {expect_fps:g}")
+    if require_audio:
+        has = any(x.get("codec_type") == "audio" for x in streams)
+        rep.add("audio stream present", has,
+                "" if has else "the file is silent - no audio stream")
 
 
 def write_inspection_frame(

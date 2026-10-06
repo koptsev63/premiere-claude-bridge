@@ -61,7 +61,7 @@ ln -sf "$(pwd)/cep-extension" \
 
 **Panel says "Disconnected — retrying":**
 - The MCP server isn't running. Check Claude Code's MCP status (`/mcp`) — there should be a "premiere" entry as ready.
-- Port 9876 collision: the bridge auto-retries every 3s. If you have multiple Claude sessions open, only one wins.
+- Port 9876 collision: the bridge auto-retries every 3s. If you have multiple Claude sessions open, only one wins. The sessions that lost can still drive Premiere through the panel's debug port: `node mcp-server/pk.js info` (see "Direct path" in the README).
 
 **Installed fine, but Claude does not see Premiere:**
 - Open a **new** chat. A session loads MCP servers only at start, so the chat that ran the install has no `premiere` tools.

@@ -101,6 +101,12 @@ mklink /D "$env:APPDATA\Adobe\CEP\extensions\com.koptsev.claude-bridge" "$(Get-L
 
 Restart Premiere → **Window → Extensions → Claude Bridge** → green "Connected to Claude".
 
+### First connection (where people get stuck)
+
+1. **Keep a Claude Code session open.** The MCP server is a child process of your Claude session. Close the session (or the Code tab in the desktop app) and the panel drops to "Disconnected".
+2. **Start a new chat after installing.** A session only loads MCP servers when it starts, so the chat you installed from does not see the bridge yet.
+3. **Ask for a health check first:** "Use `pr_status` to check the bridge." A reply with your Premiere version and project name means everything is wired up.
+
 ### 4. (Optional) Enable the analysis tools
 
 ```bash

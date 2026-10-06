@@ -63,6 +63,11 @@ ln -sf "$(pwd)/cep-extension" \
 - The MCP server isn't running. Check Claude Code's MCP status (`/mcp`) — there should be a "premiere" entry as ready.
 - Port 9876 collision: the bridge auto-retries every 3s. If you have multiple Claude sessions open, only one wins.
 
+**Installed fine, but Claude does not see Premiere:**
+- Open a **new** chat. A session loads MCP servers only at start, so the chat that ran the install has no `premiere` tools.
+- In the new chat ask: "Use `pr_status` to check the bridge."
+- Keep that Claude Code session (or the Code tab of the desktop app) open while you edit. The MCP server lives inside it; closing it disconnects the panel.
+
 **`pr_status` returns `connected: false` even when panel shows green:**
 - Known race condition documented in v0.1 CHANGELOG. Click "Reconnect" in the panel header.
 

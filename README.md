@@ -121,21 +121,37 @@ brew install yt-dlp ffmpeg          # macOS
 
 ---
 
-## Why this vs other Premiere MCP servers
+## How this compares to other Premiere and Resolve MCP servers
 
-There are three or four community Premiere-MCP attempts. Here's how this one is positioned differently:
+There are about fifteen Premiere MCP servers on GitHub now, and several for Resolve. The big ones are good at something this project is not, so here is the honest split (checked October 2026).
 
-| | Other MCP servers | **premiere-claude-bridge** |
-|---|---|---|
-| **Origin** | Hackathon, dev-tooling mindset | Built by a working film director who needed it for actual festival submissions |
-| **Editing logic** | "269 tools across 28 modules" — flat surface area | **Walter Murch's editing OS**: Rule of Six, blink theory, decisive moment, dreaming-in-pairs, all encoded as decision rules in `skills/film-editing/SKILL.md` |
-| **Analysis** | n/a or basic ffprobe | Auto-log pipeline: motion-score + audio peaks + **horizon tilt** + 6-frame motion strips → HTML contact sheet for 100+ clips in ~12 min |
-| **Video perception** | Stop-frames or text descriptions | Bundled `/watch` skill — 30-100 frames + transcript per clip, three Whisper backends including free offline |
-| **Documentary workflow** | Not the focus | First-class — case study is a real documentary teaser (108 raw .MTS, 4.4 GB) |
-| **Multi-language audio** | English-centric | Hungarian, Russian, Spanish — handled by local Whisper `medium`/`large-v3` |
-| **Non-trivial rendering** | Just timeline ops | Auto horizon-correction during AME-equivalent ffmpeg renders |
+**Where the others are ahead**
 
-If you just want to call ExtendScript from a chatbot, any of the alternatives works. If you want to **edit a documentary** with an AI assistant that thinks about emotion before plot, this one is for you.
+- **Typed timeline tools.** [hetpatel-11/Adobe_Premiere_Pro_MCP](https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP) and [leancoderkavy/premiere-pro-mcp](https://github.com/leancoderkavy/premiere-pro-mcp) ship hundreds of typed tools for effects, keyframes, transitions and multicam. Here those go through `pr_eval_jsx`.
+- **Install.** They have npm packages and installers. This repo is a clone and a symlink.
+- **UXP.** Both have a UXP preview. This panel is CEP only.
+- **Resolve depth.** [samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp) covers Fusion, Fairlight and the free edition. This project needs Resolve Studio and is tested on macOS.
+
+**What this project does that their READMEs do not mention**
+
+| | |
+|---|---|
+| **Your edits come back** | Reads the saved `.prproj` and conforms every later render to what you changed by hand |
+| **Gates that refuse** | Colour, loudness and delivery checks raise an error instead of shipping a bad file |
+| **Work before the timeline** | Auto-log of raw footage, offline transcript, dead-air removal, two rough-cut variants, subtitles |
+| **An editing method** | Walter Murch's Rule of Six as decision rules in `skills/film-editing/SKILL.md` |
+| **One brain, two editors** | The same cut list goes to Premiere or Resolve |
+| **Small surface** | Ten tools and one escape hatch, so the model does not need a tool search to find its way |
+
+If you need an agent that can reach every button in Premiere, pick one of the big servers. If you want an assistant editor for documentary material that checks its own output and follows your manual changes, this one is for you.
+
+## What an outside editor said
+
+> "Все установилось по твоей инструкции без проблем, единственный затык, который случился - это настройка первого коннекта."
+>
+> "Я пока попробовал использовать помощника только для базовой организации файлов на таймлайне, типа расставить в хронологическом порядке дубли, срезать пустые фазы и т.д. С этим он справился отлично, все вполне интуитивно."
+>
+> Andrey, film editor, October 2026. He installed it by sending one sentence to his own Claude. The first-connection snag he hit is now in the Quickstart.
 
 ---
 

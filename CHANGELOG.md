@@ -36,8 +36,9 @@ pieces that made it repeatable:
   cloning; every visible caption track is burned by `exportAsMediaDirect`);
   AAC-in-mp4 music slivers kill the audio renderer (relink to PCM); clips
   imported from another project may carry a Rec.709 override and look
-  grey; a music block for inserted shots is cut on the song's beat grid
-  with the inserts' own sound removed.
+  grey (and the override must be per camera: the same fix on a Rec.709
+  drone clip turned it yellow); a music block for inserted shots is cut on
+  the song's beat grid with the inserts' own sound removed.
 
 ### Added - direct runners, loudness, screen replacement (October 2026)
 

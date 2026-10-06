@@ -583,7 +583,11 @@ These were paid for in shipped mistakes. Do not relearn them.
 23. **Clips imported from another project may arrive with a Rec.709
     colour-space override and look grey.** Copy the colour space of a native
     clip: `item.setOverrideColorSpace(ref.getColorSpace())`. Measured: mean
-    saturation 28 against 68 on the master before the fix.
+    saturation 28 against 68 on the master before the fix. But override ONLY
+    the items whose camera actually shot log: the same blanket fix applied to
+    a Rec.709 drone clip (DJI) turned it yellow and oversaturated, and the
+    director caught it, not the gate. Filter by camera prefix, then read back
+    `getColorSpace().name` per item.
 24. **Inserted AI shots are not "hooks", they are a block with a frame and a
     music track.** The viewer needs a card that says why the fight is there;
     the song under the block is cut on its beat grid (tempo from onset

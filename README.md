@@ -20,6 +20,7 @@
 - 🎯 **Apply Murch's Rule of Six** — every cut decision ranked Emotion (51%) > Story (23%) > Rhythm (10%) > Eye-trace (7%) > 2D (5%) > 3D (4%)
 - 🎬 **Watch any clip end-to-end** — the bundled `/watch` skill extracts ~30-100 frames + transcript (free local Whisper or Groq cloud)
 - 🎨 **Colour that has to pass a gate** — every grade is measured against the ungraded base for blown highlights, oversaturation and skin pushed red, *and* for whether the look is visible at all. Calibrated on grades a director actually rejected ([`core/colorgate.py`](core/colorgate.py))
+- ✂️ **Variants of a hand-built cut, not cuts from scratch** — ripple-delete a scene, ripple-insert a block of new shots, remap the subtitles, keep every other frame; the plan is compiled with every Premiere trap of the job encoded as a test ([`core/ripple.py`](core/ripple.py), [`core/jsx/ripple_ops.jsx`](core/jsx/ripple_ops.jsx))
 - 🔁 **Your edits come back to the machine** — nudge the cuts, retype the captions, delete the title you hated, hit Save. The bridge reads your saved `.prproj` and conforms every render to your version instead of its own ([`core/prproj.py`](core/prproj.py))
 - 🤖 **No Adobe AI gating** — Adobe's official Creative Cloud connector explicitly cannot control desktop Premiere ([their docs say so](skills/film-editing/SKILL.md#xiii-analysis-pipeline-)). This bridge fills that gap.
 

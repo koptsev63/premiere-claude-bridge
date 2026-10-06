@@ -29,6 +29,7 @@ from core.tests import (
     test_render,
     test_resolve_run,
     test_review_loop,
+    test_ripple,
     test_screen_comp,
     test_silence,
     test_subtitles,
@@ -66,6 +67,8 @@ MODULES = [
     test_resolve_run,
     test_loudness,
     test_screen_comp,
+    # ripple variants of a hand-built sequence (October 2026)
+    test_ripple,
 ]
 
 

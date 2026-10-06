@@ -560,6 +560,38 @@ These were paid for in shipped mistakes. Do not relearn them.
     a full decode with nothing on the error channel - on the file that is
     actually sent.
 
+20. **Caption tracks are invisible to the ExtendScript API and do not
+    ripple.** `razor` + `TrackItem.move()` shift video and audio only; a
+    caption track in the base sequence stays put, so after the first insert
+    every one of its cues sits on the wrong shot, and `exportAsMediaDirect`
+    burns every VISIBLE caption track regardless of the preset. Before
+    cloning a sequence that carries someone else's captions, hide that track
+    (the eye icon on its header); the clone inherits the hidden state and
+    the burn stops. Six variants shipped with foreign subtitles before this
+    was understood (06.10.2026). Your own captions go in as a fresh SRT
+    track remapped by `core.ripple.remap_cues`.
+21. **Deletions by native `extract`, never by moving clips left.**
+    `qe.project.getActiveSequence().setInOutPoints(a,b); extract()` ripples
+    all tracks; `TrackItem.move()` to the left leaves black frames at the
+    old place. And run ALL deletions before ANY insert: an inserted clip
+    that later passes through `extract` can make the whole sequence
+    un-exportable ("low-level exception").
+22. **An AAC-in-mp4 music sliver shorter than 0.3 s kills Premiere's audio
+    renderer** ("could not create audio renderer" on every export). The
+    builder drops such slivers at every cut; the cure is relinking the song's
+    project item to a PCM `.mov` (`projectItem.changeMediaPath`).
+23. **Clips imported from another project may arrive with a Rec.709
+    colour-space override and look grey.** Copy the colour space of a native
+    clip: `item.setOverrideColorSpace(ref.getColorSpace())`. Measured: mean
+    saturation 28 against 68 on the master before the fix.
+24. **Inserted AI shots are not "hooks", they are a block with a frame and a
+    music track.** The viewer needs a card that says why the fight is there;
+    the song under the block is cut on its beat grid (tempo from onset
+    autocorrelation, bars of four, the drop on the strongest visual hit);
+    the inserts go in as video-only files and their own synthetic sound is
+    gone, with two or three accents mixed into the music file at -10..-14 dB.
+    A black card gets room tone under it, never silence.
+
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 
 The order is not negotiable: **assemble on the raw source -> the director says

@@ -7,6 +7,38 @@ per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
 
+### Added - ripple variants of a hand-built sequence (06.10.2026)
+
+Six versions of a director's hand-cut 377-s teaser were built in one
+evening as *declensions* of his cut: ripple-delete a scene, ripple-insert
+a block of new shots, remap his subtitles, keep every other frame. The
+pieces that made it repeatable:
+
+- **`core/ripple.py`** - plan compiler. Ops in ORIGINAL seconds of the base
+  (`D` delete, `I` insert, `A` audio-only, `R` remove audio items) compile
+  to builder order (all deletions first, then inserts in post-deletion
+  coordinates, same-anchor inserts reversed so list order = screen order,
+  audio placements in FINAL coordinates) plus a time map that remaps an
+  SRT of the base. Defects it encodes: an inserted clip that later passed
+  through `extract` made the sequence un-exportable ("low-level
+  exception", two hours of bisecting); the finale room tone landed 67 s
+  early when audio used post-deletion instead of final coordinates; a
+  subtitle starting 0.24 s inside a deleted shot vanished whole. 24 tests.
+- **`core/jsx/ripple_ops.jsx`** - the ExtendScript executor: clone the
+  base, QE `extract` for deletions (API `move()` to the left leaves black
+  frames), razor + drop <0.3-s audio slivers + move right + `overwriteClip`
+  for inserts, audio-only overwrite, title-still swap with scale copy
+  (3840-px PNG in a 1080p sequence = scale 50), caption track from SRT,
+  built length asserted against the compiler's expectation (Premiere's
+  `sequence.end` does not shrink after `extract`).
+- **Hard rules 20-24** in `skills/film-editing/SKILL.md`: caption tracks
+  are invisible to the API and do not ripple (hide the base's track before
+  cloning; every visible caption track is burned by `exportAsMediaDirect`);
+  AAC-in-mp4 music slivers kill the audio renderer (relink to PCM); clips
+  imported from another project may carry a Rec.709 override and look
+  grey; a music block for inserted shots is cut on the song's beat grid
+  with the inserts' own sound removed.
+
 ### Added - direct runners, loudness, screen replacement (October 2026)
 
 Tools that were built on jobs after the reel and lived outside the repo.

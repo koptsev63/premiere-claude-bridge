@@ -1,6 +1,6 @@
 # Install — detailed walkthrough
 
-The 4-step Quickstart in the [README](../README.md#quickstart) covers the happy path. This file is the long version: per-OS notes, troubleshooting, and what to do when something doesn't work.
+The one-sentence install at the top of the [README](../README.md#install-in-one-sentence) covers the happy path, and [Manual install](../README.md#manual-install) lists the steps. This file is the long version: per-OS notes, troubleshooting, and what to do when something doesn't work.
 
 ---
 

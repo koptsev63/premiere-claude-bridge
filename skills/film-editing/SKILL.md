@@ -595,6 +595,25 @@ These were paid for in shipped mistakes. Do not relearn them.
     the inserts go in as video-only files and their own synthetic sound is
     gone, with two or three accents mixed into the music file at -10..-14 dB.
     A black card gets room tone under it, never silence.
+25. **Handing a cut to a Resolve editor: XML per timeline, media into the
+    pool first, stills fixed.** Export FCP7 XML from a proxy-linked copy of
+    the project (new project + `importSequences`, relink, never the
+    director's own project), run `core/xml_handoff.py` (`remap_paths`,
+    `fix_stills`), and tell the editor: drag the media folder into the
+    Media Pool, then import the XML with "automatically import source
+    clips" OFF. With it on, foreign paths make the import fail outright.
+    A 3840-px title at Scale 50 arrives half size in Resolve (it fits the
+    still and applies the scale on top): ship 1080 twins, 50 -> 100, no
+    filter -> 200, any other value stays.
+26. **Before you say "it opens in Resolve", open it in Resolve.** External
+    scripting works: launch hidden, create a throwaway project, import
+    media one file per call (two numbered stills in one call become an
+    image sequence), import the timeline, compare duration to the frame
+    and count items without media, export title frames with
+    `ExportCurrentFrameAsStill` and put them next to the Premiere render.
+    Then load nothing, delete the throwaway project, quit. Seven timelines
+    took five minutes; the half-size titles were invisible in every count
+    and obvious in the first exported frame.
 
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 

@@ -7,6 +7,25 @@ per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
 Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
 is the Murch operating system on top, not the driver underneath.
 
+### Added - XML hand-off to a DaVinci Resolve editor (07.10.2026)
+
+Seven teaser timelines (4K originals, Premiere) went to an editor who cuts
+in Resolve on proxies. All seven import in Resolve 21 with the duration
+equal to the frame and zero clips without media; verified by scripting the
+real application, not by reading the XML.
+
+- **`core/xml_handoff.py`** - `remap_paths` (pathurl -> package layout by
+  basename, case-insensitive), `fix_stills` (3840-px titles: 1080 twins and
+  the three scale cases), `disabled_clips` (what the receiver will drop).
+  `core/tests/test_xml_handoff.py`, 11 checks.
+- **film-editing hard rules 25-26**: media into the pool first and
+  `importSourceClips: False`; open it in Resolve before saying it opens.
+- Measured failures on the way: `ImportTimelineFromFile` with source clips
+  on returned None on every attempt; titles came out at half size (Scale 50
+  on top of Resolve's fit); doubling a clip with Premiere's scale-to-frame
+  flag (152) filled two screens; `ru_card1.png` + `ru_card2.png` in one
+  `ImportMedia` call became an image sequence.
+
 ### Added - ripple variants of a hand-built sequence (06.10.2026)
 
 Six versions of a director's hand-cut 377-s teaser were built in one

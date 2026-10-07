@@ -35,6 +35,7 @@ from core.tests import (
     test_subtitles,
     test_value,
     test_variants,
+    test_xml_handoff,
 )
 
 MODULES = [
@@ -69,6 +70,7 @@ MODULES = [
     test_screen_comp,
     # ripple variants of a hand-built sequence (October 2026)
     test_ripple,
+    test_xml_handoff,
 ]
 
 

@@ -1,9 +1,9 @@
 name: Publish to MCP Registry
 
+# Tag trigger removed in October 2026: the registry now takes an MCPB bundle
+# whose sha256 must be patched into server.json, which this job does not do.
+# Publish by hand (see mcpb/build.sh) until the job is rewritten.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:

@@ -118,6 +118,20 @@ mklink /D "$env:APPDATA\Adobe\CEP\extensions\com.koptsev.claude-bridge" "$(Get-L
 
 ---
 
+## Install as a Claude Desktop extension (.mcpb)
+
+If you use Claude Desktop, you can install the MCP server without cloning the repo or running `npm install`.
+
+1. Download `premiere-claude-bridge-<version>.mcpb` from the [releases page](https://github.com/koptsev63/premiere-claude-bridge/releases).
+2. Open the file with Claude Desktop (double-click it, or use Settings > Extensions > Install extension) and confirm.
+3. Leave the port at 9876 unless you also changed it in the panel (`cep-extension/js/main.js`).
+
+The bundle covers only the MCP server. The Premiere panel still has to be installed: follow step 6 (allow unsigned CEP extensions and link `cep-extension/`) and step 7 of the macOS or Windows setup above, then open Window > Extensions > Claude Bridge in Premiere. The Python analysis tools and the skills are not in the bundle either. Clone the repo if you need them.
+
+To build the bundle yourself, run `bash mcpb/build.sh`. The file is written to `mcpb/dist/`.
+
+---
+
 ## Verifying the install
 
 After all 6 steps:

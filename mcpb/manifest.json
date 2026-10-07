@@ -1,0 +1,61 @@
+{
+  "manifest_version": "0.3",
+  "name": "premiere-claude-bridge",
+  "display_name": "Premiere Claude Bridge",
+  "version": "0.3.0",
+  "description": "Assistant editor for Premiere Pro: read the project and timeline, move the playhead, add markers, queue exports.",
+  "long_description": "MCP server that connects Claude to Adobe Premiere Pro through a CEP panel over a local WebSocket (127.0.0.1). This bundle contains only the MCP server. The Claude Bridge panel has to be installed in Premiere separately, see the install guide in the repository. The logging, transcription, rough cut, subtitle and QC tools of the project live in the repository as Python tools and Claude skills and are not part of this bundle.",
+  "author": {
+    "name": "Vladimir Koptsev",
+    "url": "https://github.com/koptsev63"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koptsev63/premiere-claude-bridge.git"
+  },
+  "homepage": "https://github.com/koptsev63/premiere-claude-bridge",
+  "documentation": "https://github.com/koptsev63/premiere-claude-bridge/blob/main/docs/install.md",
+  "support": "https://github.com/koptsev63/premiere-claude-bridge/issues",
+  "license": "MIT",
+  "keywords": ["premiere", "premiere pro", "adobe", "video editing", "timeline", "extendscript"],
+  "server": {
+    "type": "node",
+    "entry_point": "server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server.js"],
+      "env": {
+        "PREMIERE_BRIDGE_PORT": "${user_config.port}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "pr_status", "description": "Check the connection to Premiere Pro and return basic project info" },
+    { "name": "pr_get_project_info", "description": "Get the current project: name, path and all project items" },
+    { "name": "pr_get_active_sequence", "description": "Get info about the active sequence" },
+    { "name": "pr_list_timeline", "description": "List all tracks of the active sequence with every clip" },
+    { "name": "pr_get_selected", "description": "Get the clips currently selected on the timeline" },
+    { "name": "pr_get_playhead", "description": "Get the current playhead time" },
+    { "name": "pr_set_playhead", "description": "Move the playhead to a given time" },
+    { "name": "pr_add_marker", "description": "Add a marker on the active sequence" },
+    { "name": "pr_export_ame", "description": "Queue the active sequence for export in Adobe Media Encoder" },
+    { "name": "pr_eval_jsx", "description": "Run arbitrary ExtendScript code inside Premiere" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "user_config": {
+    "port": {
+      "type": "number",
+      "title": "Bridge port",
+      "description": "Local WebSocket port the Premiere panel connects to. Change it only if you also change it in the panel.",
+      "default": 9876,
+      "min": 1024,
+      "max": 65535,
+      "required": false
+    }
+  }
+}

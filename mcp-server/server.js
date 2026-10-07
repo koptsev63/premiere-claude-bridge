@@ -131,7 +131,7 @@ function err(message) {
 
 const server = new McpServer({
   name: "premiere-claude-bridge",
-  version: "0.1.0",
+  version: "0.3.0",
 });
 
 server.tool(

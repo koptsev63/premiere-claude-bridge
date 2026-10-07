@@ -15,3 +15,8 @@ venv/
 # local credentials must never enter this public repo
 *.env
 .env
+
+# MCPB bundle build output (mcpb/build.sh)
+mcpb/build/
+mcpb/dist/
+*.mcpb

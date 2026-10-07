@@ -1,32 +1,69 @@
-# premiere-claude-bridge
+# AI assistant editor for Premiere Pro and DaVinci Resolve
 
-> **Control Adobe Premiere Pro from Claude — with Walter Murch's editing operating system baked in.**
->
-> The first MCP bridge to Premiere Pro built by an actual film director, not by a hackathon team.
+**premiere-claude-bridge** is a free, open-source MCP server that lets Claude Code or Codex do the assistant editor's work inside your own project. You ask in plain language. It logs the footage, transcribes the speech, lays out a rough cut on your timeline and checks the result before you ship it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-compatible-blue.svg)](https://modelcontextprotocol.io/)
 [![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](#status)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-![premiere-claude-bridge — control Adobe Premiere Pro from Claude](docs/img/social-card.png)
+![AI assistant editor for Premiere Pro and DaVinci Resolve](docs/img/social-card.png)
 
-**What you get in one sentence.** A bridge that lets Claude (or any MCP client) drive Premiere Pro on your Mac/PC the same way an assistant editor would — import dailies, build sequences, set in/out points, place markers, queue AME exports — but driven by natural-language prompts and an opinionated editing skill drawn from Walter Murch's *In the Blink of an Eye*.
+## Install in one sentence
 
-**Why an editor would actually use this:**
+Open Claude Code (the Code tab of the Claude desktop app works) and send it this:
 
-- ⏱ **Auto-log 100+ raw clips in 12 minutes** instead of 4 hours of manual review (motion + audio peaks + horizon tilt + 6-frame strips per clip → one HTML contact sheet)
-- ✂️ **Build a 60-second teaser from natural-language prompts** ("make a 60-second cut: hook → absurd → action → breath → payoff")
-- 🎯 **Apply Murch's Rule of Six** — every cut decision ranked Emotion (51%) > Story (23%) > Rhythm (10%) > Eye-trace (7%) > 2D (5%) > 3D (4%)
-- 🎬 **Watch any clip end-to-end** — the bundled `/watch` skill extracts ~30-100 frames + transcript (free local Whisper or Groq cloud)
-- 🎨 **Colour that has to pass a gate** — every grade is measured against the ungraded base for blown highlights, oversaturation and skin pushed red, *and* for whether the look is visible at all. Calibrated on grades a director actually rejected ([`core/colorgate.py`](core/colorgate.py))
-- ✂️ **Variants of a hand-built cut, not cuts from scratch** — ripple-delete a scene, ripple-insert a block of new shots, remap the subtitles, keep every other frame; the plan is compiled with every Premiere trap of the job encoded as a test ([`core/ripple.py`](core/ripple.py), [`core/jsx/ripple_ops.jsx`](core/jsx/ripple_ops.jsx))
-- 🔁 **Your edits come back to the machine** — nudge the cuts, retype the captions, delete the title you hated, hit Save. The bridge reads your saved `.prproj` and conforms every render to your version instead of its own ([`core/prproj.py`](core/prproj.py))
-- 🤖 **No Adobe AI gating** — Adobe's official Creative Cloud connector explicitly cannot control desktop Premiere ([their docs say so](skills/film-editing/SKILL.md#xiii-analysis-pipeline-)). This bridge fills that gap.
+```
+Install premiere-claude-bridge from github.com/koptsev63/premiere-claude-bridge following its README, and take me to the green "Connected" label in Premiere.
+```
 
-[**See full Grave Stakes case study →**](examples/grave-stakes-teaser/) (108 raw .MTS clips → 61-sec teaser, 7 minutes of work, 3 sequence iterations)
+Claude clones the repo, sets everything up and tells you when to restart Premiere. Then:
 
----
+1. In Premiere open **Window → Extensions → Claude Bridge**. The panel should say "Connected to Claude".
+2. Start a **new** chat and ask: "Check the connection to Premiere."
+3. Keep that Claude session open while you edit.
+
+On DaVinci Resolve Studio there is no panel. Set **Preferences → System → General → External scripting using** to **Local**, restart Resolve, and ask Claude to set the project up for Resolve.
+
+You need Premiere Pro 2024 or newer, or DaVinci Resolve Studio, and a Claude or Codex subscription. Tested on macOS. Windows has install steps but nobody has confirmed them yet. Prefer to do it by hand? See [Manual install](#manual-install).
+
+## What you can ask it to do
+
+**Sort the footage**
+- Watch a whole folder of rushes and write a log: what is in the shot, where the motion and the sound are, which clips are shaky or tilted. You get one page with a frame strip per clip.
+- Transcribe speech offline, in Russian, English, Hungarian and other languages, then flag the words it probably misheard.
+- Find material by words: a character's lines, a topic, "the long monologue at night".
+
+**Build the cut**
+- Put takes on the timeline in order and mark the story beats.
+- Cut out pauses and dead air.
+- Pick the strongest moments of a long recording for a short version.
+- Build two contrasting rough cuts from the same material so you choose.
+- Make variants of a cut you built by hand: drop a scene, insert a block, keep every other frame where it was.
+
+**Sound and subtitles**
+- Duck music under speech and level the takes against each other.
+- Deliver subtitles as SRT and burned in.
+
+**Check before delivery**
+- Refuse a grade with blown highlights or red skin, and a grade nobody can see.
+- Refuse a file with wrong proportions, shaky edges or no sound.
+
+**Follow your hands.** Move the cuts, retype a caption, save the project. It reads your saved `.prproj` and works from your version from then on.
+
+It has no taste. Decisions stay with you; it takes the logging, sorting and checking.
+
+## What an editor said
+
+> "Все установилось по твоей инструкции без проблем, единственный затык, который случился - это настройка первого коннекта."
+>
+> "Я пока попробовал использовать помощника только для базовой организации файлов на таймлайне, типа расставить в хронологическом порядке дубли, срезать пустые фазы и т.д. С этим он справился отлично, все вполне интуитивно."
+>
+> Andrey, film editor, October 2026
+
+In English: "Everything installed by your instruction with no problems. The only snag was setting up the first connection." And: "So far I have used the assistant only for basic organisation of files on the timeline, like putting takes in chronological order and cutting the empty phases. It handled that very well, it is all quite intuitive."
+
+The snag he hit is now step 2 above.
 
 ## Demo
 
@@ -45,9 +82,58 @@ Claude: ✓ Imported 108 clips into bin '01_Source_MTS'
 
 → Real output from this exact prompt. See [`examples/grave-stakes-teaser/cutlist_v3.json`](examples/grave-stakes-teaser/cutlist_v3.json) for the full 12-clip cutlist that built the case-study teaser.
 
+
+## How this compares to other Premiere and Resolve MCP servers
+
+There are about fifteen Premiere MCP servers on GitHub now, and several for Resolve. The big ones are good at something this project is not, so here is the honest split (checked October 2026).
+
+**Where the others are ahead**
+
+- **Typed timeline tools.** [hetpatel-11/Adobe_Premiere_Pro_MCP](https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP) and [leancoderkavy/premiere-pro-mcp](https://github.com/leancoderkavy/premiere-pro-mcp) ship hundreds of typed tools for effects, keyframes, transitions and multicam. Here those go through `pr_eval_jsx`.
+- **Install.** They have npm packages and installers. This repo is a clone and a symlink.
+- **UXP.** Both have a UXP preview. This panel is CEP only.
+- **Resolve depth.** [samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp) covers Fusion, Fairlight and the free edition. This project needs Resolve Studio and is tested on macOS.
+
+**What this project does that their READMEs do not mention**
+
+| | |
+|---|---|
+| **Your edits come back** | Reads the saved `.prproj` and conforms every later render to what you changed by hand |
+| **Gates that refuse** | Colour, loudness and delivery checks raise an error instead of shipping a bad file |
+| **Work before the timeline** | Auto-log of raw footage, offline transcript, dead-air removal, two rough-cut variants, subtitles |
+| **An editing method** | Walter Murch's Rule of Six as decision rules in `skills/film-editing/SKILL.md` |
+| **One brain, two editors** | The same cut list goes to Premiere or Resolve |
+| **Small surface** | Ten tools and one escape hatch, so the model does not need a tool search to find its way |
+
+If you need an agent that can reach every button in Premiere, pick one of the big servers. If you want an assistant editor for documentary material that checks its own output and follows your manual changes, this one is for you.
+
+## Why I built this
+
+I'm a film director (festival shorts, currently developing two features in screenplay labs — *Doukhobors* in TFL Next, *Grave Stakes* in Cinéfondation). I monkey with Adobe Premiere all the time, and I burn 4-6 hours per teaser on the same boring assistant-editor work: watching all the dailies, writing notes in Excel, dragging selects to a timeline, trimming, re-timing.
+
+I tried Adobe's own AI tools. Their official Creative Cloud connector advertises "Premiere capabilities" but the actual surface is four cloud video tools that have nothing to do with the desktop app. The Adobe docs themselves say: *for trim by timestamp, use Adobe Premiere*. So I made the thing that actually does that.
+
+The non-obvious bit: I didn't want a chatbot that randomly clicks buttons. I wanted one that **thinks like an editor**. So the core of this repo is `skills/film-editing/SKILL.md` — Walter Murch's *In the Blink of an Eye* compressed into machine-actionable decision rules. Every cut my AI assistant proposes ranks Emotion > Story > Rhythm > Eye-trace > 2D > 3D, and I can override per shot.
+
+It worked on my actual *Grave Stakes* teaser. I wanted other directors and editors to have the same thing without re-implementing the bridge from scratch.
+
+
+## Honest limitations
+
+The bridge gives Claude full programmatic control of Premiere. With the `watch` skill bundled, the previous "stop-frames only" limitation is **largely closed**. What remains:
+
+- **Sub-frame timing intuition.** Murch-level "trim 8 frames" calls still need a human editor.
+- **Micro-expression nuance.** Frames + transcript get you 80% of the way; the last 20% is taste.
+- **Dramaturgy from nothing.** Structure must be specified — the skill won't invent the through-line.
+
+Position it as: **senior assistant editor + automation, not director's editor.**
+
+
 ---
 
-## Quickstart
+# For developers
+
+## Manual install
 
 ### Prerequisites
 
@@ -120,53 +206,6 @@ brew install yt-dlp ffmpeg          # macOS
 
 → **Detailed install + troubleshooting:** [`docs/install.md`](docs/install.md)
 
----
-
-## How this compares to other Premiere and Resolve MCP servers
-
-There are about fifteen Premiere MCP servers on GitHub now, and several for Resolve. The big ones are good at something this project is not, so here is the honest split (checked October 2026).
-
-**Where the others are ahead**
-
-- **Typed timeline tools.** [hetpatel-11/Adobe_Premiere_Pro_MCP](https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP) and [leancoderkavy/premiere-pro-mcp](https://github.com/leancoderkavy/premiere-pro-mcp) ship hundreds of typed tools for effects, keyframes, transitions and multicam. Here those go through `pr_eval_jsx`.
-- **Install.** They have npm packages and installers. This repo is a clone and a symlink.
-- **UXP.** Both have a UXP preview. This panel is CEP only.
-- **Resolve depth.** [samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp) covers Fusion, Fairlight and the free edition. This project needs Resolve Studio and is tested on macOS.
-
-**What this project does that their READMEs do not mention**
-
-| | |
-|---|---|
-| **Your edits come back** | Reads the saved `.prproj` and conforms every later render to what you changed by hand |
-| **Gates that refuse** | Colour, loudness and delivery checks raise an error instead of shipping a bad file |
-| **Work before the timeline** | Auto-log of raw footage, offline transcript, dead-air removal, two rough-cut variants, subtitles |
-| **An editing method** | Walter Murch's Rule of Six as decision rules in `skills/film-editing/SKILL.md` |
-| **One brain, two editors** | The same cut list goes to Premiere or Resolve |
-| **Small surface** | Ten tools and one escape hatch, so the model does not need a tool search to find its way |
-
-If you need an agent that can reach every button in Premiere, pick one of the big servers. If you want an assistant editor for documentary material that checks its own output and follows your manual changes, this one is for you.
-
-## What an outside editor said
-
-> "Все установилось по твоей инструкции без проблем, единственный затык, который случился - это настройка первого коннекта."
->
-> "Я пока попробовал использовать помощника только для базовой организации файлов на таймлайне, типа расставить в хронологическом порядке дубли, срезать пустые фазы и т.д. С этим он справился отлично, все вполне интуитивно."
->
-> Andrey, film editor, October 2026. He installed it by sending one sentence to his own Claude. The first-connection snag he hit is now in the Quickstart.
-
----
-
-## Why I built this
-
-I'm a film director (festival shorts, currently developing two features in screenplay labs — *Doukhobors* in TFL Next, *Grave Stakes* in Cinéfondation). I monkey with Adobe Premiere all the time, and I burn 4-6 hours per teaser on the same boring assistant-editor work: watching all the dailies, writing notes in Excel, dragging selects to a timeline, trimming, re-timing.
-
-I tried Adobe's own AI tools. Their official Creative Cloud connector advertises "Premiere capabilities" but the actual surface is four cloud video tools that have nothing to do with the desktop app. The Adobe docs themselves say: *for trim by timestamp, use Adobe Premiere*. So I made the thing that actually does that.
-
-The non-obvious bit: I didn't want a chatbot that randomly clicks buttons. I wanted one that **thinks like an editor**. So the core of this repo is `skills/film-editing/SKILL.md` — Walter Murch's *In the Blink of an Eye* compressed into machine-actionable decision rules. Every cut my AI assistant proposes ranks Emotion > Story > Rhythm > Eye-trace > 2D > 3D, and I can override per shot.
-
-It worked on my actual *Grave Stakes* teaser. I wanted other directors and editors to have the same thing without re-implementing the bridge from scratch.
-
----
 
 ## Tools (MCP commands Claude can call)
 
@@ -273,19 +312,19 @@ Lets Claude actually watch a clip. Extracts 30-100 frames + transcript via three
 
 See [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md) for credit and [`skills/film-editing/SKILL.md` §XIV](skills/film-editing/SKILL.md) for integrated workflow.
 
----
 
-## Honest limitations
+## Architecture
 
-The bridge gives Claude full programmatic control of Premiere. With the `watch` skill bundled, the previous "stop-frames only" limitation is **largely closed**. What remains:
+![How Claude drives Premiere — three processes, four hops](docs/img/architecture.png)
 
-- **Sub-frame timing intuition.** Murch-level "trim 8 frames" calls still need a human editor.
-- **Micro-expression nuance.** Frames + transcript get you 80% of the way; the last 20% is taste.
-- **Dramaturgy from nothing.** Structure must be specified — the skill won't invent the through-line.
+See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
 
-Position it as: **senior assistant editor + automation, not director's editor.**
+- **Multi-instance-safe WS server** - if a previous Claude session holds port 9876, new instances retry every 3s until the holder dies. Without this, multiple Claude sessions silently break. While they wait, [`mcp-server/pk.js`](mcp-server/pk.js) reaches the panel through its debug port instead ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
+- **ExtendScript JSON polyfill** — Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
+- **Self-healing socket lookup** — adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
 
----
+These were all real bugs found during the *Grave Stakes* case study. See [`CHANGELOG.md`](CHANGELOG.md).
+
 
 ## Roadmap
 
@@ -309,7 +348,6 @@ The three editors integrate in fundamentally different ways, so v1.0 is an **ada
 
 Net: a decision made once renders into any editor. Raw "AI controls Resolve" is already crowded ([several MCP servers exist](https://github.com/samuelgursky/davinci-resolve-mcp)); the differentiator here is the editing operating system on top, not the driver underneath.
 
----
 
 ## Contributing
 
@@ -323,32 +361,16 @@ PRs, issues, and skill packs are welcome — see [`CONTRIBUTING.md`](CONTRIBUTIN
 
 Look for [`good first issue`](https://github.com/koptsev63/premiere-claude-bridge/issues?q=label%3A%22good+first+issue%22) and [`help wanted`](https://github.com/koptsev63/premiere-claude-bridge/issues?q=label%3A%22help+wanted%22) labels.
 
----
-
-## Architecture
-
-![How Claude drives Premiere — three processes, four hops](docs/img/architecture.png)
-
-See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
-
-- **Multi-instance-safe WS server** - if a previous Claude session holds port 9876, new instances retry every 3s until the holder dies. Without this, multiple Claude sessions silently break. While they wait, [`mcp-server/pk.js`](mcp-server/pk.js) reaches the panel through its debug port instead ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
-- **ExtendScript JSON polyfill** — Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
-- **Self-healing socket lookup** — adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
-
-These were all real bugs found during the *Grave Stakes* case study. See [`CHANGELOG.md`](CHANGELOG.md).
-
----
 
 ## License
 
 MIT — see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copyright Bradley Bonanno — see [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md).
 
----
 
 ## Status
 
-🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish — a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Currently in private testing with ~20 invited editors before public launch.
+🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish — a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
 
-**Want a beta seat?** Subscribe to the dev TG channel [@koptsev_AI](https://t.me/koptsev_AI) — beta invitations + new skill packs announced there.
+**Stuck on install or found a bug?** Open an issue or a discussion here. News goes to the Telegram channel [@koptsev_AI](https://t.me/koptsev_AI) (in Russian).
 
 **Author:** Vladimir Koptsev — film director, Barcelona. [TG @koptsev_AI](https://t.me/koptsev_AI) · [koptsev63@gmail.com](mailto:koptsev63@gmail.com)

@@ -614,6 +614,25 @@ These were paid for in shipped mistakes. Do not relearn them.
     Then load nothing, delete the throwaway project, quit. Seven timelines
     took five minutes; the half-size titles were invisible in every count
     and obvious in the first exported frame.
+27. **A grading pull from an editor's `.drt` is audited clip by clip
+    before the render, and neither file is the truth.** Import, relink to
+    the camera originals with `ReplaceClip(realpath)` (a relink by name
+    keeps the proxy's properties), reset the grades, then
+    `core/drt_audit.py`: the `.drt` In against the NLE's LeftOffset for
+    every clip. Any disagreement stops the render and becomes one question
+    to the editor: source timecode and file name for that shot. One clip
+    of 79 went out wrong three times on a teaser: Resolve put a crowd shot
+    there (LeftOffset -1885), the `.drt` In (191) gave a close-up, the
+    editor's 17:48:20:17 was frame 1884. Frame count and a contact sheet
+    were clean every time. `AppendToTimeline` endFrame is exclusive.
+28. **A replacement shot for the editor is cut by the editor's timecode
+    from the original, and shown before it is sent.** ffmpeg `-ss` on the
+    original, ProRes with `-timecode` set, PSNR of the first frame against
+    that source frame (56 dB on the hit, 32 dB one frame off). Never send
+    your own guess about which part of a clip the editor meant.
+29. **Resolve's H.264 encoder is not a master.** On the same job it
+    corrupted frames in the mp4. Render ProRes from Resolve, make the mp4
+    from that with ffmpeg.
 
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 

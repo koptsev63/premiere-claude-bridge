@@ -17,6 +17,7 @@ from core.tests import (
     test_conform,
     test_cutlist,
     test_denoise,
+    test_drt_audit,
     test_ducking,
     test_highlights,
     test_library,
@@ -31,6 +32,7 @@ from core.tests import (
     test_review_loop,
     test_ripple,
     test_screen_comp,
+    test_shotmatch,
     test_silence,
     test_subtitles,
     test_value,
@@ -71,6 +73,10 @@ MODULES = [
     # ripple variants of a hand-built sequence (October 2026)
     test_ripple,
     test_xml_handoff,
+    # per-shot colour match baked to LUTs (October 2026)
+    test_shotmatch,
+    # .drt pull audit against the editor's cut (October 2026)
+    test_drt_audit,
 ]
 
 

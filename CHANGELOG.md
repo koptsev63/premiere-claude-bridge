@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.4.0] - 2026-10-18 - hand-off to the colourist
+
+Built on one festival teaser over two days: an editor in Resolve, a
+colourist downstream, camera originals in 4K S-Log3, AI shots and a drone.
+
+### Added - `.drt` audit before a grading pull (18.10.2026)
+
+- **`core/drt_audit.py`** - `read_drt` (clips, source In, the editor's
+  media-pool marks), `audit` (the `.drt` against what the NLE laid down,
+  clip by clip, with editor overrides), `source_frame` (editor TC to
+  source frame), `AuditReport.assert_ok()` refuses to render.
+  `core/tests/test_drt_audit.py`, 22 checks built on the real case.
+- Measured failure behind it: one clip of 79 went to the editor wrong three
+  times. Resolve placed it at LeftOffset -1885 (a crowd shot), the `.drt`
+  said In 191 (a close-up), the editor's timecode 17:48:20:17 meant source
+  frame 1884. Frame count and a contact sheet every 7 s were both clean.
+- `<In>` can be `5509|80ffffffffffef3f`: an integer plus a little-endian
+  double fraction. Truncating it reports a false one-frame drift.
+- Media-pool marks are only the last viewer marks per clip: in this cut 36
+  of 57 camera uses fell outside them, so they are context, not a check.
+
+### Added - per-shot colour match baked to LUTs (17.10.2026)
+
+- **`core/shotmatch.py`** - numpy-only sRGB/Lab, `measure`, `match_params`
+  (camera shots of one clip share one correction, AI shots only tamed, the
+  drone never pushed warmer, titles untouched), three looks, `bake_cube`,
+  `check_cube`, `ffmpeg_lut_filter` with escaping tested against real
+  ffmpeg. `core/tests/test_shotmatch.py`, 80 checks.
+- Measured: camera b -4.4, AI +1.3, drone +11.4. Per-pixel Python over
+  8466 frames was about 60x slower than baked 33^3 cubes through
+  `lut3d=interp=tetrahedral`; mean cube error about 0.1 code values.
+
+### Field rules added to `skills/film-editing`
+
+- Resolve's H.264 encoder corrupted frames on this job: masters go out as
+  ProRes and mp4 is made from them with ffmpeg.
+- A shot sent to replace a wrong one is cut by the editor's timecode from
+  the original and checked by PSNR against that source frame (56 dB here).
+
 ## [0.3.0] - 2026-10-06 — universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
 
 The editing brain is now NLE-agnostic. A cut is decided once as a `Cutlist`;

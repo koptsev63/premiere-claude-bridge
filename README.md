@@ -45,6 +45,10 @@ You need Premiere Pro 2024 or newer, or DaVinci Resolve Studio, and a Claude or 
 - Duck music under speech and level the takes against each other.
 - Deliver subtitles as SRT and burned in.
 
+**Colour and hand-off to the colourist**
+- Match camera, AI-generated and drone shots to one colour point, shot by shot, then bake three looks as LUTs and render them with ffmpeg.
+- Pull a "kolbasa" for grading from an editor's Resolve `.drt`: every shot relinked to the camera originals, grade removed, ProRes 422 HQ. It stops before the render if one shot out of eighty does not match the editor's cut.
+
 **Check before delivery**
 - Refuse a grade with blown highlights or red skin, and a grade nobody can see.
 - Refuse a file with wrong proportions, shaky edges or no sound.
@@ -64,6 +68,18 @@ It has no taste. Decisions stay with you; it takes the logging, sorting and chec
 In English: "Everything installed by your instruction with no problems. The only snag was setting up the first connection." And: "So far I have used the assistant only for basic organisation of files on the timeline, like putting takes in chronological order and cutting the empty phases. It handled that very well, it is all quite intuitive."
 
 The snag he hit is now step 2 above.
+
+## New in 0.4: the wrong shot nobody sees
+
+A real Sunday on a festival teaser. The editor cut it in Resolve on proxies and sent a `.drt`. The colourist needed the same cut on the 4K S-Log3 camera originals. The import looked clean and the length matched to the frame. One shot of 79 was still wrong, and it went out three times:
+
+1. Resolve put a crowd shot where the editor had an orbit around the hero.
+2. The "fix" trusted the number in the `.drt` and put in a third shot.
+3. The editor sent the timecode, and only then was the shot right.
+
+A contact sheet with a frame every seven seconds cannot see a three-second shot. So `core/drt_audit.py` reads the cut twice, once from the `.drt` and once from what the NLE actually laid down, and compares them clip by clip. If they disagree, it does not render. It prints both readings and asks you for the editor's timecode. Neither file is the truth. The editor is.
+
+Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour point and bakes the result into LUTs, about 60 times faster than grading every frame in Python. Details in [CHANGELOG](CHANGELOG.md).
 
 ## Demo
 

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "premiere-claude-bridge",
   "display_name": "Premiere Claude Bridge",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Assistant editor for Premiere Pro: read the project and timeline, move the playhead, add markers, queue exports.",
   "long_description": "MCP server that connects Claude to Adobe Premiere Pro through a CEP panel over a local WebSocket (127.0.0.1). This bundle contains only the MCP server. The Claude Bridge panel has to be installed in Premiere separately, see the install guide in the repository. The logging, transcription, rough cut, subtitle and QC tools of the project live in the repository as Python tools and Claude skills and are not part of this bundle.",
   "author": {

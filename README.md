@@ -77,7 +77,7 @@ A real Sunday on a festival teaser. The editor cut it in Resolve on proxies and 
 2. The "fix" trusted the number in the `.drt` and put in a third shot.
 3. The editor sent the timecode, and only then was the shot right.
 
-A contact sheet with a frame every seven seconds cannot see a three-second shot. So `core/drt_audit.py` reads the cut twice, once from the `.drt` and once from what the NLE actually laid down, and compares them clip by clip. If they disagree, it does not render. It prints both readings and asks you for the editor's timecode. Neither file is the truth. The editor is.
+A contact sheet with a frame every seven seconds cannot see a three-second shot. So `core/drt_audit.py` reads the cut twice, once from the `.drt` and once from what the NLE actually laid down, and compares them clip by clip. If they disagree, it does not render. It prints both readings and asks you for the editor's timecode. Neither file is the truth. The editor is. A clip the editor played backwards or retimed is read through Resolve's speed map, not its In field: a reverse goes into the pull as the forward source piece with a note to flip it back, any other speed change stops for the editor's timecode.
 
 Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour point and bakes the result into LUTs, about 60 times faster than grading every frame in Python. Details in [CHANGELOG](CHANGELOG.md).
 

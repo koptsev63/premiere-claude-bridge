@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.1] - 2026-10-19 - the wrong shot was played backwards
+
+### Fixed - reversed and retimed clips in a `.drt`
+
+- The one clip of 79 that went wrong in 0.4.0's field case was the only
+  clip the editor had reversed. He spotted it after reading about the bug:
+  his timecode for it ran from the larger number to the smaller.
+- Resolve keeps speed in `<MediaTimemapBA>`, and `<In>` of a retimed clip
+  counts clip time, not source time. `parse_timemap` decodes the map (a Qt
+  QVariantMap with UTF-16 keys), `retime` turns a full reverse into the
+  forward source range: clip frame k shows source frame n-1-k. For that clip
+  n = 2147, In 191, 72 frames gives 1884..1955 - the editor's own
+  17:48:20:17 - 17:48:23:13, to the frame.
+- `read_drt` now returns the forward source In plus `kind` ("reverse" or
+  "speed"). `audit` lists reversed clips in the report (the grading pull
+  carries the forward piece, the editor flips it back) and stops on any
+  other speed change until the editor gives the source timecode.
+- Found in the same cut: a second reversed clip (an AI shot). It was not
+  relinked to a camera original and came through right.
+- 10 new checks on the editor's real export, `test_drt_audit` 32 of 32.
+
 ## [0.4.0] - 2026-10-18 - hand-off to the colourist
 
 Built on one festival teaser over two days: an editor in Resolve, a

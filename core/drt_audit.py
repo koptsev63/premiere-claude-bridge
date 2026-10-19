@@ -32,6 +32,20 @@ Format notes, measured on Resolve 21.0.3 exports:
   disagreement, useless as a general check (36 of 57 camera uses in that
   cut fell outside their clip's marks).
 
+Reversed and retimed clips (19.10.2026, found by the same editor): the one
+bad clip was the only one he had played BACKWARDS. Resolve keeps speed in
+`<MediaTimemapBA>` and `<In>` of a retimed clip counts CLIP time, not
+source time. A plain clip carries a 9-byte stub (0x02 + double); a retimed
+one a Qt map with `KeyframesBA` -> {"0": {X, Y}, "1": {X, Y}} in seconds
+(X clip time, Y source time). Full reverse = (0, Ymax) -> (Xmax, 0): clip
+frame k shows source frame n-1-k with n = Xmax * fps. For A004C086,
+n = 2147, In 191, 72 frames: source 1955 down to 1884 - exactly the
+editor's 17:48:23:13 - 17:48:20:17. `read_drt` now returns the FORWARD
+source In and `kind="reverse"`; a grading pull carries the forward piece
+(grading does not care about direction) and the editor flips it back.
+Any other speed change is `kind="speed"` and always a stop until the
+editor gives the source timecode.
+
 Pure stdlib; the Resolve side (reading TimelineItem.GetLeftOffset and
 re-laying a clip with MediaPool.AppendToTimeline, endFrame EXCLUSIVE) lives
 in `core/adapters/resolve_run.py` callers.
@@ -68,12 +82,74 @@ def parse_in(raw: str | None) -> int | None:
     return int(round(v))
 
 
+
+def _qmap(b: bytes) -> dict:
+    """Qt-serialised QVariantMap as Resolve writes it: version, count, UTF-16BE keys."""
+    o = 4
+    (n,) = struct.unpack_from(">I", b, o)
+    o += 4
+    d: dict = {}
+    for _ in range(n):
+        (kl,) = struct.unpack_from(">I", b, o)
+        o += 4
+        k = b[o:o + kl].decode("utf-16-be")
+        o += kl
+        (t,) = struct.unpack_from(">I", b, o)
+        o += 5  # type + null flag
+        if t == 6:
+            (v,) = struct.unpack_from(">d", b, o)
+            o += 8
+        elif t == 2:
+            (v,) = struct.unpack_from(">i", b, o)
+            o += 4
+        elif t == 1:
+            v = b[o]
+            o += 1
+        elif t in (10, 12):
+            (ln,) = struct.unpack_from(">I", b, o)
+            o += 4
+            raw = b"" if ln == 0xFFFFFFFF else b[o:o + ln]
+            o += 0 if ln == 0xFFFFFFFF else ln
+            v = raw if t == 10 else (_qmap(raw) if raw[:4] == b"\0\0\0\1" else raw)
+        else:
+            raise ValueError(f"timemap value type {t}")
+        d[k] = v
+    return d
+
+
+def parse_timemap(raw: str | None) -> list[tuple[float, float]] | None:
+    """`<MediaTimemapBA>` hex -> sorted (X clip s, Y source s) keyframes; None for a plain clip."""
+    if not raw or len(raw) <= 18:
+        return None
+    try:
+        kf = _qmap(bytes.fromhex(raw)).get("KeyframesBA")
+    except (ValueError, struct.error):
+        return None
+    if not isinstance(kf, dict):
+        return None
+    return sorted((v["X"], v["Y"]) for v in kf.values() if isinstance(v, dict))
+
+
+def retime(points: list[tuple[float, float]] | None, clip_in: int, duration: int,
+           fps: int = 25) -> tuple[str | None, int]:
+    """(kind, forward source In). kind None = plain, "reverse" = full -100 %, "speed" = anything else."""
+    if not points or all(y == 0 for _, y in points):
+        return None, clip_in                       # plain clip, or a still (titles carry Y = 0)
+    if len(points) == 2 and points[0] == (0, 0) and abs(points[1][1] - points[1][0]) < 1e-6:
+        return None, clip_in                       # identity written out in full
+    if len(points) == 2 and points[0][0] == 0 and points[0][1] > 0 and points[1][1] == 0:
+        n = int(round(points[1][0] * fps))
+        head = n - 1 - clip_in                     # clip frame k shows source frame n-1-k
+        return "reverse", head - duration + 1
+    return "speed", clip_in
+
 @dataclass(frozen=True)
 class DrtClip:
     name: str
     start: int          # record frame, absolute (timeline start included)
     duration: int
-    src_in: int | None  # None for titles, generators, adjustment clips
+    src_in: int | None  # FORWARD source frame; None for titles, generators, adjustment clips
+    kind: str | None = None  # None, "reverse" (played backwards) or "speed" (any other retime)
 
 
 @dataclass(frozen=True)
@@ -107,6 +183,7 @@ class AuditReport:
     disagreements: list[Disagreement] = field(default_factory=list)
     unmatched: list[str] = field(default_factory=list)
     overridden: list[int] = field(default_factory=list)
+    reversed: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -116,7 +193,9 @@ class AuditReport:
         head = (f"checked {self.checked}, disagree {len(self.disagreements)}, "
                 f"unmatched {len(self.unmatched)}, editor overrides {len(self.overridden)}")
         return "\n".join([head] + [d.line() for d in self.disagreements] +
-                         [f"unmatched {u}" for u in self.unmatched])
+                         [f"unmatched {u}" for u in self.unmatched] +
+                         [f"reverse {r}: the pull carries the forward piece, tell the editor to flip it back"
+                          for r in self.reversed])
 
     def assert_ok(self) -> None:
         if not self.ok:
@@ -142,8 +221,10 @@ def read_drt(path: str) -> tuple[list[DrtClip], dict[str, tuple[int, int]]]:
                     name, start, dur = _tag(b, "Name"), _tag(b, "Start"), _tag(b, "Duration")
                     if not (name and start and dur):
                         continue
-                    clips.append(DrtClip(name, int(round(float(start))), int(round(float(dur))),
-                                         parse_in(_tag(b, "In"))))
+                    d, src_in, kind = int(round(float(dur))), parse_in(_tag(b, "In")), None
+                    if src_in is not None:
+                        kind, src_in = retime(parse_timemap(_tag(b, "MediaTimemapBA")), src_in, d)
+                    clips.append(DrtClip(name, int(round(float(start))), d, src_in, kind))
             elif n.startswith("MediaPool/"):
                 for m in _MP.finditer(x):
                     b = m.group(0)
@@ -175,9 +256,13 @@ def audit(drt: Iterable[DrtClip], placed: Iterable[PlacedClip], timeline_start: 
             continue
         rec = p.start - timeline_start
         want = c.src_in
+        if c.kind == "reverse":
+            rep.reversed.append(f"{p.name} @ {rec}: source {c.src_in}-{c.src_in + c.duration - 1}")
         if rec in overrides:
             want = overrides[rec]
             rep.overridden.append(rec)
+        elif c.kind == "speed":
+            want = None  # a speed ramp has no single source In: only the editor's TC settles it
         if p.src_in == want and p.duration == c.duration:
             continue
         rep.disagreements.append(Disagreement(p.name, rec, want, p.src_in, c.duration, p.duration,

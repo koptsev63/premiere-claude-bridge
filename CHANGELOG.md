@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.5.0] - 2026-10-21 - four pitfalls from one evening in a Russian Premiere
+
+An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
+20.10.2026 and hit four pitfalls and one bad export. Each became a function.
+
+### Fixed - `pr_eval_jsx` returned nothing for code that ended in an expression
+
+- The description said "last expression is returned", but the panel runs the
+  code as a function body, so only an explicit `return` came back; without
+  it the result was empty.
+- Now code with a top-level `return` runs as before, and any other code goes
+  through `eval`, which returns the last expression (checked in Premiere
+  26.0.2). `lib/evalcode.js` tells the two apart with a small scanner that
+  skips strings, comments, regexes and nested functions. Works with the
+  panel as installed: no reload.
+- A trailing `// comment` used to swallow the panel's closing `})()`; fixed
+  in both modes.
+- `test/evalcode.test.js` runs the panel's own `buildJsx` from
+  `cep-extension/js/main.js`, so the test breaks if the panel changes.
+
+### Fixed - several sessions, and the working one had no panel
+
+- Every Claude Code / Codex session starts its own `server.js`. They all
+  retried port 9876 every 3 s and the panel stuck to whichever won, often
+  an idle session; the one doing the work got "Premiere panel not
+  connected". At the time of the fix two servers were running and the
+  panel sat on the one started four hours earlier.
+- `lib/port.js`: a server binds at start only if the port is free and never
+  polls. The server that receives a tool call asks the holder to let go
+  (`POST /release` on the same port, custom header so a web page cannot do
+  it), binds and waits up to 8 s for the panel to reconnect. A holder in
+  the middle of a request answers 409 and keeps the port until it is done.
+  Last caller wins.
+- A holder that is not a bridge, or a bridge older than 0.5.0, is never
+  touched: the error names its pid. Older bridges still running in open
+  sessions need those sessions restarted once.
+- A server now exits when its client closes stdin, so a closed session
+  frees the port at once instead of holding it.
+- `test/port.test.js`: two real servers and a fake panel - the caller takes
+  the port and gives it back, a busy holder is not cut off (the second
+  session waited for the first one's request), an alien holder is left
+  alone with its pid named, a closed session frees the port.
+
+### Added - `pr_import_captions`
+
+- `app.project.importFiles([several .srt], suppressUI=true, bin, false)`
+  hung Premiere on "Импорт файлов..." for good. One file at a time with
+  the UI allowed went through, then
+  `seq.createCaptionTrack(item, 0, Sequence.CAPTION_FORMAT_SUBTITLE)`.
+- The tool does exactly that. Paths are checked on disk before Premiere is
+  touched; each file is its own panel call with its own timeout; on a
+  timeout or error it stops and reports what was done and which file
+  stopped it. A file already in the project is reused, not imported again.
+
+### Added - `pr_list_video_effects`, `pr_add_video_effect`
+
+- `qe.project.getVideoEffectByName("Black & White")` in the Russian UI
+  returned an object, `addVideoEffect` took it and added nothing, with no
+  error. The localized name "Черное и белое" worked.
+- `lib/effects.js` resolves a name against the running Premiere's
+  `getVideoEffectList()`: exact, then case/ё-insensitive, then an
+  English-to-Russian map of 66 effects, then a loose match only when it is
+  unique; otherwise it refuses and lists candidates. Every Russian name in
+  the map is checked against the real 26.0.2 list (131 effects, kept as a
+  test fixture). Some newer effects keep English names in the Russian UI
+  (`Gaussian Blur`, `Vignette`); the legacy ones are Russian.
+- `pr_add_video_effect` counts the clip's components before and after and
+  fails if the count did not grow. The QE item is found by start ticks
+  (QE counts gaps as items; ticks match the DOM exactly).
+- These tools send their ExtendScript from the server (`lib/jsx.js`), so
+  they work with a panel that is already open. Their bodies are tested to
+  parse, to be ASCII (Cyrillic goes as `\u` escapes) and ES3.
+
+### Changed - `pr_export_ame` refuses ingest/proxy presets
+
+- `exportAsMediaDirect` with `IngestPresets/Proxy/02_H.264 MP4.epr`
+  stretched a 1080x1920 vertical sequence into 1280x720. Proxy presets
+  carry their own frame size. `pr_export_ame` refuses them unless
+  `allowProxyPreset: true`; docs point to `00 - Match Source - High
+  bitrate.epr`. Field rules 30-32 in `skills/film-editing`.
+
+### Checked live, and not
+
+- In Premiere 26.0.2 through the panel's debug port, read-only: eval
+  semantics, the effect list, QE ticks, and the new ExtendScript bodies on
+  missing files and tracks (each refused cleanly).
+- Not yet run against a real project: importing an actual `.srt` and adding
+  an effect to a clip through the new tools.
+- `npm test` in `mcp-server/`: 30 checks. `mcpb/build.sh` now ships `lib/`.
+
 ## [0.4.1] - 2026-10-19 - the wrong shot was played backwards
 
 ### Fixed - reversed and retimed clips in a `.drt`

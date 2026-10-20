@@ -18,11 +18,14 @@ Claude Code  ──stdio JSON-RPC──▶  MCP server  ──WebSocket──▶
 Spoken to by Claude Code over stdio (JSON-RPC). Spawns a WebSocket server on `127.0.0.1:9876` that the CEP panel connects to. Translates each MCP tool call into a JSX expression, sends it over WS, awaits the response, translates back to MCP-format result.
 
 **Key files:**
-- `server.js` — single-file implementation, ~250 lines
+- `server.js` - tools and the panel round-trip
+- `lib/` - port hand-over (`port.js`), `pr_eval_jsx` preparation (`evalcode.js`), effect names (`effects.js`), ExtendScript for the newer tools (`jsx.js`), export preset check (`presets.js`)
+- `test/` - `npm test` (node:test), including two real servers fighting over a port with a fake panel
 - `package.json` — three deps: `@modelcontextprotocol/sdk`, `ws`, `zod`
 
 **Notable bits:**
-- Port-collision retry: if a previous Claude session holds 9876, `startWsServer()` re-tries every 3s until the holder dies (handles multiple Claude Code sessions running in parallel)
+- Port hand-over: a server binds 9876 at start only if it is free and never polls. The server that receives a tool call takes the port: `POST /release` to the holder (same port, plain HTTP, custom header so a web page cannot trigger it), bind, wait up to 8 s for the panel's reconnect. A holder running a request answers 409 and keeps the port until done. A server exits when its client closes stdin, so dead sessions do not sit on the port.
+- Newer tools (captions, effects) send their ExtendScript from the server through the panel's `evalRaw` path, so they work with a panel that is already open
 - Self-healing socket lookup: if `panelSocket` goes stale after CEP reload, `getActiveSocket()` adopts whatever live `wss.clients[0]` is available
 - Per-call timeout: 60s default, configurable via `REQUEST_TIMEOUT_MS`
 
@@ -117,7 +120,7 @@ Total round-trip on a healthy bridge: **~50-150ms** for typed tools, **~200-500m
 ## Known design constraints
 
 - **Single Premiere instance per machine** — port 9876 is hardcoded. If you run multiple Premiere instances, only the panel that connects first wins. Override via `PREMIERE_BRIDGE_PORT` env var if needed.
-- **One MCP server holds the panel** - every extra Claude session starts its own server, loses the race for 9876 and sees `panel not connected`. `mcp-server/pk.js` is the way around: it speaks Chrome DevTools Protocol to the panel's CEF debug port (8088, from `cep-extension/.debug`), sends one `Runtime.evaluate` that wraps `window.__adobe_cep__.evalScript` in a promise, and prints the result. No WebSocket server, no shared state, so sessions do not collide.
+- **One MCP server holds the panel at a time** - since 0.5.0 it is the one whose session called a tool last. Two sessions working at once hand the port back and forth (a couple of seconds per switch). A bridge older than 0.5.0 does not hand over; restart its session. `mcp-server/pk.js` needs no port at all: it speaks Chrome DevTools Protocol to the panel's CEF debug port (8088, from `cep-extension/.debug`), sends one `Runtime.evaluate` that wraps `window.__adobe_cep__.evalScript` in a promise, and prints the result. No WebSocket server, no shared state, so sessions do not collide.
 - **CEP panel must be open** - if you close the Claude Bridge panel, the bridge dies (and so does the direct path: it attaches to that panel). Make it part of your default workspace.
 - **Long ExtendScript calls block other calls** — host.jsx is single-threaded. A `pr_export_ame` call returns immediately because AME is launched asynchronously, but a `pr_eval_jsx` doing 500-clip iteration will hold the lock.
 

@@ -526,8 +526,10 @@ These were paid for in shipped mistakes. Do not relearn them.
     through `-filter_complex`, and keep filter paths free of spaces.
 
 15. **`panel not connected` is usually a port race, not a dead bridge.** Each
-    Claude session starts its own MCP server; only one gets port 9876 and the
-    panel. Before telling anyone Premiere is unreachable, run
+    Claude session starts its own MCP server; only one holds port 9876 and the
+    panel. Since 0.5.0 the calling session takes it over by itself; an error
+    naming a pid means an older bridge sits on the port (restart that
+    session). Before telling anyone Premiere is unreachable, run
     `node mcp-server/pk.js info` - it goes through the panel's debug port and
     works from every session. Resolve has no such race:
     `python -m core.adapters.resolve_run exec script.py`.
@@ -633,6 +635,18 @@ These were paid for in shipped mistakes. Do not relearn them.
 29. **Resolve's H.264 encoder is not a master.** On the same job it
     corrupted frames in the mp4. Render ProRes from Resolve, make the mp4
     from that with ffmpeg.
+30. **Caption files go in one at a time: `pr_import_captions`.**
+    `importFiles([several .srt], suppressUI=true, ...)` hung Premiere on
+    "Импорт файлов..." for good (20.10.2026). One file per call with the UI
+    allowed, then `createCaptionTrack(item, 0, CAPTION_FORMAT_SUBTITLE)`.
+31. **Effects by the name Premiere shows, verified: `pr_add_video_effect`.**
+    In a Russian UI `getVideoEffectByName("Black & White")` returns an
+    object and `addVideoEffect` adds nothing, with no error; the name is
+    "Черное и белое". Count `components.numItems` before and after.
+32. **Never export a sequence with an ingest/proxy preset.**
+    `IngestPresets/Proxy/02_H.264 MP4.epr` squashed a 1080x1920 vertical
+    into 1280x720. Use a Match Source preset and read the output size with
+    ffprobe before the file leaves.
 
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 

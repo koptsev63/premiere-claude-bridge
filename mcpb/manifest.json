@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "premiere-claude-bridge",
   "display_name": "Premiere Claude Bridge",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Assistant editor for Premiere Pro: read the project and timeline, move the playhead, add markers, queue exports.",
   "long_description": "MCP server that connects Claude to Adobe Premiere Pro through a CEP panel over a local WebSocket (127.0.0.1). This bundle contains only the MCP server. The Claude Bridge panel has to be installed in Premiere separately, see the install guide in the repository. The logging, transcription, rough cut, subtitle and QC tools of the project live in the repository as Python tools and Claude skills and are not part of this bundle.",
   "author": {
@@ -39,7 +39,10 @@
     { "name": "pr_set_playhead", "description": "Move the playhead to a given time" },
     { "name": "pr_add_marker", "description": "Add a marker on the active sequence" },
     { "name": "pr_export_ame", "description": "Queue the active sequence for export in Adobe Media Encoder" },
-    { "name": "pr_eval_jsx", "description": "Run arbitrary ExtendScript code inside Premiere" }
+    { "name": "pr_eval_jsx", "description": "Run arbitrary ExtendScript code inside Premiere" },
+    { "name": "pr_import_captions", "description": "Import caption files one at a time and put each on a caption track" },
+    { "name": "pr_list_video_effects", "description": "List video effect names as this Premiere knows them (localized)" },
+    { "name": "pr_add_video_effect", "description": "Add a video effect by English or localized name and verify it was added" }
   ],
   "compatibility": {
     "platforms": ["darwin", "win32"],

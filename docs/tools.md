@@ -89,13 +89,48 @@ Queue active sequence export to Adobe Media Encoder. Non-blocking.
 
 **Returns:** `{ok: true, jobID, outPath, eprPath}` — the job is queued; AME launches if not already running.
 
+**Use a Match Source preset for a sequence.** Ingest and proxy presets (`Settings/IngestPresets/...`, anything named Proxy) carry their own frame size: on 20.10.2026 `exportAsMediaDirect` with `IngestPresets/Proxy/02_H.264 MP4.epr` turned a 1080x1920 vertical sequence into 1280x720. `pr_export_ame` refuses such presets unless `allowProxyPreset: true`. The same applies to `exportAsMediaDirect` in your own scripts.
+
 **Stock preset locations on macOS:**
 ```
 /Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/MediaIO/systempresets/
-  4E49434B_48323634/YouTube 1080p HD.epr     ← H.264 1080p, good default
+  4E49434B_48323634/00 - Match Source - High bitrate.epr   ← H.264 at the sequence's own size, good default
+  4E49434B_48323634/YouTube 1080p HD.epr     ← H.264 1080p (fixed 16:9 size)
   4A454646_48455643/HEVC 4K.epr              ← H.265 4K
   3F3F3F3F_574D5620/HD 1080p 25.epr          ← Pro Res / DNxHR
 ```
+
+---
+
+## Captions
+
+### `pr_import_captions`
+Import caption files and put each on a new caption track of the active sequence.
+
+**Args:** `{paths: string[], bin?, createTracks? = true, startSeconds? = 0, format? = "subtitle" | "608" | "708" | "teletext" | "open_ebu", reuseExisting? = true, perFileTimeoutSec? = 60}`
+
+**Returns:** `{imported, done: [{path, nodeId, name, reused, track}]}`; on a failure, an error with what was done so far.
+
+Why a tool: `app.project.importFiles([several .srt], true, bin, false)` (suppressUI) hung Premiere 26 on "Import files" for good (20.10.2026). One file per call with the UI allowed went through, then `seq.createCaptionTrack(item, 0, Sequence.CAPTION_FORMAT_SUBTITLE)` worked. The tool does exactly that: paths are checked on disk first, each file is its own panel call with its own timeout, and on a timeout it stops and says which file, without touching the rest. A file already in the project is reused, not imported twice.
+
+---
+
+## Effects
+
+### `pr_list_video_effects`
+Effect names exactly as this Premiere shows them. In a Russian UI most are Russian (`Черное и белое`), some newer ones stay English (`Gaussian Blur`, `Vignette`).
+
+**Args:** `{filter?: string}` (matches the local name or its known English name)
+**Returns:** `{count, effects: [{name, en?}]}`
+
+### `pr_add_video_effect`
+Add a video effect and prove it landed.
+
+**Args:** `{effect: string, target? = "clip" | "track" | "selected", trackIndex? = 0, clipIndex? = 0}` (indexes as in `pr_list_timeline`; gaps do not count)
+
+**Returns:** `{requested, resolved, how, results: [{track, clip, name, before, after, added, component}]}`. An error if any clip's component count did not grow.
+
+Why a tool: `qe.project.getVideoEffectByName("Black & White")` in a Russian UI returned an object and `addVideoEffect` silently added nothing; `"Черное и белое"` worked (20.10.2026). The name is resolved against `qe.project.getVideoEffectList()` of the running Premiere: exact name, then case/ё-insensitive, then an English-to-local map checked against the real 26.0.2 list, then a loose match that is used only when it is unique. Otherwise the tool refuses and lists candidates. The QE item is found by start ticks, not by index (QE counts gaps as items).
 
 ---
 
@@ -104,9 +139,13 @@ Queue active sequence export to Adobe Media Encoder. Non-blocking.
 ### `pr_eval_jsx`
 Run arbitrary ExtendScript code inside Premiere. Use when no specific tool fits.
 
-**Args:** `{code: string}` — must explicitly `return` a value (string, number, or object). Objects are auto-stringified via the JSON polyfill in `host.jsx`.
+**Args:** `{code: string}` - ES3 ExtendScript. Two styles, both return a value:
+- end with an expression: `var s = app.project.activeSequence; s.name`
+- use `return` at top level: `var s = app.project.activeSequence; return s.name;`
 
-**Returns:** the returned value (parsed if it's valid JSON, raw string otherwise).
+Code with a top-level `return` (outside any function) runs as a function body, as it always did. Any other code runs through `eval`, which gives back the last expression (before 0.5.0 that case returned an empty string). Objects are auto-stringified via the JSON polyfill in `host.jsx`.
+
+**Returns:** the value (parsed if it's valid JSON, raw string otherwise). A statement with no value (`var x = 1;`) returns `""`.
 
 **Example — create a sequence and place clips:**
 ```javascript
@@ -140,15 +179,17 @@ app.project.saveAs("/path/to/new.prproj");
 **Common gotchas:**
 - ExtendScript is ES3 — no `let`, no arrow functions, no `Object.assign`
 - `JSON.stringify` works because we ship a polyfill in `host.jsx`
-- The wrapper around your code wraps it in `(function(){ ... })()` — without explicit `return`, you get `undefined`
+- Without a top-level `return` the value of the last expression comes back; with one, only what you `return` comes back
 - Error handling: wrap in `__safe(function(){...})` for friendly error JSON
 
 ---
 
 ## Without the MCP server: `pk.js`
 
-When a session's MCP server lost the race for port 9876, its `pr_*` tools
-report `panel not connected`. [`mcp-server/pk.js`](../mcp-server/pk.js) runs
+Since 0.5.0 the session that calls a tool takes port 9876 over, so `pr_*`
+tools work from any session. If an older bridge (before 0.5.0) still holds
+the port, the tools answer with an error naming its pid; restart that
+session, or meanwhile use `pk.js`. [`mcp-server/pk.js`](../mcp-server/pk.js) runs
 ExtendScript through the panel's Chromium debug port instead.
 
 ```bash

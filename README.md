@@ -234,17 +234,21 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_get_selected` | Currently selected clips on timeline |
 | `pr_get_playhead` / `pr_set_playhead` | CTI control |
 | `pr_add_marker` | Place marker at given time with name + comment |
-| `pr_export_ame` | Queue export to Adobe Media Encoder with .epr preset |
-| `pr_eval_jsx` | Escape hatch — run any ExtendScript code |
+| `pr_export_ame` | Queue export to Adobe Media Encoder with .epr preset (Match Source; proxy presets refused) |
+| `pr_import_captions` | Import .srt files one at a time, a caption track for each |
+| `pr_list_video_effects` | Effect names as this Premiere knows them (localized UI) |
+| `pr_add_video_effect` | Add an effect by English or local name, verified by component count |
+| `pr_eval_jsx` | Escape hatch - run any ExtendScript code, last expression returned |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
 
 ### Direct path when several Claude sessions fight for the port
 
 The MCP server owns one WebSocket port (9876) and the panel connects to
-whichever server instance got there first. With two or three Claude Code
-windows open there are two or three servers, and every one but the winner
-answers `panel not connected` while Premiere is perfectly fine.
+whichever server instance holds it. Since 0.5.0 the session that calls a
+tool takes the port over, so this is rarely needed. It still helps while an
+older bridge (started before 0.5.0) sits on the port, or when you want to
+run a script without any MCP server at all.
 
 [`mcp-server/pk.js`](mcp-server/pk.js) does not use that port. It attaches to
 the panel's own Chromium debug endpoint (port 8088, declared in
@@ -335,7 +339,7 @@ See [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md) for credit and 
 
 See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
 
-- **Multi-instance-safe WS server** - if a previous Claude session holds port 9876, new instances retry every 3s until the holder dies. Without this, multiple Claude sessions silently break. While they wait, [`mcp-server/pk.js`](mcp-server/pk.js) reaches the panel through its debug port instead ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
+- **The calling session gets the panel** - every Claude or Codex session starts its own server, and only one can hold port 9876. Since 0.5.0 the server that receives a tool call asks the holder to let go (HTTP on the same port), binds, and waits for the panel to reconnect; a holder in the middle of a request keeps the port until it is done. Nothing polls. A holder that is not a 0.5.0+ bridge is never touched: the error names its pid. [`mcp-server/pk.js`](mcp-server/pk.js) still reaches the panel through its debug port ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
 - **ExtendScript JSON polyfill** — Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
 - **Self-healing socket lookup** — adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
 

@@ -81,13 +81,28 @@ An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
   `allowProxyPreset: true`; docs point to `00 - Match Source - High
   bitrate.epr`. Field rules 30-32 in `skills/film-editing`.
 
-### Checked live, and not
+### Checked live (21.10.2026)
 
-- In Premiere 26.0.2 through the panel's debug port, read-only: eval
-  semantics, the effect list, QE ticks, and the new ExtendScript bodies on
-  missing files and tracks (each refused cleanly).
-- Not yet run against a real project: importing an actual `.srt` and adding
-  an effect to a clip through the new tools.
+- Premiere 26.0.2, Russian UI, on a throwaway copy of a project opened next
+  to the director's own (which was not touched). The new `server.js` ran
+  end to end; a shim wrapped each call with the panel's own `buildJsx` and
+  sent it through the panel's debug port.
+- `pr_import_captions` with two `.srt` into a vertical 1080x1920 test
+  sequence: both imported, two caption tracks. The saved project shows
+  caption tracks 3 -> 5 and caption items 76 -> 79, i.e. exactly the two
+  cues of the first file and the one of the second. A second call reused
+  the item instead of importing again. No dialog hang.
+- The pitfall reproduced: `getVideoEffectByName("Black & White")` gave an
+  object, `addVideoEffect` left the clip at 2 components. Then
+  `pr_add_video_effect "Black & White"` resolved to "Черное и белое" and
+  the clip went 2 -> 3 components. "Blur" was refused with five candidates.
+- `pr_eval_jsx` without `return` and with a trailing comment returned
+  `bridge_test_seq 1920`; `pr_export_ame` refused the proxy preset.
+- Found on the way: with two projects open, `app.project` was the copy but
+  `app.project.activeSequence` still named the other project's sequence
+  until a sequence of the copy was opened. Tools act on whatever
+  `activeSequence` says, so with several projects open, open the target
+  sequence first. Not fixed in this release.
 - `npm test` in `mcp-server/`: 30 checks. `mcpb/build.sh` now ships `lib/`.
 
 ## [0.4.1] - 2026-10-19 - the wrong shot was played backwards

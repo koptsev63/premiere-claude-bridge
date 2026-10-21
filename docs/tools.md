@@ -111,6 +111,8 @@ Import caption files and put each on a new caption track of the active sequence.
 
 **Returns:** `{imported, done: [{path, nodeId, name, reused, track}]}`; on a failure, an error with what was done so far.
 
+Both caption and effect tools refuse when the active sequence belongs to another open project: with two projects open Premiere can report the active project as one and `activeSequence` as the other's sequence (21.10.2026). Open the target sequence first.
+
 Why a tool: `app.project.importFiles([several .srt], true, bin, false)` (suppressUI) hung Premiere 26 on "Import files" for good (20.10.2026). One file per call with the UI allowed went through, then `seq.createCaptionTrack(item, 0, Sequence.CAPTION_FORMAT_SUBTITLE)` worked. The tool does exactly that: paths are checked on disk first, each file is its own panel call with its own timeout, and on a timeout it stops and says which file, without touching the rest. A file already in the project is reused, not imported twice.
 
 ---

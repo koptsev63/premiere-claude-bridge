@@ -647,6 +647,11 @@ These were paid for in shipped mistakes. Do not relearn them.
     `IngestPresets/Proxy/02_H.264 MP4.epr` squashed a 1080x1920 vertical
     into 1280x720. Use a Match Source preset and read the output size with
     ffprobe before the file leaves.
+33. **Two projects open = check whose sequence is active.** On 21.10.2026
+    `app.project` was a test copy while `app.project.activeSequence` was the
+    director's Grave Stakes sequence. The bridge's caption and effect tools
+    refuse that; in your own scripts compare `activeSequence.sequenceID`
+    with `app.project.sequences` before writing.
 
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 

@@ -36,6 +36,15 @@ function __byMedia(item, want, depth) {
   }
   return null;
 }
+// With two projects open, app.project can be one project while
+// app.project.activeSequence still names the other one's sequence (seen
+// live 21.10.2026). Refuse instead of writing into the wrong project.
+function __foreignSequence(seq) {
+  var list = app.project.sequences;
+  for (var i = 0; i < list.numSequences; i++) if (list[i].sequenceID === seq.sequenceID) return null;
+  return { error: 'The active sequence "' + seq.name + '" is not in the active project "' + app.project.name +
+    '" (several projects open). Open the target sequence of this project first, then retry.' };
+}
 function __childBin(parent, name) {
   for (var i = 0; i < parent.children.numItems; i++) {
     var c = parent.children[i];
@@ -94,6 +103,8 @@ export function captionTrackJsx({ nodeId, startSeconds, format }) {
   return `${FIND}
 var seq = app.project.activeSequence;
 if (!seq) return { error: "No active sequence" };
+var foreign = __foreignSequence(seq);
+if (foreign) return foreign;
 var it = __byNode(app.project.rootItem, ${S(nodeId)}, 0);
 if (!it) return { error: "Project item not found: " + ${S(nodeId)} };
 var fmt = Sequence[${S(constName)}];
@@ -119,10 +130,13 @@ return out;
 // item index differ). Ticks match exactly between the two APIs (checked on
 // 26.0.2).
 export function addVideoEffectJsx({ name, mode, track, clip }) {
-  return `app.enableQE();
+  return `${FIND}
+app.enableQE();
 var NAME = ${S(name)}; var MODE = ${S(mode)}; var T = ${Number(track) || 0}; var C = ${Number(clip) || 0};
 var seq = app.project.activeSequence;
 if (!seq) return { error: "No active sequence" };
+var foreign = __foreignSequence(seq);
+if (foreign) return foreign;
 var qseq = qe.project.getActiveSequence();
 if (!qseq) return { error: "QE has no active sequence" };
 var eff = qe.project.getVideoEffectByName(NAME);

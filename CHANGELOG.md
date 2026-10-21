@@ -100,9 +100,13 @@ An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
   `bridge_test_seq 1920`; `pr_export_ame` refused the proxy preset.
 - Found on the way: with two projects open, `app.project` was the copy but
   `app.project.activeSequence` still named the other project's sequence
-  until a sequence of the copy was opened. Tools act on whatever
-  `activeSequence` says, so with several projects open, open the target
-  sequence first. Not fixed in this release.
+  until a sequence of the copy was opened. Reproduced on a fresh copy:
+  the active sequence was the director's "MIDPOINT C3" from Grave Stakes,
+  so a caption track would have landed in his project. Fixed:
+  `pr_import_captions` and `pr_add_video_effect` refuse when the active
+  sequence is not one of the active project's sequences, and say to open
+  the target sequence first. Checked live both ways (passes in a single
+  project, refuses on the fresh copy).
 - `npm test` in `mcp-server/`: 30 checks. `mcpb/build.sh` now ships `lib/`.
 
 ## [0.4.1] - 2026-10-19 - the wrong shot was played backwards

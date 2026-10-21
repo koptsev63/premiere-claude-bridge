@@ -31,3 +31,9 @@ test("effect add counts components before and after", () => {
   assert.match(bodies.addEffect, /before = dom\.components\.numItems/);
   assert.match(bodies.addEffect, /r\.added = r\.after > before/);
 });
+
+test("sequence tools refuse a sequence from another open project", () => {
+  for (const b of [bodies.captionTrack, bodies.addEffect]) {
+    assert.match(b, /var foreign = __foreignSequence\(seq\);\s*if \(foreign\) return foreign;/);
+  }
+});

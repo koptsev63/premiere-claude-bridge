@@ -19,7 +19,10 @@ from core.tests import (
     test_denoise,
     test_drt_audit,
     test_ducking,
+    test_hits,
+    test_xmeml,
     test_highlights,
+    test_hits,
     test_library,
     test_loudness,
     test_overlays,
@@ -38,6 +41,7 @@ from core.tests import (
     test_value,
     test_variants,
     test_xml_handoff,
+    test_xmeml,
 )
 
 MODULES = [

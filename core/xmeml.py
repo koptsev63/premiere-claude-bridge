@@ -1,0 +1,108 @@
+"""core.xmeml - write a Cutlist as FCP7 XML (xmeml v4) that Premiere Pro imports.
+
+Field origin (23.10.2026, Treasures Wanted pilot): the cut was rendered by
+ffmpeg from a JSON edit list, but delivery to Vladimir is a montage project,
+not an mp4 (film-editing hard rule, mandate 15.08.2026). Premiere was not
+running, so no panel: a text FCP7 XML is the hand-off. Everything is in
+frames at the sequence rate (no fractional seconds: the "micro-gap" lesson).
+
+  write_xmeml(cutlist, path, *, width, height, audio=[...], dissolves={...},
+              overlays=[...])
+  xmeml_string(...)  - same, returns the XML text
+
+audio:     [(file, in_s, out_s, offset_s), ...] clips on A1 (music parts)
+dissolves: {timeline_second: duration_s} centre-aligned cross dissolves on V1
+overlays:  [(png, start_s, end_s), ...] stills on V2 (title cards)
+markers:   from the cutlist (sequence markers, comment = marker.comment)
+"""
+
+from __future__ import annotations
+
+import os
+import urllib.parse
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+from core.cutlist import Cutlist
+
+
+def _fr(sec: float, fps: float) -> int:
+    return int(round(sec * fps))
+
+
+def _pathurl(p: str) -> str:
+    return "file://localhost" + urllib.parse.quote(os.path.abspath(p))
+
+
+def _rate(fps: float) -> str:
+    tb = int(round(fps))
+    ntsc = "TRUE" if abs(fps - tb) > 0.01 else "FALSE"
+    return f"<rate><timebase>{tb}</timebase><ntsc>{ntsc}</ntsc></rate>"
+
+
+def _file(fid: str, path: str, fps: float, w: int, h: int, has_audio: bool, still: bool = False) -> str:
+    media = f"<video><samplecharacteristics>{_rate(fps)}<width>{w}</width><height>{h}</height></samplecharacteristics></video>"
+    if has_audio:
+        media += "<audio><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate></samplecharacteristics><channelcount>2</channelcount></audio>"
+    dur = "" if still else ""
+    return (f"<file id=\"{fid}\"><name>{escape(os.path.basename(path))}</name><pathurl>{_pathurl(path)}</pathurl>"
+            f"{_rate(fps)}{dur}<media>{media}</media></file>")
+
+
+def xmeml_string(cl: Cutlist, *, width: int = 1920, height: int = 1080,
+                 audio: list[tuple[str, float, float, float]] | None = None,
+                 dissolves: dict[float, float] | None = None,
+                 overlays: list[tuple[str, float, float]] | None = None) -> str:
+    fps = cl.fps
+    audio = audio or []; dissolves = dissolves or {}; overlays = overlays or []
+    total = cl.total_duration_sec or max([c.timeline_end for c in cl.cuts] + [o[2] for o in overlays] + [a[3] + a[2] - a[1] for a in audio])
+    T = _fr(total, fps)
+    files: dict[str, str] = {}
+    def fid(p):
+        if p not in files: files[p] = f"file-{len(files) + 1}"
+        return files[p]
+    v1 = []
+    for i, c in enumerate(cl.cuts):
+        s, e = _fr(c.offset, fps), _fr(c.timeline_end, fps)
+        ci, co = _fr(c.in_, fps), _fr(c.out, fps)
+        # centre-aligned dissolve INTO this clip: Premiere expects the transitionitem before the clipitem
+        d = dissolves.get(round(c.offset, 3))
+        if d and i > 0:
+            hd = _fr(d / 2, fps)
+            v1.append(f"<transitionitem><start>{s - hd}</start><end>{s + hd}</end><alignment>center</alignment>{_rate(fps)}"
+                      "<effect><name>Cross Dissolve</name><effectid>Cross Dissolve</effectid><effecttype>transition</effecttype>"
+                      "<mediatype>video</mediatype><effectcategory>Dissolve</effectcategory></effect></transitionitem>")
+        f = fid(c.clip); first = f not in [x for x in files.values() if x != f and False]
+        v1.append(f"<clipitem id=\"v{i + 1}\"><name>{escape(c.label or os.path.basename(c.clip))}</name>{_rate(fps)}"
+                  f"<start>{s}</start><end>{e}</end><in>{ci}</in><out>{co}</out>"
+                  f"{_file(f, c.clip, fps, width, height, has_audio=False)}"
+                  "<sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
+    v2 = []
+    for j, (png, a, b) in enumerate(overlays):
+        s, e = _fr(a, fps), _fr(b, fps)
+        v2.append(f"<clipitem id=\"t{j + 1}\"><name>{escape(os.path.basename(png))}</name>{_rate(fps)}"
+                  f"<start>{s}</start><end>{e}</end><in>0</in><out>{e - s}</out>"
+                  f"{_file(fid(png), png, fps, width, height, has_audio=False, still=True)}"
+                  "<sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
+    a1 = []
+    for k, (wav, ain, aout, off) in enumerate(audio):
+        s = _fr(off, fps); e = s + _fr(aout - ain, fps)
+        a1.append(f"<clipitem id=\"a{k + 1}\"><name>{escape(os.path.basename(wav))}</name>{_rate(fps)}"
+                  f"<start>{s}</start><end>{e}</end><in>{_fr(ain, fps)}</in><out>{_fr(aout, fps)}</out>"
+                  f"{_file(fid(wav), wav, fps, width, height, has_audio=True)}"
+                  "<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
+    mk = "".join(f"<marker><name>{escape(m.name)}</name><comment>{escape(m.comment)}</comment><in>{_fr(m.time, fps)}</in><out>-1</out></marker>"
+                 for m in cl.markers)
+    tracks_v = f"<track>{''.join(v1)}</track>" + (f"<track>{''.join(v2)}</track>" if v2 else "")
+    return ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE xmeml>\n<xmeml version=\"4\"><sequence id=\"seq-1\">"
+            f"<name>{escape(cl.sequence_name)}</name><duration>{T}</duration>{_rate(fps)}"
+            f"<media><video><format><samplecharacteristics>{_rate(fps)}<width>{width}</width><height>{height}</height>"
+            "<pixelaspectratio>square</pixelaspectratio><fielddominance>none</fielddominance></samplecharacteristics></format>"
+            f"{tracks_v}</video><audio><format><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate></samplecharacteristics></format>"
+            f"<track>{''.join(a1)}</track></audio></media>{mk}</sequence></xmeml>\n")
+
+
+def write_xmeml(cl: Cutlist, path: str | Path, **kw) -> str:
+    xml = xmeml_string(cl, **kw)
+    Path(path).write_text(xml, encoding="utf-8")
+    return str(path)

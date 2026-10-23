@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.1] - 2026-10-23 - cuts on the music hits, FCP7 XML out of a cutlist
+
+A 54-second pilot built from 5-second generated clips was rejected on first
+listen: "the music enters at second 12, the cut to the volcano after the big
+hit is off". Measured on the Suno track: an accent every 5.0 s (2.0, 7.1,
+12.0, 17.0 ... 47.1), loudest at 12.1 and 47.2; the cuts sat at 7.0, 9.4 and
+14.4, between the accents. Beat tracking does not see this: the accents are
+loud hits, not the beat grid.
+
+### Added - `core/hits.py`
+
+- `loudness_curve` (20 ms RMS), `find_hits` (rise >= 12 dB, peak above
+  -16 dBFS, de-duplicated at 0.8 s), `loudest_near`, `cuts_vs_hits` with a
+  two-frame tolerance at 24 fps and `assert_ok()`. CLI:
+  `python -m core.hits track.wav 8.11 13.03 ...` exits 1 when a cut is off.
+- Re-cut result on the same material: nine cuts within 0.06 s of the loudest
+  moment (the detector reads the finished file, so the mix and the offsets are
+  checked together). A clip shorter than the interval between hits is slowed
+  (Topaz Apollo 1.6x), not padded with cloned frames.
+
+### Added - `core/xmeml.py`
+
+- `write_xmeml(cutlist, path, audio=..., dissolves=..., overlays=...)`: FCP7
+  XML (xmeml v4) that Premiere Pro imports when the panel is not running.
+  Everything in frames at the sequence rate; centred cross dissolves; stills
+  on V2; music parts on A1 with their offset; cutlist markers kept.
+- Tests: `core/tests/test_hits.py` (9), `core/tests/test_xmeml.py` (10).
+
+
 ## [0.5.0] - 2026-10-21 - four pitfalls from one evening in a Russian Premiere
 
 An agent drove Premiere Pro 2026 (Russian UI) through the bridge on

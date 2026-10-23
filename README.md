@@ -394,3 +394,5 @@ MIT — see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copy
 **Stuck on install or found a bug?** Open an issue or a discussion here. News goes to the Telegram channel [@koptsev_AI](https://t.me/koptsev_AI) (in Russian).
 
 **Author:** Vladimir Koptsev — film director, Barcelona. [TG @koptsev_AI](https://t.me/koptsev_AI) · [koptsev63@gmail.com](mailto:koptsev63@gmail.com)
+
+- `core/hits.py` - music accents (loud hits) and "cut on the hit" verification with a two-frame tolerance; `core/xmeml.py` - FCP7 XML writer for Premiere from a cutlist (0.5.1).

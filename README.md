@@ -239,8 +239,45 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_list_video_effects` | Effect names as this Premiere knows them (localized UI) |
 | `pr_add_video_effect` | Add an effect by English or local name, verified by component count |
 | `pr_eval_jsx` | Escape hatch - run any ExtendScript code, last expression returned |
+| `pr_ping` / `pr_dialog_check` | Cheap health; "is Premiere waiting for a click?" (modal window detector, 0.6) |
+| `pr_probe_media` / `pr_import_media` | Codec and disk gate (AV1/VP9 come in as sound only), H.264 copy of a range, import one file per call |
+| `pr_make_sequence` | Sequence from a clip range without any dialog: size, fps, bin; settings read back |
+| `pr_set_motion` / `pr_set_motion_keyframes` | Scale / Position / Rotation on a clip, in pixels; hold keyframes for shot changes |
+| `pr_add_markers` / `pr_list_markers` | Markers in bulk, count verified |
+| `pr_open_sequences` / `pr_activate_sequence` | Tabs and the active sequence |
+| `pr_get_timeline` / `pr_get_inout` | Any sequence's clips with borders in seconds; the render range after a manual trim |
+| `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project` | Project housekeeping |
+| `pr_build_sequences` | Many sequences from one spec: import, create, motion, keyframes, markers, open |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
+
+### New in 0.6: sequences without a single click
+
+Ten vertical shorts had to be built as Premiere sequences from one podcast
+(24.10.2026). Four things went wrong in a row, all of them now bridge
+functions:
+
+- `createNewSequence(name, presetId)` opened the "Создать эпизод" dialog and
+  the bridge hung on a timeout. `pr_make_sequence` takes the dialog-free path
+  (`setInPoint/setOutPoint` on the item, `createNewSequenceFromClips`,
+  `getSettings/setSettings`) and reads the settings back.
+- The AV1 source from yt-dlp imported "successfully" with sound only.
+  `pr_import_media` runs ffprobe first, refuses AV1/VP9/VP8/4:4:4, hands you
+  the ffmpeg command for an H.264 copy of just the range you need (or runs it
+  with `convert: true`), and refuses everything under 2 GB of free disk.
+- Any modal window froze every tool with no explanation. `pr_dialog_check`
+  (and every 0.6 tool on a timeout) tells the difference: the panel's debug
+  port still answers while the script thread is blocked, the extra on-screen
+  window is named, and the message says which button to press, in Russian.
+- Motion keyframes between shots slid instead of cutting: `setInterpolationTypeAtKey`
+  with 5 is Bezier; hold is 4. `pr_set_motion_keyframes` with `hold: true`
+  checks the value between keys.
+
+Every one of these is also a `pk.js` command (`node mcp-server/pk.js make-seq ...`),
+so a session without the MCP panel has the same reach. The acceptance run:
+`pr_build_sequences` with a 10-sequence spec took 6 seconds and every
+sequence was verified by reading its timeline, Motion values and marker
+names back.
 
 ### Direct path when several Claude sessions fight for the port
 
@@ -261,7 +298,15 @@ node mcp-server/pk.js info                       # version, project, active sequ
 node mcp-server/pk.js eval 'app.project.name'    # one ExtendScript expression
 node mcp-server/pk.js file build_sequence.jsx    # a whole script
 echo 'app.version' | node mcp-server/pk.js eval -
+node mcp-server/pk.js status                     # 0.6: health + "is Premiere waiting for a click?"
+node mcp-server/pk.js make-seq --name "ПОДКАСТ 01" --file /abs/clip.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "ПОДКАСТ шортсы"
+node mcp-server/pk.js build --spec spec.json     # many sequences from one spec
 ```
+
+`node mcp-server/pk.js` with no arguments lists every typed command (probe, import,
+make-seq, motion, motion-keys, markers, open, activate, timeline, inout,
+delete-seq, move, ls, build, save). They share `mcp-server/lib/ops.js` with the
+MCP tools, so the behaviour is the same on both paths.
 
 Node 22+ needs no packages for it; older Node uses the `ws` that `npm install`
 already put in `mcp-server/`. Premiere must be running with the Claude Bridge

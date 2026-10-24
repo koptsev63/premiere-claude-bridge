@@ -147,3 +147,16 @@ export function prepareEvalCode(code) {
   if (hasTopLevelReturn(src)) return { mode: "function", code: src + "\n" };
   return { mode: "expression", code: "return eval(" + jsxString(src) + ");\n" };
 }
+
+// The panel's own wrapper (cep-extension/js/main.js, buildJsx "evalRaw"),
+// for callers that talk to evalScript directly (pk.js): a function body with
+// a top-level `return` becomes one expression whose value is a string, and
+// an ExtendScript error becomes {"error": ..., "line": ...} instead of the
+// bare "EvalScript error.".
+export function wrapBodyForEvalScript(body) {
+  return (
+    "(function(){ try { var __r = (function(){ " + body + " })();" +
+    " return (typeof __r === 'undefined') ? '' : (typeof __r === 'string' ? __r : JSON.stringify(__r)); }" +
+    " catch(e){ return JSON.stringify({error: e.toString(), line: e.line}); } })()"
+  );
+}

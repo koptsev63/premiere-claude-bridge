@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.6.0] - 2026-10-24 - sequences without a single click
+
+Order of the day (his words, 13:58): "допили мост так, чтобы мне не надо было
+вручную постоянно кликать ... как создаёшь секвенцию". Ten podcast shorts had
+to become Premiere sequences; four things in a row needed a click or lied.
+
+### Added - `mcp-server/lib/seq.js`, `lib/ops.js`, `lib/mediagate.js`, `lib/dialog.js`
+
+- 18 new MCP tools, each also a `pk.js` command (same code through `lib/ops.js`):
+  `pr_ping`, `pr_dialog_check`, `pr_probe_media`, `pr_import_media`,
+  `pr_make_sequence`, `pr_set_motion`, `pr_set_motion_keyframes`,
+  `pr_add_markers`, `pr_list_markers`, `pr_open_sequences`,
+  `pr_activate_sequence`, `pr_get_timeline`, `pr_get_inout`,
+  `pr_delete_sequence`, `pr_move_to_bin`, `pr_list_bin`, `pr_save_project`,
+  `pr_build_sequences`.
+- Sequence creation without a dialog: `createNewSequence(name, presetId)`
+  opened "Создать эпизод" and hung the bridge; the bridge now uses
+  `setInPoint/setOutPoint` + `createNewSequenceFromClips` + `setSettings`
+  and reads the settings, clip counts and borders back.
+- Media gate before any import (Node twin of `core/media_gate.py`): ffprobe,
+  AV1/VP9/VP8/4:4:4 refused with the ffmpeg command for an H.264 copy of the
+  range, 2 GB disk minimum, 5 GB reserve after a copy, footage frame rate
+  read back after the import (~0 = sound only).
+- "Is Premiere waiting for a click?": the CEF debug port answers while the
+  script thread is blocked; the dialog window is named from the Quartz window
+  list (Premiere's UI is invisible to Accessibility) against a baseline of the
+  last healthy check; the message is Russian and names the button. Every 0.6
+  tool adds it to a timeout.
+- Motion by localized property names (RU/EN), position in pixels; keyframes
+  are clip-relative seconds; hold = interpolation type 4 (5 is Bezier and
+  slid between shots - caught on frame export during acceptance).
+- `pr_build_sequences` / `pk.js build --spec`: import, create, Motion,
+  keyframes, markers, open tabs, save, from one JSON spec.
+- `pr_status` now reports `waitingForClick`.
+- Tests: `test/seq.test.js` (builders run against a fake Premiere DOM),
+  `test/mediagate.test.js` (real VP9/H.264 files), `test/dialog.test.js`,
+  `test/ops.test.js` (fake executor: build stops at the first failure,
+  markers chunked, VP9 refused before Premiere), `test/pk.test.js`. 67 pass.
+
+### Checked live (Premiere 26.0.2, RU UI, project «подкаст.prproj»)
+
+Every command on the open project without a dialog; acceptance:
+`pr_build_sequences` rebuilt ПОДКАСТ 01-10 (1080x1920, 29.97, Motion,
+2-7 hold keyframes each, 25-62 markers each) in 6 s, then each sequence was
+read back (timeline, Motion, marker names) and two frames were exported.
+
 ## [Unreleased] - 2026-10-24 - AV1 from YouTube comes in as sound only
 
 ### Added - `core/media_gate.py`

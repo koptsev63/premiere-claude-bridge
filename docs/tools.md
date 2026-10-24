@@ -136,6 +136,115 @@ Why a tool: `qe.project.getVideoEffectByName("Black & White")` in a Russian UI r
 
 ---
 
+## Sequences without a dialog (0.6)
+
+Shared by the MCP tools and `pk.js` through `mcp-server/lib/ops.js`; the
+ExtendScript lives in `mcp-server/lib/seq.js` and ships from the server, so
+no panel reinstall. Field facts behind them (Premiere 26.0.2, Russian UI,
+24.10.2026):
+
+- `createNewSequence(name, presetId)` with an id that is not an installed
+  preset opens "Создать эпизод" and blocks the script thread. The bridge
+  never calls it.
+- In/out points snap to the source frame grid (10 s at 29.97 → 9.977 s).
+- Motion keyframe times (`addKey`) are seconds from the clip's start on the
+  timeline. Hold interpolation is `setInterpolationTypeAtKey(t, 4, 1)`; 5 is
+  Bezier and still slides between shots.
+- A marker's duration is set as `marker.end = seconds` (a Time object is
+  "Illegal Parameter type").
+- `app.project.deleteSequence(seq)`, `projectItem.moveBin(bin)`,
+  `markers.deleteMarker(m)`, `seq.setInPoint(sec)` all work; the work-area
+  setters do not take effect while the work area is disabled.
+
+### `pr_ping`
+Version, project name and path, number of sequences, the active sequence's settings. No side effects.
+
+### `pr_dialog_check`
+Three signals: the process is running (`pgrep`), the panel's Chromium debug
+port (8088) answers, a trivial script answers within 3 s. Port alive and
+script silent = `blocked: true` (a modal window or a long operation). The
+window list comes from Quartz (`CGWindowListCopyWindowInfo`), because
+Premiere's windows are not visible to Accessibility; a dialog is a new titled
+window compared with the baseline remembered on the last healthy check
+(`~/.claude/state/premiere-windows-baseline.json`). `message` is Russian and
+names the button for known dialogs ("Создать эпизод" → «Отмена», "Несоответствие
+медиаданных" → «Отмена»). Looks, never clicks. Every 0.6 tool runs it on a
+timeout and adds `hint`.
+
+### `pr_probe_media`
+`{paths, start?, end?}` → per file: codec, pixel format, size, fps, duration,
+`ok`, `reason`, `fixCmd` (ffmpeg: libx264 CRF 16, keyframe every second, AAC
+320k, `-ss/-to` for the range), `copyPath`, `copyBytesEst`, `freeBytes`,
+`diskOk` (2 GB minimum), `copyDiskOk` (5 GB reserve after the copy). Refused
+codecs: AV1, VP9, VP8, Theora, FFV1, H.264/HEVC 4:4:4, HEVC 12-bit.
+
+### `pr_import_media`
+`{paths, bin?, start?, end?, convert?, reuseExisting?}`. Gate first; an
+unreadable file is not imported unless `convert: true`, in which case the
+bridge runs the ffmpeg copy (skipped if the copy already exists) and imports
+that. One `importFiles` per file with the UI suppressed. The footage frame
+rate is read back after the import: ~0 means Premiere decoded no video, and
+the entry carries `error` with the fix command.
+
+### `pr_make_sequence`
+`{name, file | item, in?, out?, width?, height?, fps?, bin?, exists?, convert?}`.
+`file` imports (gated, reused by path) first; `item` is a nodeId, absolute
+path or name. `exists`: `error` (default), `replace` (delete and rebuild),
+`skip`. Returns `sequenceID`, settings read back, `video`/`audio` tracks with
+clips, `check: {v1Clips, a1Clips, sourceFps, sourceVideoDecoded}`; an empty
+V1 is an error that names the cause.
+
+### `pr_set_motion`
+`{seq?, track?, clip?, scale?, posX?, posY?, rotation?, anchorX?, anchorY?, units?}`.
+Properties found by localized name (`Движение`/`Motion`, `Масштаб`/`Scale`,
+`Положение`/`Position`, `Поворот`/`Rotation`, `Опорная точка`/`Anchor Point`).
+Position in pixels of the sequence frame by default (`units: "norm"` for
+0..1). Returns the values read back.
+
+### `pr_set_motion_keyframes`
+`{seq?, track?, clip?, keys: [{t, scale?, posX?, posY?, rotation?}], units?, hold?, clear?}`.
+Old keyframes of the touched properties are removed first (`clear: false`
+keeps them). `hold: true` = a cut between shots. Returns the keyframes read
+back in pixels.
+
+### `pr_add_markers` / `pr_list_markers`
+`{seq?, markers: [{t, name?, comment?, duration?}], clear?}`, 400 per call to
+Premiere; the count before and after is checked. `pr_list_markers` returns
+`t, end, name, comment, type`.
+
+### `pr_open_sequences` / `pr_activate_sequence`
+`openSequence(sequenceID)` for each name; the last (or `activate`) stays
+active; `missing` lists names that do not exist. `pr_activate_sequence`
+confirms `app.project.activeSequence` is the one asked for.
+
+### `pr_get_timeline` / `pr_get_inout`
+For any sequence by name or id. `pr_get_timeline`: settings, tracks, clips
+with `start/end/inPoint/outPoint` (seconds) and ticks, media path, sequence
+in/out, work area, `clipsRange`, `renderRange` (in/out if set, else the clip
+span), markers on request. `pr_get_inout` is the short form for a render
+after a manual trim.
+
+### `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project`
+Delete by name or id (confirmed gone); move a clip or a sequence into a bin
+path `A/B` (created if missing); list a bin with `videoDecoded` per clip;
+`app.project.save()`.
+
+### `pr_build_sequences`
+One spec, many sequences. Per sequence: import (gated) → create → Motion →
+keyframes → markers; then open the finished ones as tabs, optionally save.
+Stops at the first failure unless `continueOnError`; every finished step is
+reported. The spec is the same JSON `pk.js build --spec` takes:
+
+```json
+{ "bin": "ПОДКАСТ шортсы", "width": 1080, "height": 1920, "fps": 29.97, "exists": "replace",
+  "sequences": [ { "name": "ПОДКАСТ 01 - ... (34 с)", "file": "/abs/01-src.mp4", "in": 10, "out": 43.653,
+                   "motion": { "scale": 177.778, "x": 753, "y": 960 },
+                   "motionKeys": [ { "t": 0, "posX": 753 }, { "t": 8, "posX": 664 } ], "hold": true,
+                   "markers": [ { "t": 0, "name": "КРОП", "comment": "..." } ] } ] }
+```
+
+---
+
 ## Escape hatch
 
 ### `pr_eval_jsx`
@@ -199,7 +308,21 @@ node mcp-server/pk.js info
 node mcp-server/pk.js eval '(function(){ return JSON.stringify({n: app.project.rootItem.children.numItems}); })()'
 node mcp-server/pk.js file skills/film-editing/tools/verify_timeline.jsx
 node mcp-server/pk.js targets        # what the debug port exposes
+node mcp-server/pk.js                # usage: every typed command (0.6)
+node mcp-server/pk.js status         # health + dialog check
+node mcp-server/pk.js probe /abs/talk.mp4 --in 1396 --out 1450
+node mcp-server/pk.js make-seq --name "ПОДКАСТ 01" --file /abs/01-src.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "ПОДКАСТ шортсы" --exists replace
+node mcp-server/pk.js motion --seq "ПОДКАСТ 01" --scale 177.778 --x 753 --y 960
+node mcp-server/pk.js motion-keys --seq "ПОДКАСТ 01" --keys '[{"t":0,"posX":753},{"t":8,"posX":664}]' --hold
+node mcp-server/pk.js markers --seq "ПОДКАСТ 01" --markers @markers.json --clear
+node mcp-server/pk.js inout --seq "ПОДКАСТ 01"   # clip borders after a manual trim
+node mcp-server/pk.js open "ПОДКАСТ 01" "ПОДКАСТ 02" --activate "ПОДКАСТ 01"
+node mcp-server/pk.js build --spec spec.json
 ```
+
+The typed commands print JSON and exit 1 on a refusal; on a timeout they add
+`diagnosis` (the dialog check). `~/.claude/tools/premiere-kit/pk.js` on
+Vladimir's machine is a thin shim that runs this file.
 
 | Variable | Default | Meaning |
 |---|---|---|

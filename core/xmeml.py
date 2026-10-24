@@ -40,20 +40,50 @@ def _rate(fps: float) -> str:
     return f"<rate><timebase>{tb}</timebase><ntsc>{ntsc}</ntsc></rate>"
 
 
-def _file(fid: str, path: str, fps: float, w: int, h: int, has_audio: bool, still: bool = False) -> str:
-    media = f"<video><samplecharacteristics>{_rate(fps)}<width>{w}</width><height>{h}</height></samplecharacteristics></video>"
+_SEEN: set = set()
+
+
+def _file(fid: str, path: str, fps: float, w: int, h: int, has_audio: bool, still: bool = False,
+          src_dims: tuple[int, int] | None = None, src_dur_frames: int | None = None) -> str:
+    """24.10.2026 (podcast shorts, Premiere 26 «Сбой при импорте файла» without a message): a <file> is defined
+    once per sequence and referenced by id afterwards; the file block names the SOURCE dimensions and its
+    duration in frames, not the sequence dimensions."""
+    if fid in _SEEN:
+        return f"<file id=\"{fid}\"/>"
+    _SEEN.add(fid)
+    fw, fh = src_dims or (w, h)
+    media = f"<video><samplecharacteristics>{_rate(fps)}<width>{fw}</width><height>{fh}</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></video>"
     if has_audio:
         media += "<audio><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate></samplecharacteristics><channelcount>2</channelcount></audio>"
-    dur = "" if still else ""
+    dur = f"<duration>{src_dur_frames}</duration>" if src_dur_frames else ""
     return (f"<file id=\"{fid}\"><name>{escape(os.path.basename(path))}</name><pathurl>{_pathurl(path)}</pathurl>"
             f"{_rate(fps)}{dur}<media>{media}</media></file>")
+
+
+def _motion(scale: float | None) -> str:
+    if not scale:
+        return ""
+    return ("<filter><effect><name>Basic Motion</name><effectid>basic</effectid><effectcategory>motion</effectcategory>"
+            "<effecttype>motion</effecttype><mediatype>video</mediatype>"
+            f"<parameter><parameterid>scale</parameterid><name>Scale</name><valuemin>0</valuemin><valuemax>1000</valuemax><value>{scale:g}</value></parameter>"
+            "</effect></filter>")
 
 
 def xmeml_string(cl: Cutlist, *, width: int = 1920, height: int = 1080,
                  audio: list[tuple[str, float, float, float]] | None = None,
                  dissolves: dict[float, float] | None = None,
-                 overlays: list[tuple[str, float, float]] | None = None) -> str:
+                 overlays: list[tuple[str, float, float]] | None = None,
+                 motion_scale: dict[int, float] | None = None,
+                 src_info: dict[str, tuple[int, int, float]] | None = None) -> str:
+    """motion_scale: {cut_index: percent} adds a Basic Motion scale filter to that V1 clip
+    (24.10.2026, podcast shorts: 1920x1080 source inside a 1080x1920 sequence, scale 177.78)."""
     fps = cl.fps
+    motion_scale = motion_scale or {}
+    src_info = src_info or {}  # {path: (width, height, duration_s)} of the real media files
+    _SEEN.clear()
+    def _si(p):
+        i = src_info.get(p)
+        return (None, None) if not i else ((i[0], i[1]), _fr(i[2], fps))
     audio = audio or []; dissolves = dissolves or {}; overlays = overlays or []
     total = cl.total_duration_sec or max([c.timeline_end for c in cl.cuts] + [o[2] for o in overlays] + [a[3] + a[2] - a[1] for a in audio])
     T = _fr(total, fps)
@@ -75,21 +105,22 @@ def xmeml_string(cl: Cutlist, *, width: int = 1920, height: int = 1080,
         f = fid(c.clip); first = f not in [x for x in files.values() if x != f and False]
         v1.append(f"<clipitem id=\"v{i + 1}\"><name>{escape(c.label or os.path.basename(c.clip))}</name>{_rate(fps)}"
                   f"<start>{s}</start><end>{e}</end><in>{ci}</in><out>{co}</out>"
-                  f"{_file(f, c.clip, fps, width, height, has_audio=False)}"
-                  "<sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
+                  f"{_file(f, c.clip, fps, width, height, has_audio=any(a[0] == c.clip for a in audio), src_dims=_si(c.clip)[0], src_dur_frames=_si(c.clip)[1])}"
+                  "<sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack>"
+                  f"{_motion(motion_scale.get(i))}</clipitem>")
     v2 = []
     for j, (png, a, b) in enumerate(overlays):
         s, e = _fr(a, fps), _fr(b, fps)
         v2.append(f"<clipitem id=\"t{j + 1}\"><name>{escape(os.path.basename(png))}</name>{_rate(fps)}"
                   f"<start>{s}</start><end>{e}</end><in>0</in><out>{e - s}</out>"
-                  f"{_file(fid(png), png, fps, width, height, has_audio=False, still=True)}"
+                  f"{_file(fid(png), png, fps, width, height, has_audio=False, still=True, src_dims=_si(png)[0])}"
                   "<sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
     a1 = []
     for k, (wav, ain, aout, off) in enumerate(audio):
         s = _fr(off, fps); e = s + _fr(aout - ain, fps)
         a1.append(f"<clipitem id=\"a{k + 1}\"><name>{escape(os.path.basename(wav))}</name>{_rate(fps)}"
                   f"<start>{s}</start><end>{e}</end><in>{_fr(ain, fps)}</in><out>{_fr(aout, fps)}</out>"
-                  f"{_file(fid(wav), wav, fps, width, height, has_audio=True)}"
+                  f"{_file(fid(wav), wav, fps, width, height, has_audio=True, src_dims=_si(wav)[0], src_dur_frames=_si(wav)[1])}"
                   "<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>")
     mk = "".join(f"<marker><name>{escape(m.name)}</name><comment>{escape(m.comment)}</comment><in>{_fr(m.time, fps)}</in><out>-1</out></marker>"
                  for m in cl.markers)

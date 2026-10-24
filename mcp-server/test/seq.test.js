@@ -95,7 +95,10 @@ test("make_sequence never calls createNewSequence with a preset (the dialog path
   assert.match(bodies.makeSequence, /EXISTS === "skip"/);
 });
 
-test("keyframes: hold interpolation only when asked, old keys cleared by default", () => {
+test("keyframes: placed in media time (inPoint + t), hold only when asked, old keys cleared by default", () => {
+  assert.match(bodies.keyframes, /var inP = __sec\(cl\.inPoint\) \|\| 0/);
+  assert.match(bodies.keyframes, /var t = inP \+ tClip;/);
+  assert.match(bodies.keyframes, /t: __sec\(ks\[i\]\) - inP/);
   assert.match(bodies.keyframes, /var HOLD = true, CLEAR = true/);
   assert.match(bodies.keyframes, /setInterpolationTypeAtKey\(t, 4, 1\)/);
   const noHold = J.setMotionKeyframesJsx({ seq: "s", keys: [{ t: 0, scale: 1 }], clear: false });

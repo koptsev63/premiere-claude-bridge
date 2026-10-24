@@ -269,9 +269,11 @@ functions:
   (and every 0.6 tool on a timeout) tells the difference: the panel's debug
   port still answers while the script thread is blocked, the extra on-screen
   window is named, and the message says which button to press, in Russian.
-- Motion keyframes between shots slid instead of cutting: `setInterpolationTypeAtKey`
-  with 5 is Bezier; hold is 4. `pr_set_motion_keyframes` with `hold: true`
-  checks the value between keys.
+- Motion keyframes lied twice: `setInterpolationTypeAtKey` with 5 is Bezier
+  (hold is 4), and key times are media time (inPoint + t), while
+  `getValueAtTime` answers consistently in whatever base you used. Both were
+  caught by exporting frames and comparing them with the ffmpeg preview, not
+  by the API. `pr_set_motion_keyframes` converts and holds.
 
 Every one of these is also a `pk.js` command (`node mcp-server/pk.js make-seq ...`),
 so a session without the MCP panel has the same reach. The acceptance run:

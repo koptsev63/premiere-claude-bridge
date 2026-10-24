@@ -8,7 +8,11 @@
 //     dialog-free path is item.setInPoint/setOutPoint + createNewSequenceFromClips
 //     + getSettings/setSettings.
 //   - Motion properties are found by localized displayName (RU and EN).
-//   - Keyframe times (addKey / setValueAtKey) are clip-relative seconds.
+//   - Keyframe times (addKey / setValueAtKey) are MEDIA time: seconds from
+//     the start of the source file, i.e. clip.inPoint + offset. The API
+//     answers getValueAtTime consistently in whatever base you used, so only
+//     a frame export shows the mistake (24.10.2026: a key "at 0" on a clip
+//     with inPoint 9.98 s never played; the next key did, from the start).
 //   - app.project.deleteSequence(seq), seq.projectItem.moveBin(bin),
 //     seq.markers.deleteMarker(m), seq.setInPoint(sec) all exist and work.
 
@@ -326,7 +330,8 @@ return { sequence: seq.name, track: T, clip: C, name: cl.name, set: set, width: 
 }
 
 // Keyframes on Motion: keys = [{t, scale?, posX?, posY?, rotation?}], t in
-// seconds from the clip's start on the timeline. `hold` = no interpolation.
+// seconds from the clip's start on the timeline; the builder adds the clip's
+// inPoint because Premiere places keys in media time. `hold` = no interpolation.
 export function setMotionKeyframesJsx({ seq, track, clip, keys, units, hold, clear }) {
   const rows = (keys || []).map((k) => ({
     t: Number(k.t) || 0,
@@ -346,6 +351,7 @@ if (!cl) return { error: "No clip at V" + (T + 1) + " index " + C + " in " + seq
 var mo = __motion(cl);
 if (!mo) return { error: "Motion component not found on " + cl.name };
 var st = __settings(seq), w = st.width, h = st.height;
+var inP = __sec(cl.inPoint) || 0; // keys live in media time
 function nx(v) { return UNITS === "norm" ? v : v / w; }
 function ny(v) { return UNITS === "norm" ? v : v / h; }
 function clearKeys(pr) {
@@ -354,7 +360,8 @@ function clearKeys(pr) {
   for (var i = ks.length - 1; i >= 0; i--) { try { pr.removeKey(ks[i]); } catch (e) {} }
   try { pr.setTimeVarying(false); } catch (e2) {}
 }
-function putKey(pr, t, v) {
+function putKey(pr, tClip, v) {
+  var t = inP + tClip;
   if (!pr.isTimeVarying()) pr.setTimeVarying(true);
   pr.addKey(t);
   pr.setValueAtKey(t, v, 1);
@@ -381,10 +388,10 @@ var fresh = __motion(__clip(seq, T, C, "video"));
 function dump(pr, isPos) {
   if (!pr || !pr.isTimeVarying()) return [];
   var ks = pr.getKeys() || [], out = [];
-  for (var i = 0; i < ks.length; i++) { var v = pr.getValueAtKey(ks[i]); out.push({ t: __sec(ks[i]), value: isPos && v ? [v[0] * w, v[1] * h] : v }); }
+  for (var i = 0; i < ks.length; i++) { var v = pr.getValueAtKey(ks[i]); out.push({ t: __sec(ks[i]) - inP, tMedia: __sec(ks[i]), value: isPos && v ? [v[0] * w, v[1] * h] : v }); }
   return out;
 }
-return { sequence: seq.name, track: T, clip: C, name: cl.name, width: w, height: h, keysWritten: count,
+return { sequence: seq.name, track: T, clip: C, name: cl.name, width: w, height: h, clipInPoint: inP, keysWritten: count,
          scaleKeys: dump(fresh.scale, false), positionKeysPx: dump(fresh.position, true), rotationKeys: dump(fresh.rotation, false) };
 `;
 }

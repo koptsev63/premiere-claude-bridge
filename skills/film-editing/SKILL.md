@@ -191,7 +191,7 @@ When Vladimir uses Russian terms, map to Murch concepts:
 | `mcp__premiere__pr_eval_jsx` | Escape hatch for any custom ExtendScript (set in/out, insertClip, motion params, color) |
 | `pr_make_sequence` / `pr_build_sequences` (0.6) | Sequences from clip ranges with NO dialog (never `createNewSequence` with a preset id: it opens "Создать эпизод" and hangs the bridge) |
 | `pr_import_media` / `pr_probe_media` | Codec gate first: AV1/VP9 import as sound only; get the H.264 copy command for just the range; nothing under 2 GB free |
-| `pr_set_motion` / `pr_set_motion_keyframes` | Scale/Position in pixels; `hold: true` between shots (interpolation 4; 5 is Bezier and slides) |
+| `pr_set_motion` / `pr_set_motion_keyframes` | Scale/Position in pixels; `hold: true` between shots (interpolation 4; 5 is Bezier and slides). Keys live in media time (inPoint + t), the tool converts; verify with a frame export, `getValueAtTime` cannot tell |
 | `pr_add_markers` / `pr_get_inout` | Markers in bulk; the clip borders after the editor's manual trim, for a render from his borders |
 | `pr_dialog_check` | A tool timed out? Ask this before touching the keyboard: it names the modal window and the button |
 

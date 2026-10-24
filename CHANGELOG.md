@@ -28,9 +28,12 @@ to become Premiere sequences; four things in a row needed a click or lied.
   list (Premiere's UI is invisible to Accessibility) against a baseline of the
   last healthy check; the message is Russian and names the button. Every 0.6
   tool adds it to a timeout.
-- Motion by localized property names (RU/EN), position in pixels; keyframes
-  are clip-relative seconds; hold = interpolation type 4 (5 is Bezier and
-  slid between shots - caught on frame export during acceptance).
+- Motion by localized property names (RU/EN), position in pixels. Keyframes:
+  `t` from the clip's start, converted to media time (inPoint + t), because
+  Premiere stores keys in media time and `getValueAtTime` hides the mistake
+  (a key "at 0" on a clip with inPoint 9.98 s never played; frame export
+  caught it). Hold = interpolation type 4 (5 is Bezier and slid between
+  shots - also caught on frame export during acceptance).
 - `pr_build_sequences` / `pk.js build --spec`: import, create, Motion,
   keyframes, markers, open tabs, save, from one JSON spec.
 - `pr_status` now reports `waitingForClick`.

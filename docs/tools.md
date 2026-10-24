@@ -147,9 +147,13 @@ no panel reinstall. Field facts behind them (Premiere 26.0.2, Russian UI,
   preset opens "Создать эпизод" and blocks the script thread. The bridge
   never calls it.
 - In/out points snap to the source frame grid (10 s at 29.97 → 9.977 s).
-- Motion keyframe times (`addKey`) are seconds from the clip's start on the
-  timeline. Hold interpolation is `setInterpolationTypeAtKey(t, 4, 1)`; 5 is
-  Bezier and still slides between shots.
+- Motion keyframe times (`addKey`, `setValueAtKey`) are MEDIA time: seconds
+  from the start of the source file, `clip.inPoint + offset`. `getValueAtTime`
+  answers consistently in whatever base you used, so only a frame export
+  shows the mistake: a key "at 0" on a clip with inPoint 9.98 s never played.
+  The bridge takes `t` from the clip's start and adds the inPoint itself.
+  Hold interpolation is `setInterpolationTypeAtKey(t, 4, 1)`; 5 is Bezier
+  and still slides between shots.
 - A marker's duration is set as `marker.end = seconds` (a Time object is
   "Illegal Parameter type").
 - `app.project.deleteSequence(seq)`, `projectItem.moveBin(bin)`,
@@ -203,9 +207,11 @@ Position in pixels of the sequence frame by default (`units: "norm"` for
 
 ### `pr_set_motion_keyframes`
 `{seq?, track?, clip?, keys: [{t, scale?, posX?, posY?, rotation?}], units?, hold?, clear?}`.
-Old keyframes of the touched properties are removed first (`clear: false`
-keeps them). `hold: true` = a cut between shots. Returns the keyframes read
-back in pixels.
+`t` is seconds from the clip's start on the timeline; the builder adds the
+clip's inPoint (media time). Old keyframes of the touched properties are
+removed first (`clear: false` keeps them). `hold: true` = a cut between
+shots. Returns the keyframes read back in pixels, with `t` (clip) and
+`tMedia`.
 
 ### `pr_add_markers` / `pr_list_markers`
 `{seq?, markers: [{t, name?, comment?, duration?}], clear?}`, 400 per call to

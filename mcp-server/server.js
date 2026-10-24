@@ -492,7 +492,7 @@ tool(
 
 tool(
   "pr_set_motion_keyframes",
-  "Keyframes on Motion for shot changes inside one clip: keys = [{t, scale?, posX?, posY?, rotation?}] with t in seconds from the clip's start on the timeline (checked live: addKey times are clip-relative). Existing keyframes of the touched properties are removed first unless clear=false. hold=true makes every key a hold (cut, no slide). Reads the keyframes back.",
+  "Keyframes on Motion for shot changes inside one clip: keys = [{t, scale?, posX?, posY?, rotation?}] with t in seconds from the clip's start on the timeline. Premiere stores keys in MEDIA time (inPoint + t) and the bridge converts; the API's getValueAtTime looks consistent in either base, only a frame export shows the difference (caught 24.10.2026). Existing keyframes of the touched properties are removed first unless clear=false. hold=true makes every key a hold (cut, no slide). Reads the keyframes back.",
   {
     seq: SEQ_REF,
     track: z.number().int().min(0).optional(),

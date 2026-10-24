@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] - 2026-10-24 - AV1 from YouTube comes in as sound only
+
+### Added - `core/media_gate.py`
+
+- A podcast downloaded with yt-dlp came as AV1 (1920x1080, 65 min).
+  Premiere 26.0.2 imported only its audio ("сжатие видео неподдерживаемого
+  типа «av01»"), and ten short sequences were built on it with an empty V1.
+  The disk had 2 GB free, then 1.1 GB: a full copy (~9.7 GB) would not fit.
+- `check_for_premiere(path, start, end)` reads the streams with ffprobe and
+  refuses AV1, VP9 and VP8. It returns the ffmpeg command for an edit copy
+  (libx264 CRF 16, one keyframe per second, AAC), the copy's estimated size
+  and whether the disk keeps a 5 GB reserve after it. Cut only the needed
+  range with `start`/`end`. CLI: `python -m core.media_gate FILE`.
+- `core/tests/test_media_gate.py`: 14 checks on AV1, VP9 and H.264 files
+  made on the fly, including that the fix command produces an H.264 file.
+  Checked on the real podcast source: refused, 9.7 GB estimate, disk short.
+- Field rule 34 in `skills/film-editing`.
+
 ## [0.5.1] - 2026-10-23 - cuts on the music hits, FCP7 XML out of a cutlist
 
 A 54-second pilot built from 5-second generated clips was rejected on first

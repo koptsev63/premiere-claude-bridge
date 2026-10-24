@@ -652,6 +652,12 @@ These were paid for in shipped mistakes. Do not relearn them.
     director's Grave Stakes sequence. The bridge's caption and effect tools
     refuse that; in your own scripts compare `activeSequence.sequenceID`
     with `app.project.sequences` before writing.
+34. **A YouTube download is AV1 until proven otherwise.** yt-dlp picks AV1;
+    Premiere 26 then imports the audio only and the timeline gets an empty
+    V1 (24.10.2026, ten podcast shorts). Before import:
+    `python -m core.media_gate FILE --start S --end E` and cut an H.264
+    copy of the needed range only; a full hour is ~10 GB. Or download H.264
+    in the first place: `yt-dlp -S vcodec:h264`.
 
 ## XVIII. Phone-HDR jobs and the order of work (August 2026, five failures in one job)
 

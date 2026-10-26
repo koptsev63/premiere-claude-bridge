@@ -51,6 +51,23 @@ read back (timeline, Motion, marker names) and two frames were exported.
 
 ## [Unreleased] - 2026-10-24 - AV1 from YouTube comes in as sound only
 
+### Added - `core/rhythm_gate.py`
+
+- Murch's rhythm arithmetic lived in `core.review_loop.analyze_cutlist` and
+  ran once in October: nothing called it at delivery. It is now a gate:
+  `python3 -m core.rhythm_gate SOURCE --genre trailer|teaser` exits 1 on a
+  monotone cut (p90/p10 shot length under 2), on 4+ same-length shots in a row
+  (within 2 frames) and on a labelled beat outside its band.
+- SOURCE is a bridge cutlist, a Premiere timeline dump (`pr_list_timeline`
+  answer saved to a file) or a rendered file (ffmpeg scene detection).
+- Thresholds validated on three approved cuts (Grave Stakes teasers v4 and V7,
+  the DUALITY trailer: all pass) against a machine draft cut every ~3 s
+  (fails). Murch's 2-4x upper bound did not survive that check (V7 49.7x,
+  DUALITY 15.7x) and neither did "must accelerate to the end": both are
+  reported, not gated. Other genres get the report with exit 0.
+- `--brief DIR` prints the genre digest's machine-check section with the
+  report. Tests: `python3 -m core.tests.test_rhythm_gate` (20 checks).
+
 ### Added - `core/media_gate.py`
 
 - A podcast downloaded with yt-dlp came as AV1 (1920x1080, 65 min).

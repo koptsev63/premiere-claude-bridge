@@ -119,7 +119,7 @@ There are about fifteen Premiere MCP servers on GitHub now, and several for Reso
 | **Work before the timeline** | Auto-log of raw footage, offline transcript, dead-air removal, two rough-cut variants, subtitles |
 | **An editing method** | Walter Murch's Rule of Six as decision rules in `skills/film-editing/SKILL.md` |
 | **One brain, two editors** | The same cut list goes to Premiere or Resolve |
-| **Small surface** | Ten tools and one escape hatch, so the model does not need a tool search to find its way |
+| **Small surface** | 31 tools, one of them the escape hatch `pr_eval_jsx`: a few dozen, not hundreds, so the model does not need a tool search to find its way |
 
 If you need an agent that can reach every button in Premiere, pick one of the big servers. If you want an assistant editor for documentary material that checks its own output and follows your manual changes, this one is for you.
 

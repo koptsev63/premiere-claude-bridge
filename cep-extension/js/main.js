@@ -11,6 +11,19 @@
   var logEl = document.getElementById("log");
   var reconnectBtn = document.getElementById("reconnect");
   var pingBtn = document.getElementById("ping");
+  var shareBox = document.getElementById("share");
+  var shareState = document.getElementById("shareState");
+  var shareMore = document.getElementById("shareMore");
+  var dataUrl = "https://github.com/koptsev63/premiere-claude-bridge/blob/main/DATA.md";
+
+  function showShare(msg) {
+    if (msg.dataUrl) dataUrl = msg.dataUrl;
+    shareBox.disabled = false;
+    shareBox.checked = msg.consent === true;
+    if (msg.consent === null || msg.consent === undefined) shareState.textContent = "Вы ещё не выбирали. По умолчанию выключено.";
+    else if (msg.consent === true) shareState.textContent = "Включено." + (msg.lastUpload ? " Последняя отправка: " + new Date(msg.lastUpload).toLocaleString() : "");
+    else shareState.textContent = "Выключено.";
+  }
 
   var ws = null;
   var callCount = 0;
@@ -90,6 +103,7 @@
       var msg;
       try { msg = JSON.parse(ev.data); }
       catch (e) { log("Bad WS message"); return; }
+      if (msg && msg.type === "share") { showShare(msg); return; }
       if (msg && msg.id && msg.fn) handleCall(msg);
     };
 
@@ -116,6 +130,13 @@
     log("Manual reconnect");
     connect();
   });
+
+  shareBox.addEventListener("change", function () {
+    try { ws.send(JSON.stringify({ type: "share-set", consent: shareBox.checked })); log("share: " + shareBox.checked); }
+    catch (e) { log("share: not connected"); shareBox.checked = !shareBox.checked; }
+  });
+
+  shareMore.addEventListener("click", function () { cs.openURLInDefaultBrowser(dataUrl); });
 
   pingBtn.addEventListener("click", function () {
     log("Ping host");

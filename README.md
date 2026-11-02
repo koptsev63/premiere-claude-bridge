@@ -27,6 +27,23 @@ On DaVinci Resolve Studio there is no panel. Set **Preferences → System → Ge
 
 You need Premiere Pro 2024 or newer, or DaVinci Resolve Studio, and a Claude or Codex subscription. Tested on macOS. Windows has install steps but nobody has confirmed them yet. Prefer to do it by hand? See [Manual install](#manual-install).
 
+## По-русски: для монтажёров
+
+**Как поставить.** Откройте Claude (приложение, вкладка Code) и отправьте ему фразу:
+«Установи мост Premiere с github.com/koptsev63/premiere-claude-bridge и доведи меня до зелёной надписи Connected в Premiere». Дальше Claude всё сделает сам и скажет, когда перезапустить Premiere.
+
+**Как работать.** В Premiere откройте Окно → Расширения → Claude Bridge. Панель должна гореть зелёным. Пишите Claude обычными словами: «собери секвенцию 1080 на 1920 из этого файла», «поставь маркеры на паузы», «открой все секвенции подкаста вкладками».
+
+**Как обновиться.** Скажите Claude: «обнови мост». Потом закройте и снова откройте Claude, а в Premiere закройте и снова откройте панель. Когда выходит новая версия, Claude сам говорит об этом при проверке связи.
+
+**Если Premiere не отвечает.** Чаще всего в Premiere открыто окно, которое ждёт нажатия. Спросите Claude: «Premiere ждёт клика?» Он назовёт окно и кнопку.
+
+**Если видео пришло без картинки.** Ролики с YouTube часто в формате, который Premiere открывает без изображения. Просто попросите Claude импортировать файл: мост проверит его заранее и при необходимости сделает рабочую копию.
+
+**Помочь обучать ассистента.** В панели есть галочка «Помогать обучать ассистента», по умолчанию она снята. Если её поставить, мост сам отправляет обезличенную схему монтажа: где разрезы, сколько кадров снято, длины планов. Без видео, звука и названий. Сняли галочку - всё отправленное удалилось. Подробно: [DATA.md](DATA.md).
+
+**Чат монтажёров.** Вопросы, ошибки, пожелания, приёмы: [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
+
 ## What you can ask it to do
 
 **Sort the footage**
@@ -248,9 +265,16 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_get_timeline` / `pr_get_inout` | Any sequence's clips with borders in seconds; the render range after a manual trim |
 | `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project` | Project housekeeping |
 | `pr_build_sequences` | Many sequences from one spec: import, create, motion, keyframes, markers, open |
+| `pr_share` / `pr_update_bridge` | Help train the assistant (0.8, off until the editor says yes, see [DATA.md](DATA.md)); update in one sentence: «обнови мост» |
 | `pr_journal_snapshot` / `pr_journal_report` | The editor's journal (0.7): snapshots of every sequence, diffs as editing decisions, the hand report |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
+
+### New in 0.8: updates in one sentence, sharing by consent
+
+- **Updates.** `pr_status` says when a new release is out. The editor tells Claude «обнови мост»; `pr_update_bridge` pulls and reinstalls a git install (never touching local edits) or hands a Claude Desktop install the new `.mcpb`.
+- **Sharing the journal.** Off by default. Claude asks once («Да, помогать» / «Не сейчас»), and the panel has a checkbox. With a yes, every 10 minutes the bridge reads Premiere's new Auto-Save files into the journal and sends new decisions and sequence shapes, anonymized with a salt that never leaves the machine. A later no deletes everything sent. `pk.js share status | on | off | preview | send`. Full terms: [DATA.md](DATA.md).
+- **Editors' chat:** [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
 
 ### New in 0.7: the editor's journal
 

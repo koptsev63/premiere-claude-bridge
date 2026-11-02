@@ -21,7 +21,7 @@ import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
 import http from "node:http";
 
-const VERSION = "0.8.1";
+const VERSION = "0.8.2";
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);
@@ -62,6 +62,7 @@ function attachConnectionHandler(ws) {
     catch { log("invalid msg from panel:", data.toString().slice(0, 200)); return; }
     if (msg.type === "share-set") { onPanelConsent(ws, msg.consent); return; }
     if (msg.type === "share-get") { sendShareState(ws); return; }
+    if (msg.type === "share-exclude") { onPanelExclude(ws, msg.exclude); return; }
     if (!msg.id) return;
     const p = pending.get(msg.id);
     if (!p) return;
@@ -638,11 +639,36 @@ tool(
 // Consent is asked once, in the editor's words: through Claude (pr_status
 // carries the question) or the checkbox in the panel. Default: off.
 
-function sendShareState(ws) {
+// The project open in Premiere, or null. Asked only when Premiere is idle.
+// toolsRunning: how many tool calls may be running (1 from inside a tool).
+async function currentProject(toolsRunning = 0) {
+  if (!panelSocket || activeTools > toolsRunning || pending.size > 0) return null;
+  try {
+    const p = await runJsx("return app.project ? app.project.path : '';", { timeoutMs: 5000 });
+    if (typeof p !== "string" || !p) return null;
+    share.rememberProject(p);
+    return p;
+  } catch { return null; }
+}
+
+async function sendShareState(ws) {
   try {
     const st = share.consentStatus();
-    ws.send(JSON.stringify({ type: "share", consent: st.consent, text: share.CONSENT_TEXT, dataUrl: share.DATA_URL, lastUpload: st.lastUpload, sentItems: st.sentItems }));
+    const msg = { type: "share", consent: st.consent, text: share.CONSENT_TEXT, dataUrl: share.DATA_URL, lastUpload: st.lastUpload, sentItems: st.sentItems };
+    if (st.consent === true) {
+      const p = await currentProject();
+      if (p) { msg.project = share.projectKey(p); msg.projectExcluded = share.isExcluded(p); }
+    }
+    ws.send(JSON.stringify(msg));
   } catch {}
+}
+
+async function onPanelExclude(ws, value) {
+  try {
+    const p = await currentProject();
+    if (p) { share.setExcluded(p, !!value); log(`share: project ${share.projectKey(p)} ${value ? "kept out" : "let back in"} from panel`); }
+  } catch (e) { log("share exclude failed:", e.message); }
+  sendShareState(ws);
 }
 
 async function onPanelConsent(ws, value) {
@@ -663,19 +689,28 @@ async function extrasForStatus() {
       how: "Ask the editor this question once, in their language, with two answers: «Да, помогать» and «Не сейчас». Then call pr_share with consent true or false. Never answer for them; no answer = leave it off.",
     };
   } else {
-    out.share = { consent: st.consent, lastUpload: st.lastUpload, sentItems: st.sentItems };
+    out.share = { consent: st.consent, since: st.since, lastUpload: st.lastUpload, sentItems: st.sentItems, excluded: st.excluded };
   }
   return out;
 }
 
 tool(
   "pr_share",
-  "Sharing the editor's journal to help train the assistant (off by default). action=status (default) shows the choice and what was sent; consent=true/false records the EDITOR's own answer (ask them first, never decide for them; false also deletes everything already sent); action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
+  "Sharing the editor's journal to help train the assistant (off by default). action=status (default) shows the choice and what was sent; consent=true/false records the EDITOR's own answer (ask them first, never decide for them; false also deletes everything already sent). Only work done after the yes is ever sent. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
   {
     consent: z.boolean().optional().describe("The editor's answer: true = help train, false = stop and delete what was sent"),
+    exclude: z.boolean().optional().describe("true = never send this project; false = let it back in"),
+    project: z.string().optional().describe("Project name or .prproj path for exclude; default: the project open in Premiere"),
     action: z.enum(["status", "preview", "send"]).optional(),
   },
-  async ({ consent, action }) => {
+  async ({ consent, exclude, project, action }) => {
+    if (exclude !== undefined) {
+      const p = project || (await currentProject(1));
+      if (!p) return err("Не вижу открытого проекта в Premiere. Назовите проект, который не отправлять.");
+      const r = share.setExcluded(p, exclude);
+      if (panelSocket) sendShareState(panelSocket);
+      return ok({ ...r, say: exclude ? `Проект «${r.project}» не будет отправляться, даже если галочка включена.` : `Проект «${r.project}» снова участвует: уйдёт только новая работа.` });
+    }
     if (consent !== undefined) {
       const r = await share.setConsent(consent, { via: "claude" });
       if (panelSocket) sendShareState(panelSocket);
@@ -708,12 +743,7 @@ async function autopilot(force = false) {
   if (!force && share.consentStatus().consent !== true) return { skipped: true };
   autopilotBusy = true;
   try {
-    if (panelSocket && activeTools === 0 && pending.size === 0) {
-      try {
-        const p = await runJsx("return app.project ? app.project.path : '';", { timeoutMs: 5000 });
-        share.rememberProject(typeof p === "string" ? p : null);
-      } catch {}
-    }
+    await currentProject(); // remembers the project folder for its autosaves
     const r = await share.tick({ version: VERSION });
     if (r.sent || r.error) log("share:", r);
     return r;

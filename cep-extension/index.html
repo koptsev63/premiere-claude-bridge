@@ -31,8 +31,10 @@
   <div class="row" style="margin-top:8px"><button id="reconnect">Reconnect</button><button id="ping">Ping host</button></div>
   <div class="share">
     <label><input type="checkbox" id="share" disabled> Помогать обучать ассистента</label>
-    <div class="hint">Мост сам отправляет обезличенную структуру монтажа: разрезы, длины планов, темп. Без видео, звука, имён файлов и проектов. Снимете галочку - всё отправленное удалится. <a id="shareMore">Подробнее</a></div>
+    <div class="hint">Мост сам отправляет обезличенную структуру монтажа: разрезы, длины планов, темп. Без видео, звука, имён файлов и проектов. Уходит только работа после того, как вы поставили галочку. Снимете её - всё отправленное удалится. <a id="shareMore">Подробнее</a></div>
     <div id="shareState" class="hint"></div>
+    <label id="excludeRow" style="display:none; margin-top:6px"><input type="checkbox" id="exclude"> Не отправлять этот проект</label>
+    <div id="excludeHint" class="hint" style="display:none">Для проектов под NDA. Из этого проекта ничего не уйдёт, пока галочка стоит.</div>
   </div>
   <div id="log" class="log"></div>
   <script src="js/CSInterface.js"></script>

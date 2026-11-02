@@ -6,6 +6,10 @@
 // No frames, no audio, no file names, no project names, no IP stored on the
 // receiving side. Off until the editor says yes; "no" later deletes what
 // was sent and starts a fresh anonymous id. Details: DATA.md.
+//
+// 0.8.2: only work done after the yes is sent (sharingSince), never the
+// journal or autosaves that were there before; and the editor can keep any
+// project out (projects under NDA): «не отправляй этот проект».
 
 import { randomUUID, createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
@@ -22,8 +26,8 @@ export const DATA_URL = "https://github.com/koptsev63/premiere-claude-bridge/blo
 const MAX_BATCH = 4000;
 
 export const CONSENT_TEXT = {
-  ru: "Помочь обучить ассистента монтажу? Мост будет сам отправлять обезличенную структуру вашего монтажа: где разрезы, сколько кадров снято с начала и конца плана, длины планов, темп. Без видео, звука, имён файлов и названий проектов. Можно выключить в любой момент, и всё отправленное удалится. Подробно: " + DATA_URL,
-  en: "Help train the editing assistant? The bridge will send an anonymized outline of your edit: cut points, frames trimmed, shot lengths, pace. No video, no audio, no file or project names. Turn it off any time and everything sent is deleted. Details: " + DATA_URL,
+  ru: "Помочь обучить ассистента монтажу? Мост будет сам отправлять обезличенную структуру вашего монтажа: где разрезы, сколько кадров снято с начала и конца плана, длины планов, темп. Без видео, звука, имён файлов и названий проектов. Уходит только работа после вашего «да», любой проект можно исключить. Можно выключить в любой момент, и всё отправленное удалится. Подробно: " + DATA_URL,
+  en: "Help train the editing assistant? The bridge will send an anonymized outline of your edit: cut points, frames trimmed, shot lengths, pace. No video, no audio, no file or project names. Only work after your yes goes, and any project can be kept out. Turn it off any time and everything sent is deleted. Details: " + DATA_URL,
 };
 
 // ---- state -----------------------------------------------------------------
@@ -56,6 +60,8 @@ export function consentStatus(home = HOME) {
     at: s.consentAt || null,
     via: s.consentVia || null,
     installId: s.consent ? s.installId : null,
+    since: s.consent ? s.sharingSince || null : null,
+    excluded: s.excluded || [],
     lastUpload: s.lastUpload || null,
     sentItems: s.sentItems || 0,
     lastError: s.lastError || null,
@@ -74,6 +80,7 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
     if (choice) {
       if (!s.installId) s.installId = randomUUID();
       if (!s.salt) s.salt = randomUUID() + randomUUID(); // never leaves this machine: the receiver cannot reverse a hash by guessing names
+      if (s.consent !== true) s.sharingSince = new Date().toISOString(); // nothing from before the yes ever goes
       s.consent = true;
     } else {
       s.consent = false;
@@ -81,6 +88,7 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
       s.salt = null;
       s.sent = {};
       s.sentItems = 0;
+      delete s.sharingSince;
     }
     s.consentAt = new Date().toISOString();
     s.consentVia = via;
@@ -90,6 +98,30 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
   // The "no" is on disk first; only then ask the receiver to forget the old id.
   if (!choice && was && oldId) result.deleted = await deleteRemote(oldId, { fetchImpl }).catch((e) => ({ ok: false, error: e.message }));
   return { ...result, status: consentStatus(home) };
+}
+
+// Keep one project out of sharing, or let it back in. The name stays on this
+// machine. Work done while a project was out never goes, even after it is let
+// back in. What was sent before stays until the editor unticks sharing.
+export function projectKey(project) {
+  const base = String(project || "").split(/[\\/]/).pop();
+  return JR.slug(base);
+}
+
+export function setExcluded(project, exclude = true, home = HOME) {
+  if (!project) throw new Error("Не знаю, какой проект: откройте его в Premiere или назовите.");
+  const key = projectKey(project);
+  let list = [];
+  updateState((s) => {
+    const set = new Set(s.excluded || []);
+    if (exclude) set.add(key); else set.delete(key);
+    s.excluded = list = Array.from(set).sort();
+  }, home);
+  return { project: key, excluded: exclude, all: list };
+}
+
+export function isExcluded(project, home = HOME) {
+  return (loadState(home).excluded || []).includes(projectKey(project));
 }
 
 // ---- anonymizing -----------------------------------------------------------
@@ -136,19 +168,24 @@ function projectDirs(root = JR.JOURNAL_ROOT) {
 // shape of every sequence whose latest snapshot is new.
 export function collect(state, { root = JR.JOURNAL_ROOT } = {}) {
   const salt = state.salt || state.installId;
+  const since = state.sharingSince ? Date.parse(state.sharingSince) : 0;
+  const after = (t) => !since || (Date.parse(t) || 0) >= since;
+  const excluded = new Set(state.excluded || []);
   const items = [], marks = {};
   for (const d of projectDirs(root)) {
     const key = d.split("/").pop();
     const p = hashWith(salt)(key);
     const done = state.sent?.[key] || { lines: 0, snapshot: null };
     const rows = JR.readEvents(d);
-    for (const r of rows.slice(done.lines)) items.push({ item: "decision", project: p, ...anonymize(r, salt) });
-    let snapshot = done.snapshot;
     const snaps = JR.listSnapshots(d);
     const last = snaps[snaps.length - 1];
+    if (excluded.has(key)) { marks[key] = { lines: rows.length, snapshot: last || done.snapshot }; continue; } // skipped for good
+    for (const r of rows.slice(done.lines)) if (after(r.t)) items.push({ item: "decision", project: p, ...anonymize(r, salt) });
+    let snapshot = done.snapshot;
     if (last && last !== snapshot) {
       try {
         const snap = JR.loadSnapshot(last);
+        if (!after(snap.t)) throw new Error("before the yes");
         for (const seq of snap.sequences || []) {
           const shape = JR.sequenceShape(seq);
           items.push({ item: "shape", project: p, t: snap.t, sequence: hashWith(salt)(seq.sequenceID || seq.name), width: seq.width, height: seq.height, fps: seq.fps, end: seq.end, ...anonymize(shape, salt) });
@@ -199,7 +236,10 @@ export function preview({ home = HOME, root = JR.JOURNAL_ROOT, limit = 20 } = {}
   const s = loadState(home);
   const st = s.salt ? s : { ...s, salt: "preview-" + randomUUID(), installId: "preview" };
   const { items } = collect(st, { root });
-  return { consent: s.consent ?? null, wouldSend: items.length, sample: items.slice(0, limit) };
+  const note = s.consent === true
+    ? "Уходит только работа, сделанная после согласия" + (s.excluded?.length ? ", кроме проектов, которые вы исключили." : ".")
+    : "Это пример того, как выглядят данные. После «да» уйдёт только работа, сделанная после согласия; всё, что уже есть на компьютере, останется здесь.";
+  return { consent: s.consent ?? null, wouldSend: items.length, note, excluded: s.excluded || [], sample: items.slice(0, limit) };
 }
 
 export async function deleteRemote(installId, { fetchImpl = globalThis.fetch } = {}) {
@@ -233,8 +273,9 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
   let files = 0, events = 0, left = 0;
   for (const folder of autosaveFolders(s)) {
     const seen = s.autosaveSeen?.[folder] || 0;
+    const since = s.sharingSince ? Date.parse(s.sharingSince) : 0; // autosaves from before the yes are never read for sharing
     const fresh = readdirSync(folder).filter((f) => f.toLowerCase().endsWith(".prproj")).map((f) => join(folder, f))
-      .map((f) => ({ f, m: statSync(f).mtimeMs })).filter((x) => x.m > seen).sort((a, b) => a.m - b.m);
+      .map((f) => ({ f, m: statSync(f).mtimeMs })).filter((x) => x.m > seen && x.m >= since).sort((a, b) => a.m - b.m);
     for (const { f, m } of fresh) {
       if (files >= limit) { left++; continue; }
       await yieldNow();

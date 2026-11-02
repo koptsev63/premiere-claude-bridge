@@ -26,6 +26,15 @@ const RELEASE_HEADER = "x-premiere-bridge"; // custom header: a web page cannot 
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Who may connect as "the panel". A CEP panel is a local file page and sends
+// Origin "file://" (checked live in Premiere 26, 02.11.2026). Node clients send
+// no Origin. A web page sends its own http(s) origin, a sandboxed frame sends
+// "null": both are refused, so a site open in the browser cannot pose as the
+// panel, read the JSX we send or switch journal sharing on.
+export function allowedOrigin(origin) {
+  return origin === undefined || origin === "" || origin === "file://";
+}
+
 export class PanelPort {
   constructor({ host, port, version, log, onConnection, isBusy }) {
     this.host = host;
@@ -56,7 +65,14 @@ export class PanelPort {
       srv.once("listening", () => {
         srv.removeListener("error", onError);
         srv.on("error", (e) => this.log("HTTP server error:", e.message));
-        const wss = new WebSocketServer({ server: srv });
+        const wss = new WebSocketServer({
+          server: srv,
+          verifyClient: ({ origin }) => {
+            if (allowedOrigin(origin)) return true;
+            this.log(`refused a connection from ${origin}: only the Premiere panel may connect`);
+            return false;
+          },
+        });
         wss.on("connection", (ws) => {
           this.onConnection(ws);
           const w = this.waiters.splice(0);

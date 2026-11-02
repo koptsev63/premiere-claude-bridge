@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.0] - 2026-11-02 - updates in one sentence, sharing by consent
+
+His words (02.11): editors are not coders, "how to update with git pull is
+unclear"; few people will send journal folders by hand, so collect
+automatically, behind a checkbox like other apps; and a Telegram chat for
+editors linked from GitHub.
+
+### Added
+- `lib/update.js`, `pr_update_bridge`, `pk.js update [--check]`: «обнови мост»
+  pulls and reinstalls a git install, or links the new `.mcpb` for Claude
+  Desktop. Local edits stop the update instead of being overwritten.
+  `pr_status` carries `update` (latest release, checked twice a day).
+- `lib/share.js`, `pr_share`, `pk.js share status|on|off|preview|send`:
+  opt-in sharing of the journal. Default off; Claude asks once (`pr_status`
+  carries the question), the panel has a checkbox. With a yes, an autopilot
+  every 10 minutes reads new Premiere Auto-Save files and sends new decisions
+  and sequence shapes. Names hashed with a local salt, paths and texts
+  dropped, numbers kept. A later no deletes everything on the receiver.
+- Receiver: `https://bridge.204-168-219-232.sslip.io` (EU, no IP logged,
+  2 GB cap, rate limit).
+- `DATA.md`: what is sent, what never is, retention, withdrawal (RU + EN).
+- README: a plain Russian section for editors; editors' Telegram chat.
+
 ## [0.7.0] - 2026-11-02 - the editor's journal
 
 His question (02.11): a talented editor is cutting a project with the bridge

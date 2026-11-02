@@ -17,9 +17,11 @@ import {
   importOneCaptionJsx, captionTrackJsx, listVideoEffectsJsx, addVideoEffectJsx, CAPTION_FORMATS,
 } from "./lib/jsx.js";
 import * as ops from "./lib/ops.js";
+import * as share from "./lib/share.js";
+import * as upd from "./lib/update.js";
 import http from "node:http";
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);
@@ -52,11 +54,14 @@ function attachConnectionHandler(ws) {
     try { panelSocket.close(); } catch {}
   }
   panelSocket = ws;
+  sendShareState(ws);
 
   ws.on("message", (data) => {
     let msg;
     try { msg = JSON.parse(data.toString()); }
     catch { log("invalid msg from panel:", data.toString().slice(0, 200)); return; }
+    if (msg.type === "share-set") { onPanelConsent(ws, msg.consent); return; }
+    if (msg.type === "share-get") { sendShareState(ws); return; }
     if (!msg.id) return;
     const p = pending.get(msg.id);
     if (!p) return;
@@ -168,6 +173,7 @@ tool(
     catch (e) {
       const diagnosis = await ops.dialogCheck(runJsx, { pingPort: cefPortAlive }).catch(() => null);
       return ok({
+        ...(await extrasForStatus()),
         connected: false,
         reason: e.message,
         waitingForClick: !!(diagnosis && diagnosis.blocked),
@@ -177,7 +183,8 @@ tool(
     }
     const data = parseResult(await callPanel("getStatus", []));
     ops.rememberBaseline().catch(() => {}); // a responsive Premiere: remember its windows for the dialog check
-    return ok({ connected: true, waitingForClick: false, bridgePid: process.pid, ...data });
+    try { share.rememberProject(data && data.project && data.project.path); } catch {}
+    return ok({ connected: true, waitingForClick: false, bridgePid: process.pid, ...data, ...(await extrasForStatus()) });
   }
 );
 
@@ -626,6 +633,94 @@ tool(
   { dir: z.string().optional(), project: z.string().optional().describe("Project name as in Premiere, e.g. 'подкаст.prproj'"), markdown: z.boolean().optional() },
   async (a) => { try { return ok(ops.journalReport(a)); } catch (e) { return err(e.data || { error: e.message }); } }
 );
+
+// ---- sharing the journal, updates (0.8) -------------------------------------
+// Consent is asked once, in the editor's words: through Claude (pr_status
+// carries the question) or the checkbox in the panel. Default: off.
+
+function sendShareState(ws) {
+  try {
+    const st = share.consentStatus();
+    ws.send(JSON.stringify({ type: "share", consent: st.consent, text: share.CONSENT_TEXT, dataUrl: share.DATA_URL, lastUpload: st.lastUpload, sentItems: st.sentItems }));
+  } catch {}
+}
+
+async function onPanelConsent(ws, value) {
+  try { await share.setConsent(!!value, { via: "panel" }); log(`share consent from panel: ${!!value}`); }
+  catch (e) { log("share consent failed:", e.message); }
+  sendShareState(ws);
+  if (value) autopilot().catch(() => {});
+}
+
+async function extrasForStatus() {
+  const st = share.consentStatus();
+  const out = { bridgeVersion: VERSION, update: await upd.updateInfo(VERSION) };
+  if (out.update && !out.update.available) out.update = { current: VERSION, latest: out.update.latest, available: false };
+  if (st.consent === null) {
+    out.share = {
+      consent: null,
+      askEditor: share.CONSENT_TEXT.ru,
+      how: "Ask the editor this question once, in their language, with two answers: «Да, помогать» and «Не сейчас». Then call pr_share with consent true or false. Never answer for them; no answer = leave it off.",
+    };
+  } else {
+    out.share = { consent: st.consent, lastUpload: st.lastUpload, sentItems: st.sentItems };
+  }
+  return out;
+}
+
+tool(
+  "pr_share",
+  "Sharing the editor's journal to help train the assistant (off by default). action=status (default) shows the choice and what was sent; consent=true/false records the EDITOR's own answer (ask them first, never decide for them; false also deletes everything already sent); action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
+  {
+    consent: z.boolean().optional().describe("The editor's answer: true = help train, false = stop and delete what was sent"),
+    action: z.enum(["status", "preview", "send"]).optional(),
+  },
+  async ({ consent, action }) => {
+    if (consent !== undefined) {
+      const r = await share.setConsent(consent, { via: "claude" });
+      if (panelSocket) sendShareState(panelSocket);
+      if (consent) autopilot().catch(() => {});
+      return ok(r);
+    }
+    if (action === "preview") return ok(share.preview());
+    if (action === "send") return ok(await autopilot(true));
+    return ok(share.consentStatus());
+  }
+);
+
+tool(
+  "pr_update_bridge",
+  "Update the bridge to the latest release (what the editor means by «обнови мост»). A git install pulls and reinstalls (never touches local edits); a Claude Desktop bundle gets the download link. Afterwards tell the editor, in plain words, to restart Claude and reopen the panel in Premiere.",
+  { check: z.boolean().optional().describe("true = only say whether a new version exists") },
+  async ({ check }) => {
+    if (check) return ok(await upd.updateInfo(VERSION, { force: true }));
+    return ok(await upd.updateBridge(VERSION));
+  }
+);
+
+// The autopilot: every 10 minutes, if the editor said yes, read Premiere's
+// new autosaves into the journal and send what is new. Never asks Premiere
+// anything except the project path, and only when no tool is running.
+const AUTOPILOT_MS = Number(process.env.PREMIERE_SHARE_EVERY_MS || 10 * 60 * 1000);
+let autopilotBusy = false;
+async function autopilot(force = false) {
+  if (autopilotBusy) return { busy: true };
+  if (!force && share.consentStatus().consent !== true) return { skipped: true };
+  autopilotBusy = true;
+  try {
+    if (panelSocket && activeTools === 0 && pending.size === 0) {
+      try {
+        const p = await runJsx("return app.project ? app.project.path : '';", { timeoutMs: 5000 });
+        share.rememberProject(typeof p === "string" ? p : null);
+      } catch {}
+    }
+    const r = await share.tick({ version: VERSION });
+    if (r.sent || r.error) log("share:", r);
+    return r;
+  } finally { autopilotBusy = false; }
+}
+setTimeout(() => autopilot().catch(() => {}), 60_000).unref();
+setInterval(() => autopilot().catch(() => {}), AUTOPILOT_MS).unref();
 
 // ---- start ----------------------------------------------------------------
 

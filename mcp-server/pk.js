@@ -45,6 +45,8 @@
  *   journal watch [--every 120] [--minutes N]   keep snapshotting while Premiere runs (+ one per save)
  *   journal import <folder|file.prproj ...>     read Premiere Auto-Save files into the journal
  *   journal diff | ls | report [--md]           decisions between snapshots; the hand report
+ *   share status | on | off | preview | send     help train the assistant (off until the editor says yes)
+ *   update [--check]                             pull the latest bridge (what «обнови мост» does)
  * Sequences are named by exact name or sequenceID; items by nodeId, absolute path or name.
  * Bins are paths from the root ("A/B"), created when missing.
  *
@@ -67,6 +69,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { wrapBodyForEvalScript } from "./lib/evalcode.js";
 import * as ops from "./lib/ops.js";
+import * as share from "./lib/share.js";
+import * as upd from "./lib/update.js";
+const PKG_VERSION = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEBUG_FILE = path.join(HERE, "..", "cep-extension", ".debug");
@@ -282,12 +287,22 @@ export async function typed(cmd, argv) {
       if (sub === "report") { const r = ops.journalReport({ ...where, markdown: !!opts.md }); if (opts.md) { console.log(r.markdown); return { dir: r.dir, printed: true }; } return r; }
       throw new Error("journal: snapshot | watch | import | diff | ls | report");
     }
+    case "share": {
+      const sub = argv[0] || "status";
+      if (sub === "on" || sub === "off") return share.setConsent(sub === "on", { via: "cli" });
+      if (sub === "preview") return share.preview();
+      if (sub === "send") return share.tick({ version: PKG_VERSION });
+      if (sub === "status") return share.consentStatus();
+      throw new Error("share: status | on | off | preview | send");
+    }
+    case "update":
+      return argv.includes("--check") ? upd.updateInfo(PKG_VERSION, { force: true }) : upd.updateBridge(PKG_VERSION);
     default: return undefined;
   }
 }
 
 const TYPED = new Set(["ping", "status", "dialog", "probe", "import", "make-seq", "motion", "motion-keys", "markers", "list-markers",
-  "open", "activate", "timeline", "inout", "delete-seq", "move", "ls", "build", "save", "journal"]);
+  "open", "activate", "timeline", "inout", "delete-seq", "move", "ls", "build", "save", "journal", "share", "update"]);
 
 export async function main(argv) {
   const [cmd, arg] = argv;

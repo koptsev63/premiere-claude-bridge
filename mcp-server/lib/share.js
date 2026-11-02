@@ -41,6 +41,14 @@ export function saveState(s, home = HOME) {
   return s;
 }
 
+// Re-read, change, write: the autopilot and a consent click may overlap,
+// and a stale copy must never bring back a "yes" the editor took away.
+export function updateState(fn, home = HOME) {
+  const s = loadState(home);
+  fn(s);
+  return saveState(s, home);
+}
+
 export function consentStatus(home = HOME) {
   const s = loadState(home);
   return {
@@ -59,25 +67,28 @@ export function consentStatus(home = HOME) {
 // yes: start (new anonymous id if none). no after yes: ask the receiver to
 // delete everything under the old id, then forget it.
 export async function setConsent(choice, { via = "claude", home = HOME, fetchImpl = globalThis.fetch } = {}) {
-  const s = loadState(home);
-  const was = s.consent;
-  const result = { consent: !!choice, was: was ?? null };
-  if (choice) {
-    if (!s.installId) s.installId = randomUUID();
-    if (!s.salt) s.salt = randomUUID() + randomUUID(); // never leaves this machine: the receiver cannot reverse a hash by guessing names
-    s.consent = true;
-  } else {
-    if (was && s.installId) result.deleted = await deleteRemote(s.installId, { fetchImpl }).catch((e) => ({ ok: false, error: e.message }));
-    s.consent = false;
-    s.installId = null;
-    s.salt = null;
-    s.sent = {};
-    s.sentItems = 0;
-  }
-  s.consentAt = new Date().toISOString();
-  s.consentVia = via;
-  s.consentVersion = CONSENT_VERSION;
-  saveState(s, home);
+  let was = null, oldId = null;
+  updateState((s) => {
+    was = s.consent ?? null;
+    oldId = s.installId || null;
+    if (choice) {
+      if (!s.installId) s.installId = randomUUID();
+      if (!s.salt) s.salt = randomUUID() + randomUUID(); // never leaves this machine: the receiver cannot reverse a hash by guessing names
+      s.consent = true;
+    } else {
+      s.consent = false;
+      s.installId = null;
+      s.salt = null;
+      s.sent = {};
+      s.sentItems = 0;
+    }
+    s.consentAt = new Date().toISOString();
+    s.consentVia = via;
+    s.consentVersion = CONSENT_VERSION;
+  }, home);
+  const result = { consent: !!choice, was };
+  // The "no" is on disk first; only then ask the receiver to forget the old id.
+  if (!choice && was && oldId) result.deleted = await deleteRemote(oldId, { fetchImpl }).catch((e) => ({ ok: false, error: e.message }));
   return { ...result, status: consentStatus(home) };
 }
 
@@ -153,28 +164,34 @@ export function collect(state, { root = JR.JOURNAL_ROOT } = {}) {
 export async function upload({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl = globalThis.fetch, version = "0" } = {}) {
   const s = loadState(home);
   if (s.consent !== true || !s.installId) return { sent: 0, skipped: s.consent === false ? "editor said no" : "not asked yet" };
+  const id = s.installId;
   const { items, marks } = collect(s, { root });
-  if (!items.length) { s.sent = { ...s.sent, ...marks }; saveState(s, home); return { sent: 0, nothingNew: true }; }
-  let sent = 0;
+  const stillYes = () => { const now = loadState(home); return now.consent === true && now.installId === id; };
+  if (!items.length) { if (stillYes()) updateState((x) => { x.sent = { ...x.sent, ...marks }; }, home); return { sent: 0, nothingNew: true }; }
+  let sent = 0, error = null;
   try {
     for (let i = 0; i < items.length; i += MAX_BATCH) {
+      if (!stillYes()) break; // the editor said no while we were sending
       const batch = items.slice(i, i + MAX_BATCH);
-      const body = gzipSync(Buffer.from(JSON.stringify({ installId: s.installId, bridgeVersion: version, consentVersion: s.consentVersion || CONSENT_VERSION, batch })));
+      const body = gzipSync(Buffer.from(JSON.stringify({ installId: id, bridgeVersion: version, consentVersion: s.consentVersion || CONSENT_VERSION, batch })));
       const res = await fetchImpl(`${ENDPOINT}/v1/journal`, { method: "POST", headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" }, body, signal: AbortSignal.timeout(20000) });
       if (!res.ok) throw new Error(`receiver answered ${res.status}`);
       sent += batch.length;
     }
-  } catch (e) {
-    s.lastError = { at: new Date().toISOString(), error: e.message };
-    saveState(s, home);
-    return { sent, error: e.message };
+  } catch (e) { error = e.message; }
+  if (!stillYes()) {
+    // Withdrawn mid-send: whatever reached the receiver under the old id goes too.
+    if (sent) await deleteRemote(id, { fetchImpl }).catch(() => {});
+    return { sent: 0, withdrawn: true };
   }
-  s.sent = { ...s.sent, ...marks };
-  s.sentItems = (s.sentItems || 0) + sent;
-  s.lastUpload = new Date().toISOString();
-  s.lastError = null;
-  saveState(s, home);
-  return { sent };
+  updateState((x) => {
+    if (error) { x.lastError = { at: new Date().toISOString(), error }; return; }
+    x.sent = { ...x.sent, ...marks };
+    x.sentItems = (x.sentItems || 0) + sent;
+    x.lastUpload = new Date().toISOString();
+    x.lastError = null;
+  }, home);
+  return error ? { sent, error } : { sent };
 }
 
 // Exactly what the next send would contain, without sending it.
@@ -198,43 +215,46 @@ export async function deleteRemote(installId, { fetchImpl = globalThis.fetch } =
 
 export function rememberProject(projectPath, home = HOME) {
   if (!projectPath || typeof projectPath !== "string") return;
-  const s = loadState(home);
   const dir = dirname(projectPath);
-  s.projectDirs = Array.from(new Set([dir, ...(s.projectDirs || [])])).slice(0, 50);
-  saveState(s, home);
+  updateState((s) => { s.projectDirs = Array.from(new Set([dir, ...(s.projectDirs || [])])).slice(0, 50); }, home);
 }
 
 export function autosaveFolders(state) {
   return (state.projectDirs || []).map((d) => join(d, "Adobe Premiere Pro Auto-Save")).filter((d) => existsSync(d));
 }
 
-export function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT } = {}) {
+// A few files per round, yielding between them: a big project's autosave
+// takes a while to parse, and the bridge must keep answering meanwhile.
+export const AUTOSAVES_PER_TICK = 6;
+const yieldNow = () => new Promise((r) => setImmediate(r));
+
+export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK } = {}) {
   const s = loadState(home);
-  let files = 0, events = 0;
+  let files = 0, events = 0, left = 0;
   for (const folder of autosaveFolders(s)) {
     const seen = s.autosaveSeen?.[folder] || 0;
-    let newest = seen;
     const fresh = readdirSync(folder).filter((f) => f.toLowerCase().endsWith(".prproj")).map((f) => join(folder, f))
       .map((f) => ({ f, m: statSync(f).mtimeMs })).filter((x) => x.m > seen).sort((a, b) => a.m - b.m);
     for (const { f, m } of fresh) {
+      if (files >= limit) { left++; continue; }
+      await yieldNow();
+      if (loadState(home).consent !== true) return { files, events, stopped: true };
       try {
         const snap = snapshotFromProject(f, { mtime: new Date(m) });
         const r = JR.record(JR.journalDir(snap.project, root), snap, { source: snap.source, file: f });
         files++; events += r.events || 0;
-      } catch {}
-      newest = Math.max(newest, m);
+      } catch { files++; }
+      updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [folder]: Math.max(x.autosaveSeen?.[folder] || 0, m) }; }, home);
     }
-    s.autosaveSeen = { ...(s.autosaveSeen || {}), [folder]: newest };
   }
-  saveState(s, home);
-  return { files, events };
+  return { files, events, left };
 }
 
 // One round of the autopilot: read new autosaves, send what is new.
 export async function tick({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl, version } = {}) {
   const s = loadState(home);
   if (s.consent !== true) return { skipped: true };
-  const imported = importNewAutosaves({ home, root });
+  const imported = await importNewAutosaves({ home, root });
   const sent = await upload({ home, root, fetchImpl, version });
   return { imported, ...sent };
 }

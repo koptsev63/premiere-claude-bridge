@@ -7,6 +7,12 @@
 // receiving side. Off until the editor says yes; "no" later deletes what
 // was sent and starts a fresh anonymous id. Details: DATA.md.
 //
+// 0.8.3: on by default (the owner's decision, 02.11.2026), off with one
+// click or one sentence, and that "no" is kept. Never chosen = on from the
+// first run of 0.8.3; an explicit no from 0.8.1/0.8.2 stays a no. The editor
+// is told once (pr_status tellEditor, the panel line). Lawful basis moves from
+// consent to legitimate interest with the right to object (DATA.md).
+//
 // 0.8.2: only work done after the yes is sent (sharingSince), never the
 // journal or autosaves that were there before; and the editor can keep any
 // project out (projects under NDA): «не отправляй этот проект».
@@ -21,14 +27,36 @@ import { snapshotFromProject } from "./prproj.js";
 
 export const HOME = process.env.PREMIERE_BRIDGE_HOME || join(homedir(), ".premiere-bridge");
 export const ENDPOINT = (process.env.PREMIERE_SHARE_URL || "https://bridge.204-168-219-232.sslip.io").replace(/\/+$/, "");
-export const CONSENT_VERSION = 1;
+export const CONSENT_VERSION = 2; // 2 = on by default, off on request
 export const DATA_URL = "https://github.com/koptsev63/premiere-claude-bridge/blob/main/DATA.md";
 const MAX_BATCH = 4000;
 
 export const CONSENT_TEXT = {
-  ru: "Помочь обучить ассистента монтажу? Мост будет сам отправлять обезличенную структуру вашего монтажа: где разрезы, сколько кадров снято с начала и конца плана, длины планов, темп. Без видео, звука, имён файлов и названий проектов. Уходит только работа после вашего «да», любой проект можно исключить. Можно выключить в любой момент, и всё отправленное удалится. Подробно: " + DATA_URL,
-  en: "Help train the editing assistant? The bridge will send an anonymized outline of your edit: cut points, frames trimmed, shot lengths, pace. No video, no audio, no file or project names. Only work after your yes goes, and any project can be kept out. Turn it off any time and everything sent is deleted. Details: " + DATA_URL,
+  ru: "Мост помогает обучать ассистента монтажу: сам отправляет обезличенную структуру вашего монтажа (где разрезы, сколько кадров снято с начала и конца плана, длины планов, темп). Без видео, звука, имён файлов и названий проектов. Это включено по умолчанию и касается только работы с момента обновления. Не хотите: снимите галочку «Помогать обучать ассистента» в панели или скажите «не отправляй журнал», и всё отправленное удалится. Проект под NDA можно исключить отдельно: «не отправляй этот проект». Подробно: " + DATA_URL,
+  en: "The bridge helps train the editing assistant: it sends an anonymized outline of your edit (cut points, frames trimmed, shot lengths, pace). No video, no audio, no file or project names. This is on by default and covers only work from the update on. Don't want it: untick «Помогать обучать ассистента» in the panel or tell Claude «don't send my journal», and everything sent is deleted. A project under NDA can be kept out on its own. Details: " + DATA_URL,
 };
+export const NOTICE_TEXT = CONSENT_TEXT;
+
+// On unless the editor said no. null = never chose = on by default.
+export function isOn(s) { return !!s && s.consent !== false; }
+
+// The anonymous id, the salt and the start moment, made on first use.
+export function ensureStarted(home = HOME) {
+  let st = loadState(home);
+  if (!isOn(st) || (st.installId && st.salt && (st.sharingSince || st.consent === true))) return st;
+  updateState((s) => {
+    if (!isOn(s)) return;
+    if (!s.installId) s.installId = randomUUID();
+    if (!s.salt) s.salt = randomUUID() + randomUUID();
+    if (!s.sharingSince && s.consent !== true) { s.sharingSince = new Date().toISOString(); s.consentVia = s.consentVia || "default"; s.consentVersion = CONSENT_VERSION; }
+  }, home);
+  return loadState(home);
+}
+
+// The editor has been told once that sharing is on by default.
+export function markNoticeGiven(home = HOME) {
+  updateState((s) => { s.noticeGiven = new Date().toISOString(); }, home);
+}
 
 // ---- state -----------------------------------------------------------------
 
@@ -56,11 +84,14 @@ export function updateState(fn, home = HOME) {
 export function consentStatus(home = HOME) {
   const s = loadState(home);
   return {
-    consent: s.consent ?? null, // true | false | null (never asked)
+    consent: s.consent ?? null, // true | false | null (never chose = on by default)
+    on: isOn(s),
+    byDefault: s.consent == null,
+    noticeGiven: s.noticeGiven || null,
     at: s.consentAt || null,
     via: s.consentVia || null,
-    installId: s.consent ? s.installId : null,
-    since: s.consent ? s.sharingSince || null : null,
+    installId: isOn(s) ? s.installId || null : null,
+    since: isOn(s) ? s.sharingSince || null : null,
     excluded: s.excluded || [],
     lastUpload: s.lastUpload || null,
     sentItems: s.sentItems || 0,
@@ -80,7 +111,7 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
     if (choice) {
       if (!s.installId) s.installId = randomUUID();
       if (!s.salt) s.salt = randomUUID() + randomUUID(); // never leaves this machine: the receiver cannot reverse a hash by guessing names
-      if (s.consent !== true) s.sharingSince = new Date().toISOString(); // nothing from before the yes ever goes
+      if (!s.sharingSince) s.sharingSince = new Date().toISOString(); // nothing from before the start ever goes
       s.consent = true;
     } else {
       s.consent = false;
@@ -96,7 +127,7 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
   }, home);
   const result = { consent: !!choice, was };
   // The "no" is on disk first; only then ask the receiver to forget the old id.
-  if (!choice && was && oldId) result.deleted = await deleteRemote(oldId, { fetchImpl }).catch((e) => ({ ok: false, error: e.message }));
+  if (!choice && oldId) result.deleted = await deleteRemote(oldId, { fetchImpl }).catch((e) => ({ ok: false, error: e.message }));
   return { ...result, status: consentStatus(home) };
 }
 
@@ -199,11 +230,11 @@ export function collect(state, { root = JR.JOURNAL_ROOT } = {}) {
 }
 
 export async function upload({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl = globalThis.fetch, version = "0" } = {}) {
-  const s = loadState(home);
-  if (s.consent !== true || !s.installId) return { sent: 0, skipped: s.consent === false ? "editor said no" : "not asked yet" };
+  const s = ensureStarted(home);
+  if (!isOn(s) || !s.installId) return { sent: 0, skipped: "editor said no" };
   const id = s.installId;
   const { items, marks } = collect(s, { root });
-  const stillYes = () => { const now = loadState(home); return now.consent === true && now.installId === id; };
+  const stillYes = () => { const now = loadState(home); return isOn(now) && now.installId === id; };
   if (!items.length) { if (stillYes()) updateState((x) => { x.sent = { ...x.sent, ...marks }; }, home); return { sent: 0, nothingNew: true }; }
   let sent = 0, error = null;
   try {
@@ -233,12 +264,13 @@ export async function upload({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl = 
 
 // Exactly what the next send would contain, without sending it.
 export function preview({ home = HOME, root = JR.JOURNAL_ROOT, limit = 20 } = {}) {
-  const s = loadState(home);
+  const s0 = loadState(home);
+  const s = isOn(s0) && !s0.sharingSince && s0.consent !== true ? { ...s0, sharingSince: new Date().toISOString() } : s0;
   const st = s.salt ? s : { ...s, salt: "preview-" + randomUUID(), installId: "preview" };
   const { items } = collect(st, { root });
-  const note = s.consent === true
-    ? "Уходит только работа, сделанная после согласия" + (s.excluded?.length ? ", кроме проектов, которые вы исключили." : ".")
-    : "Это пример того, как выглядят данные. После «да» уйдёт только работа, сделанная после согласия; всё, что уже есть на компьютере, останется здесь.";
+  const note = isOn(s)
+    ? "Уходит только работа, сделанная после включения" + (s.excluded?.length ? ", кроме проектов, которые вы исключили." : ".")
+    : "Отправка выключена, ничего не уходит. Это пример того, как выглядели бы данные.";
   return { consent: s.consent ?? null, wouldSend: items.length, note, excluded: s.excluded || [], sample: items.slice(0, limit) };
 }
 
@@ -269,7 +301,8 @@ export const AUTOSAVES_PER_TICK = 6;
 const yieldNow = () => new Promise((r) => setImmediate(r));
 
 export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK } = {}) {
-  const s = loadState(home);
+  const s = ensureStarted(home);
+  if (!isOn(s)) return { files: 0, events: 0, left: 0, stopped: true };
   let files = 0, events = 0, left = 0;
   for (const folder of autosaveFolders(s)) {
     const seen = s.autosaveSeen?.[folder] || 0;
@@ -279,7 +312,7 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     for (const { f, m } of fresh) {
       if (files >= limit) { left++; continue; }
       await yieldNow();
-      if (loadState(home).consent !== true) return { files, events, stopped: true };
+      if (!isOn(loadState(home))) return { files, events, stopped: true };
       try {
         const snap = snapshotFromProject(f, { mtime: new Date(m) });
         const r = JR.record(JR.journalDir(snap.project, root), snap, { source: snap.source, file: f });
@@ -293,8 +326,8 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
 
 // One round of the autopilot: read new autosaves, send what is new.
 export async function tick({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl, version } = {}) {
-  const s = loadState(home);
-  if (s.consent !== true) return { skipped: true };
+  const s = ensureStarted(home);
+  if (!isOn(s)) return { skipped: true };
   const imported = await importNewAutosaves({ home, root });
   const sent = await upload({ home, root, fetchImpl, version });
   return { imported, ...sent };

@@ -21,7 +21,7 @@ import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
 import http from "node:http";
 
-const VERSION = "0.8.2";
+const VERSION = "0.8.3";
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);
@@ -654,8 +654,8 @@ async function currentProject(toolsRunning = 0) {
 async function sendShareState(ws) {
   try {
     const st = share.consentStatus();
-    const msg = { type: "share", consent: st.consent, text: share.CONSENT_TEXT, dataUrl: share.DATA_URL, lastUpload: st.lastUpload, sentItems: st.sentItems };
-    if (st.consent === true) {
+    const msg = { type: "share", consent: st.consent, on: st.on, byDefault: st.byDefault, text: share.CONSENT_TEXT, dataUrl: share.DATA_URL, lastUpload: st.lastUpload, sentItems: st.sentItems };
+    if (st.on) {
       const p = await currentProject();
       if (p) { msg.project = share.projectKey(p); msg.projectExcluded = share.isExcluded(p); }
     }
@@ -679,26 +679,30 @@ async function onPanelConsent(ws, value) {
 }
 
 async function extrasForStatus() {
+  try { share.ensureStarted(); } catch {} // on by default: the start moment is the first status check
   const st = share.consentStatus();
   const out = { bridgeVersion: VERSION, update: await upd.updateInfo(VERSION) };
   if (out.update && !out.update.available) out.update = { current: VERSION, latest: out.update.latest, available: false };
-  if (st.consent === null) {
+  if (st.on && st.byDefault && !st.noticeGiven) {
+    // On by default: the editor is told once, plainly, how to turn it off.
     out.share = {
-      consent: null,
-      askEditor: share.CONSENT_TEXT.ru,
-      how: "Ask the editor this question once, in their language, with two answers: «Да, помогать» and «Не сейчас». Then call pr_share with consent true or false. Never answer for them; no answer = leave it off.",
+      on: true,
+      byDefault: true,
+      tellEditor: share.CONSENT_TEXT.ru,
+      how: "Tell the editor this once, in their language, as information, not a question. If they say they don't want it, call pr_share consent=false (it deletes what was sent). Never decide for them.",
     };
+    share.markNoticeGiven();
   } else {
-    out.share = { consent: st.consent, since: st.since, lastUpload: st.lastUpload, sentItems: st.sentItems, excluded: st.excluded };
+    out.share = { on: st.on, byDefault: st.byDefault, since: st.since, lastUpload: st.lastUpload, sentItems: st.sentItems, excluded: st.excluded };
   }
   return out;
 }
 
 tool(
   "pr_share",
-  "Sharing the editor's journal to help train the assistant (off by default). action=status (default) shows the choice and what was sent; consent=true/false records the EDITOR's own answer (ask them first, never decide for them; false also deletes everything already sent). Only work done after the yes is ever sent. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
+  "Sharing the editor's journal to help train the assistant. On by default (only work from the update on), off whenever the editor says so. action=status (default) shows the state and what was sent; consent=false records the EDITOR's own no («не отправляй журнал»): it stops sharing for good and deletes everything already sent; consent=true turns it back on (work from then on). Never decide for them. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
   {
-    consent: z.boolean().optional().describe("The editor's answer: true = help train, false = stop and delete what was sent"),
+    consent: z.boolean().optional().describe("The editor's own choice: false = stop and delete what was sent, true = turn back on"),
     exclude: z.boolean().optional().describe("true = never send this project; false = let it back in"),
     project: z.string().optional().describe("Project name or .prproj path for exclude; default: the project open in Premiere"),
     action: z.enum(["status", "preview", "send"]).optional(),
@@ -740,7 +744,7 @@ const AUTOPILOT_MS = Number(process.env.PREMIERE_SHARE_EVERY_MS || 10 * 60 * 100
 let autopilotBusy = false;
 async function autopilot(force = false) {
   if (autopilotBusy) return { busy: true };
-  if (!force && share.consentStatus().consent !== true) return { skipped: true };
+  if (!force && !share.consentStatus().on) return { skipped: true };
   autopilotBusy = true;
   try {
     await currentProject(); // remembers the project folder for its autosaves

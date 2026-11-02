@@ -40,7 +40,7 @@ You need Premiere Pro 2024 or newer, or DaVinci Resolve Studio, and a Claude or 
 
 **Если видео пришло без картинки.** Ролики с YouTube часто в формате, который Premiere открывает без изображения. Просто попросите Claude импортировать файл: мост проверит его заранее и при необходимости сделает рабочую копию.
 
-**Помочь обучать ассистента.** В панели есть галочка «Помогать обучать ассистента», по умолчанию она снята. Если её поставить, мост сам отправляет обезличенную схему монтажа: где разрезы, сколько кадров снято, длины планов. Без видео, звука и названий. Уходит только работа после того, как вы поставили галочку. Проект под NDA можно исключить: галочка «Не отправлять этот проект» или фраза Claude «не отправляй этот проект». Сняли главную галочку - всё отправленное удалилось. Подробно и политика конфиденциальности: [DATA.md](DATA.md).
+**Помочь обучать ассистента.** В панели есть галочка «Помогать обучать ассистента», с версии 0.8.3 она стоит по умолчанию. Мост сам отправляет обезличенную схему монтажа: где разрезы, сколько кадров снято, длины планов. Без видео, звука и названий. Уходит только работа после обновления моста. Не хотите: снимите галочку или скажите Claude «не отправляй журнал». Проект под NDA можно исключить: галочка «Не отправлять этот проект» или фраза Claude «не отправляй этот проект». Сняли главную галочку - всё отправленное удалилось. Подробно и политика конфиденциальности: [DATA.md](DATA.md).
 
 **Чат монтажёров.** Вопросы, ошибки, пожелания, приёмы: [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
 
@@ -265,7 +265,7 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_get_timeline` / `pr_get_inout` | Any sequence's clips with borders in seconds; the render range after a manual trim |
 | `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project` | Project housekeeping |
 | `pr_build_sequences` | Many sequences from one spec: import, create, motion, keyframes, markers, open |
-| `pr_share` / `pr_update_bridge` | Help train the assistant (0.8, off until the editor says yes, see [DATA.md](DATA.md)); update in one sentence: «обнови мост» |
+| `pr_share` / `pr_update_bridge` | Help train the assistant (on by default since 0.8.3, off with one click, see [DATA.md](DATA.md)); update in one sentence: «обнови мост» |
 | `pr_journal_snapshot` / `pr_journal_report` | The editor's journal (0.7): snapshots of every sequence, diffs as editing decisions, the hand report |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
@@ -273,7 +273,7 @@ brew install yt-dlp ffmpeg          # macOS
 ### New in 0.8: updates in one sentence, sharing by consent
 
 - **Updates.** `pr_status` says when a new release is out. The editor tells Claude «обнови мост»; `pr_update_bridge` pulls and reinstalls a git install (never touching local edits) or hands a Claude Desktop install the new `.mcpb`.
-- **Sharing the journal.** Off by default. Claude asks once («Да, помогать» / «Не сейчас»), and the panel has a checkbox. With a yes, every 10 minutes the bridge reads Premiere's new Auto-Save files into the journal and sends new decisions and sequence shapes, anonymized with a salt that never leaves the machine. Only work done after the yes is sent, and any project can be kept out for good (NDA): panel checkbox or «не отправляй этот проект». A later no deletes everything sent. `pk.js share status | on | off | preview | send | exclude [project]`. Full terms and privacy policy: [DATA.md](DATA.md).
+- **Sharing the journal.** On by default since 0.8.3, off with one click (panel checkbox) or one sentence to Claude; Claude tells the editor once. An earlier no stays a no. While on, every 10 minutes the bridge reads Premiere's new Auto-Save files into the journal and sends new decisions and sequence shapes, anonymized with a salt that never leaves the machine. Only work done after the first run of 0.8.3 (or after turning it back on) is sent, and any project can be kept out for good (NDA): panel checkbox or «не отправляй этот проект». A later no deletes everything sent. `pk.js share status | on | off | preview | send | exclude [project]`. Full terms and privacy policy: [DATA.md](DATA.md).
 - **Editors' chat:** [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
 
 ### New in 0.7: the editor's journal
@@ -478,7 +478,7 @@ Look for [`good first issue`](https://github.com/koptsev63/premiere-claude-bridg
 
 ## Privacy
 
-The bridge sends nothing unless the editor ticks «Помогать обучать ассистента». What goes, what never goes, who keeps it and how to delete it: [DATA.md](DATA.md), the privacy policy.
+Journal sharing is on by default and off with one click on «Помогать обучать ассистента»; turning it off deletes everything sent. What goes, what never goes, who keeps it and how to delete it: [DATA.md](DATA.md), the privacy policy.
 
 ## License
 

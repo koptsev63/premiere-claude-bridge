@@ -45,7 +45,7 @@
  *   journal watch [--every 120] [--minutes N]   keep snapshotting while Premiere runs (+ one per save)
  *   journal import <folder|file.prproj ...>     read Premiere Auto-Save files into the journal
  *   journal diff | ls | report [--md]           decisions between snapshots; the hand report
- *   share status | on | off | preview | send     help train the assistant (off until the editor says yes)
+ *   share status | on | off | preview | send     help train the assistant (on by default, off on request)
  *   share exclude|include [project]             keep a project out of sharing (NDA); default: the open one
  *   update [--check]                             pull the latest bridge (what «обнови мост» does)
  * Sequences are named by exact name or sequenceID; items by nodeId, absolute path or name.

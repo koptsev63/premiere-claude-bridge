@@ -2,8 +2,8 @@
   "manifest_version": "0.3",
   "name": "premiere-claude-bridge",
   "display_name": "Premiere Claude Bridge",
-  "version": "0.5.0",
-  "description": "Assistant editor for Premiere Pro: read the project and timeline, move the playhead, add markers, queue exports.",
+  "version": "0.7.0",
+  "description": "Assistant editor for Premiere Pro: sequences without a dialog, media gate, Motion and keyframes, markers, the editor's journal, exports.",
   "long_description": "MCP server that connects Claude to Adobe Premiere Pro through a CEP panel over a local WebSocket (127.0.0.1). This bundle contains only the MCP server. The Claude Bridge panel has to be installed in Premiere separately, see the install guide in the repository. The logging, transcription, rough cut, subtitle and QC tools of the project live in the repository as Python tools and Claude skills and are not part of this bundle.",
   "author": {
     "name": "Vladimir Koptsev",
@@ -17,35 +17,166 @@
   "documentation": "https://github.com/koptsev63/premiere-claude-bridge/blob/main/docs/install.md",
   "support": "https://github.com/koptsev63/premiere-claude-bridge/issues",
   "license": "MIT",
-  "keywords": ["premiere", "premiere pro", "adobe", "video editing", "timeline", "extendscript"],
+  "keywords": [
+    "premiere",
+    "premiere pro",
+    "adobe",
+    "video editing",
+    "timeline",
+    "extendscript"
+  ],
   "server": {
     "type": "node",
     "entry_point": "server.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server.js"],
+      "args": [
+        "${__dirname}/server.js"
+      ],
       "env": {
         "PREMIERE_BRIDGE_PORT": "${user_config.port}"
       }
     }
   },
   "tools": [
-    { "name": "pr_status", "description": "Check the connection to Premiere Pro and return basic project info" },
-    { "name": "pr_get_project_info", "description": "Get the current project: name, path and all project items" },
-    { "name": "pr_get_active_sequence", "description": "Get info about the active sequence" },
-    { "name": "pr_list_timeline", "description": "List all tracks of the active sequence with every clip" },
-    { "name": "pr_get_selected", "description": "Get the clips currently selected on the timeline" },
-    { "name": "pr_get_playhead", "description": "Get the current playhead time" },
-    { "name": "pr_set_playhead", "description": "Move the playhead to a given time" },
-    { "name": "pr_add_marker", "description": "Add a marker on the active sequence" },
-    { "name": "pr_export_ame", "description": "Queue the active sequence for export in Adobe Media Encoder" },
-    { "name": "pr_eval_jsx", "description": "Run arbitrary ExtendScript code inside Premiere" },
-    { "name": "pr_import_captions", "description": "Import caption files one at a time and put each on a caption track" },
-    { "name": "pr_list_video_effects", "description": "List video effect names as this Premiere knows them (localized)" },
-    { "name": "pr_add_video_effect", "description": "Add a video effect by English or localized name and verify it was added" }
+    {
+      "name": "pr_status",
+      "description": "Check connection to Premiere Pro and return basic project info"
+    },
+    {
+      "name": "pr_get_project_info",
+      "description": "Get the current Premiere project"
+    },
+    {
+      "name": "pr_get_active_sequence",
+      "description": "Get info about the active sequence"
+    },
+    {
+      "name": "pr_list_timeline",
+      "description": "List all video and audio tracks of active sequence with every clip on each track (name, in/out points, start/end times, "
+    },
+    {
+      "name": "pr_get_selected",
+      "description": "Get currently selected clips on the timeline."
+    },
+    {
+      "name": "pr_get_playhead",
+      "description": "Get current playhead time (CTI) on the active sequence in seconds and ticks."
+    },
+    {
+      "name": "pr_set_playhead",
+      "description": "Move the playhead to a given time on the active sequence."
+    },
+    {
+      "name": "pr_add_marker",
+      "description": "Add a marker on the active sequence at given time."
+    },
+    {
+      "name": "pr_export_ame",
+      "description": "Queue active sequence export to Adobe Media Encoder (non-blocking)"
+    },
+    {
+      "name": "pr_eval_jsx",
+      "description": "ESCAPE HATCH"
+    },
+    {
+      "name": "pr_import_captions",
+      "description": "Import caption files (.srt etc.) into the project ONE AT A TIME and, by default, put each on a new caption track of the "
+    },
+    {
+      "name": "pr_list_video_effects",
+      "description": "List video effect names exactly as this Premiere knows them (localized"
+    },
+    {
+      "name": "pr_add_video_effect",
+      "description": "Add a video effect to clips of the active sequence and VERIFY it was added (components counted before and after)"
+    },
+    {
+      "name": "pr_ping",
+      "description": "Cheap health check"
+    },
+    {
+      "name": "pr_dialog_check",
+      "description": "Is Premiere waiting for a click? A modal window (e.g"
+    },
+    {
+      "name": "pr_probe_media",
+      "description": "Codec gate before an import, without touching Premiere"
+    },
+    {
+      "name": "pr_import_media",
+      "description": "Import media files into a bin, one file per call to Premiere, with the codec and disk gate first (pr_probe_media rules)"
+    },
+    {
+      "name": "pr_make_sequence",
+      "description": "Create a sequence from one clip range WITHOUT any dialog (createNewSequence with a preset id opens 'Создать эпизод' and "
+    },
+    {
+      "name": "pr_set_motion",
+      "description": "Set Motion (Scale / Position / Rotation / Anchor Point) on one clip of a sequence and read the values back"
+    },
+    {
+      "name": "pr_set_motion_keyframes",
+      "description": "Keyframes on Motion for shot changes inside one clip"
+    },
+    {
+      "name": "pr_add_markers",
+      "description": "Add many sequence markers in one call"
+    },
+    {
+      "name": "pr_list_markers",
+      "description": "List the markers of a sequence (t, end, name, comment, type)."
+    },
+    {
+      "name": "pr_open_sequences",
+      "description": "Open sequences as timeline tabs (by name or sequenceID); the last one, or `activate`, becomes the active sequence"
+    },
+    {
+      "name": "pr_activate_sequence",
+      "description": "Make a sequence the active one (opens its tab) and confirm app.project.activeSequence is it."
+    },
+    {
+      "name": "pr_get_timeline",
+      "description": "Timeline of a named sequence (not only the active one)"
+    },
+    {
+      "name": "pr_get_inout",
+      "description": "Borders for a render after a manual trim"
+    },
+    {
+      "name": "pr_delete_sequence",
+      "description": "Delete a sequence by exact name or sequenceID (app.project.deleteSequence) and confirm it is gone."
+    },
+    {
+      "name": "pr_move_to_bin",
+      "description": "Move a project item (clip by nodeId/path/name, or a sequence by name) into a bin path 'A/B' (created if missing)"
+    },
+    {
+      "name": "pr_list_bin",
+      "description": "List a bin (path 'A/B' from the root; empty = root)"
+    },
+    {
+      "name": "pr_save_project",
+      "description": "Save the open project (app.project.save())."
+    },
+    {
+      "name": "pr_build_sequences",
+      "description": "Many sequences from one spec, no dialogs"
+    },
+    {
+      "name": "pr_journal_snapshot",
+      "description": "The editor's journal"
+    },
+    {
+      "name": "pr_journal_report",
+      "description": "The hand behind the edit, from the journal"
+    }
   ],
   "compatibility": {
-    "platforms": ["darwin", "win32"],
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
     "runtimes": {
       "node": ">=18.0.0"
     }

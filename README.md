@@ -248,8 +248,31 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_get_timeline` / `pr_get_inout` | Any sequence's clips with borders in seconds; the render range after a manual trim |
 | `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project` | Project housekeeping |
 | `pr_build_sequences` | Many sequences from one spec: import, create, motion, keyframes, markers, open |
+| `pr_journal_snapshot` / `pr_journal_report` | The editor's journal (0.7): snapshots of every sequence, diffs as editing decisions, the hand report |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
+
+### New in 0.7: the editor's journal
+
+The bridge used to see only what Claude sent through it. The editor's own
+hand - where he cuts, how many frames he takes off a head, how far an audio
+edit leads the picture - was never recorded. Now it is, as structure only
+(timecodes, clip names, media paths; no frames, no sound):
+
+- `pk.js journal watch` snapshots every sequence while Premiere runs (and
+  once more on each save); `pk.js journal import <Auto-Save folder>` reads
+  the same thing out of Premiere's autosaves, so a day of someone else's
+  editing arrives as a zip and needs nothing installed on their side.
+- Two snapshots diff into decisions: `trim_head`, `trim_tail`, `move`,
+  `slip`, `split` (a razor), `speed`, `added`, `removed`, `move_track`.
+- `pk.js journal report --md` / `pr_journal_report`: decisions by type,
+  trim sizes in frames, razor count, tempo per active hour, and each
+  sequence as it stands (V1 shot-length percentiles, histogram, cuts per
+  minute, J/L cuts, gaps). The numbers feed the measured rules in
+  `skills/film-editing`, the way a director's own cut already did.
+
+Checked on 100 real autosaves of four projects (3811 decisions) and live on
+an open project. Ask the editor first; the journal is their work.
 
 ### New in 0.6: sequences without a single click
 

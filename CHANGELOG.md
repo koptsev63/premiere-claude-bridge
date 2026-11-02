@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0] - 2026-11-02 - the editor's journal
+
+His question (02.11): a talented editor is cutting a project with the bridge
+right now; can we learn from his work? The bridge logged only its own
+commands, never the editor's hand. Now the hand is recorded as structure
+(timecodes, clip names, media paths), never frames or sound, with the
+editor's consent.
+
+### Added - `mcp-server/lib/journal.js`, `lib/prproj.js`, `snapshotJsx`
+
+- `pr_journal_snapshot` / `pk.js journal snapshot|watch`: every sequence,
+  every clip, diffed against the previous snapshot into decisions:
+  `trim_head`, `trim_tail`, `move`, `slip`, `split`, `speed`, `added`,
+  `removed`, `move_track`, marker and sequence changes. Unchanged = not saved.
+- `pk.js journal import <Auto-Save folder>`: the same snapshots out of
+  Premiere 26 project files (object graph documented in `lib/prproj.js`:
+  Sequence → track groups → tracks → track items → subclip → clip with
+  InPoint/OutPoint → media source → Media with the file path). One journal
+  per project, ordered by the time in the file name. Nothing to install on
+  the editor's machine: a zip of the folder is enough.
+- `pr_journal_report` / `pk.js journal report --md`: the hand (trim sizes
+  in frames, moves, razors, tempo per active hour) and each sequence as it
+  stands (shot-length percentiles, histogram, cuts/min, J/L cuts, gaps).
+- Tests: `test/journal.test.js` (every decision type on synthetic cuts,
+  storage dedupe, report), `test/prproj.test.js` (a minimal project in the
+  real shape, plus a real autosave when present). 81 pass.
+
+### Checked
+
+- 100 autosaves of four projects imported: 92 distinct snapshots, 3811
+  decisions; live snapshot on the open podcast project; a real autosave
+  reads the same numbers as the live bridge (inPoint 9.977 s).
+
 ## [0.6.0] - 2026-10-24 - sequences without a single click
 
 Order of the day (his words, 13:58): "допили мост так, чтобы мне не надо было

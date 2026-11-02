@@ -522,3 +522,24 @@ var r = p.save();
 return { saved: true, returned: r, path: p.path, name: p.name };
 `;
 }
+
+// One snapshot of every sequence in the project: the editor's journal
+// reads these over time and diffs them. Compact rows, seconds, media paths.
+export function snapshotJsx({ onlyOpen } = {}) {
+  return `${LIB}
+var p = app.project;
+if (!p) return { error: "No project open" };
+var list = p.sequences, seqs = [];
+var act = p.activeSequence;
+for (var i = 0; i < list.numSequences; i++) {
+  var s = list[i];
+  var info = __seqInfo(s);
+  info.active = !!(act && act.sequenceID === s.sequenceID);
+  info.video = __tracks(s.videoTracks, "video");
+  info.audio = __tracks(s.audioTracks, "audio");
+  try { var ip = s.getInPointAsTime().seconds, op = s.getOutPointAsTime().seconds; if (ip >= 0 && op > 0) { info.inPoint = ip; info.outPoint = op; } } catch (e) {}
+  seqs.push(info);
+}
+return { project: p.name, projectPath: p.path, sequences: seqs, activeSequence: act ? act.name : null };
+`;
+}

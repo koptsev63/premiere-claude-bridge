@@ -41,6 +41,10 @@
  *   delete-seq N | move --item REF --bin B | ls [--bin B] [-r]
  *   build --spec spec.json           many sequences from one spec (see lib/ops.js build)
  *   save
+ *   journal snapshot [--dir D] [--note ..]      the editor's journal: one snapshot of every sequence now
+ *   journal watch [--every 120] [--minutes N]   keep snapshotting while Premiere runs (+ one per save)
+ *   journal import <folder|file.prproj ...>     read Premiere Auto-Save files into the journal
+ *   journal diff | ls | report [--md]           decisions between snapshots; the hand report
  * Sequences are named by exact name or sequenceID; items by nodeId, absolute path or name.
  * Bins are paths from the root ("A/B"), created when missing.
  *
@@ -267,12 +271,23 @@ export async function typed(cmd, argv) {
     case "ls": return ops.listBin(run, { bin: opts.bin, recursive: !!opts.recursive });
     case "build": return ops.build(run, json(opts.spec ? (opts.spec.trim().startsWith("{") ? opts.spec : "@" + opts.spec) : undefined) ?? (() => { throw new Error("build: --spec spec.json"); })(), { log });
     case "save": return ops.saveProject(run);
+    case "journal": {
+      const sub = positional[0], rest = positional.slice(1);
+      const where = { dir: opts.dir, project: opts.project };
+      if (sub === "snapshot") return ops.journalSnapshot(run, { dir: opts.dir, note: opts.note });
+      if (sub === "watch") return ops.journalWatch(run, { dir: opts.dir, everySec: num(opts.every) || 120, maxMinutes: num(opts.minutes) || 0, log });
+      if (sub === "import") return ops.journalImport(rest.map((p) => path.resolve(p)), { dir: opts.dir });
+      if (sub === "diff") return ops.journalDiff({ ...where, a: rest[0], b: rest[1] });
+      if (sub === "ls") return ops.journalList(where);
+      if (sub === "report") { const r = ops.journalReport({ ...where, markdown: !!opts.md }); if (opts.md) { console.log(r.markdown); return { dir: r.dir, printed: true }; } return r; }
+      throw new Error("journal: snapshot | watch | import | diff | ls | report");
+    }
     default: return undefined;
   }
 }
 
 const TYPED = new Set(["ping", "status", "dialog", "probe", "import", "make-seq", "motion", "motion-keys", "markers", "list-markers",
-  "open", "activate", "timeline", "inout", "delete-seq", "move", "ls", "build", "save"]);
+  "open", "activate", "timeline", "inout", "delete-seq", "move", "ls", "build", "save", "journal"]);
 
 export async function main(argv) {
   const [cmd, arg] = argv;

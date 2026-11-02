@@ -251,6 +251,55 @@ reported. The spec is the same JSON `pk.js build --spec` takes:
 
 ---
 
+## The editor's journal (0.7)
+
+`mcp-server/lib/journal.js` (diff, storage, report), `lib/prproj.js`
+(Premiere 26 project reader), `lib/seq.js` `snapshotJsx` (live snapshot).
+Journal folder: `~/.premiere-bridge/journal/<project>/` (`PREMIERE_JOURNAL_DIR`
+overrides the root): `snapshots/<time>-<hash>.json`, `events.jsonl`,
+`latest.json`. A snapshot whose content equals the previous one is not
+saved, so polling is cheap.
+
+### `pr_journal_snapshot`
+`{dir?, note?}`: one snapshot of every sequence now (tracks, clips with
+`start/end/inPoint/outPoint`, media path, markers count, sequence in/out),
+diffed against the previous snapshot; the decisions are appended to
+`events.jsonl`. Returns `saved`, `events`, and the diff summary.
+
+### `pr_journal_report`
+`{dir? | project?, markdown?}`: no Premiere needed. `hand`: decisions by
+type, head/tail trims (count, how many shortened, frames p10/median/p90),
+moves, razor splits, removed/added shot lengths, video vs audio edits,
+active minutes and decisions per active hour (gaps over 30 min do not
+count). `shapes`: every sequence as it stands - V1 shots, shot-length
+percentiles in seconds and frames, histogram (<1s, 1-2s, 2-4s, 4-8s, >8s),
+cuts per minute, gaps on V1, J/L cuts (audio boundary 2 frames or more
+away from the nearest picture cut, J = leads, L = trails), tracks used.
+
+### `pk.js journal ...`
+```bash
+node mcp-server/pk.js journal snapshot [--dir D] [--note "..."]
+node mcp-server/pk.js journal watch --every 120 [--minutes 480]   # until Ctrl-C
+node mcp-server/pk.js journal import "~/Documents/Adobe/Premiere Pro/26.0/Adobe Premiere Pro Auto-Save"
+node mcp-server/pk.js journal diff [A.json B.json] --project "подкаст.prproj"
+node mcp-server/pk.js journal ls --project "подкаст.prproj"
+node mcp-server/pk.js journal report --project "подкаст.prproj" --md
+```
+`import` groups files by project (an Auto-Save folder holds every project
+ever opened) and orders them by the time in the file name.
+
+### How a decision is recognised
+Clips of the same source are matched by source overlap (`inPoint..outPoint`),
+then compared with half a frame of tolerance: start and in point moving
+together = `trim_head` (`frames` > 0 shortened), end and out point together
+= `trim_tail`, start and end together with the source untouched = `move`,
+source window moving under a fixed timeline slot = `slip`, one clip matched
+by two contiguous parts = `split` with `cutsAt`, a changed source/timeline
+duration ratio = `speed`. Keyframes, effects and transitions are not in
+the snapshot yet.
+
+---
+
 ## Escape hatch
 
 ### `pr_eval_jsx`

@@ -194,6 +194,7 @@ When Vladimir uses Russian terms, map to Murch concepts:
 | `pr_set_motion` / `pr_set_motion_keyframes` | Scale/Position in pixels; `hold: true` between shots (interpolation 4; 5 is Bezier and slides). Keys live in media time (inPoint + t), the tool converts; verify with a frame export, `getValueAtTime` cannot tell |
 | `pr_add_markers` / `pr_get_inout` | Markers in bulk; the clip borders after the editor's manual trim, for a render from his borders |
 | `pr_dialog_check` | A tool timed out? Ask this before touching the keyboard: it names the modal window and the button |
+| `pr_journal_snapshot` / `pr_journal_report`, `pk.js journal` (0.7) | The editor's journal: his decisions (trims in frames, razors, moves, J/L cuts, tempo) from live snapshots or his Auto-Save folder. With his consent; structure only. Feed the numbers into §III rules |
 
 ---
 

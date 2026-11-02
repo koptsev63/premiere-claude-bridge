@@ -19,7 +19,7 @@ import {
 import * as ops from "./lib/ops.js";
 import http from "node:http";
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);
@@ -609,6 +609,22 @@ tool(
     if (!r.ok) throw Object.assign(new Error("build finished with errors"), { data: r });
     return r;
   })
+);
+
+// ---- the editor's journal (0.7) ---------------------------------------------
+
+tool(
+  "pr_journal_snapshot",
+  "The editor's journal: take one snapshot of every sequence (tracks, clips with start/end/in/out, media paths; structure only, no frames) and diff it against the previous snapshot into editing decisions (trim_head, trim_tail, move, slip, split, speed, added, removed). Stored under ~/.premiere-bridge/journal/<project>/. Unchanged project = nothing saved. Use pk.js `journal watch` for a continuous log, `journal import` for Premiere's Auto-Save folder.",
+  { dir: z.string().optional().describe("Journal folder (default: ~/.premiere-bridge/journal/<project>)"), note: z.string().optional() },
+  async (a) => withDialogHint(() => ops.journalSnapshot(runJsx, a))
+);
+
+tool(
+  "pr_journal_report",
+  "The hand behind the edit, from the journal: decisions by type, trim sizes in frames, moves, razor splits, tempo per active hour; and every sequence as it stands (V1 shot lengths, histogram, cuts per minute, J/L cuts, gaps). No Premiere needed.",
+  { dir: z.string().optional(), project: z.string().optional().describe("Project name as in Premiere, e.g. 'подкаст.prproj'"), markdown: z.boolean().optional() },
+  async (a) => { try { return ok(ops.journalReport(a)); } catch (e) { return err(e.data || { error: e.message }); } }
 );
 
 // ---- start ----------------------------------------------------------------

@@ -253,3 +253,99 @@ export async function build(run, spec, { log } = {}) {
 }
 
 export { MIN_FREE_BYTES, rememberBaseline };
+
+// ---- the editor's journal (0.7) ---------------------------------------------
+// Snapshots of every sequence, diffs as editing decisions, a report of the
+// hand. Live through the bridge, or from Premiere's Auto-Save folder.
+
+import * as JR from "./journal.js";
+import { snapshotFromProject } from "./prproj.js";
+import { readdirSync, statSync } from "node:fs";
+import { join as pjoin, extname as pext } from "node:path";
+
+export async function journalSnapshot(run, { dir, note, source = "live" } = {}) {
+  const snap = must(await run(J.snapshotJsx({}), { timeoutMs: IMPORT_TIMEOUT_MS }), "journal snapshot");
+  snap.t = new Date().toISOString();
+  snap.source = source;
+  if (note) snap.note = note;
+  const d = dir || JR.journalDir(snap.project);
+  const r = JR.record(d, snap, { source });
+  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(r.diff) : null };
+}
+
+function summarizeDiff(diff) {
+  return { from: diff.from, to: diff.to, count: diff.count, sequences: diff.sequences.map((s) => ({ sequence: s.sequence, events: s.events.map((e) => ({ type: e.type, kind: e.kind, name: e.name, start: e.start, frames: e.frames, parts: e.parts })) })) };
+}
+
+// Import .prproj files (or a folder of autosaves) in time order.
+export function journalImport(paths, { dir } = {}) {
+  const files = [];
+  for (const p of paths) {
+    const st = statSync(p);
+    if (st.isDirectory()) for (const f of readdirSync(p)) { if (pext(f).toLowerCase() === ".prproj") files.push(pjoin(p, f)); }
+    else files.push(p);
+  }
+  const snaps = files.map((f) => ({ f, snap: snapshotFromProject(f, { mtime: statSync(f).mtime }) })).sort((a, b) => a.snap.t.localeCompare(b.snap.t));
+  if (!snaps.length) throw new BridgeError("journal import: no .prproj files found");
+  // One journal per project: an Auto-Save folder holds every project ever opened.
+  const done = [], dirs = {};
+  let events = 0;
+  for (const { f, snap } of snaps) {
+    const d = dir || JR.journalDir(snap.project);
+    dirs[snap.project] = d;
+    const r = JR.record(d, snap, { source: snap.source, file: f });
+    events += r.events;
+    done.push({ project: snap.project, file: f, t: snap.t, saved: r.saved, events: r.events, sequences: snap.sequences.length });
+  }
+  return { dirs, files: files.length, snapshotsSaved: done.filter((x) => x.saved).length, events, done };
+}
+
+export function journalReport({ dir, project, markdown } = {}) {
+  const d = dir || (project ? JR.journalDir(project) : null);
+  if (!d) throw new BridgeError("journal report: dir or project is required");
+  const r = JR.report(d);
+  return markdown ? { dir: d, markdown: JR.reportMarkdown(r), report: r } : r;
+}
+
+export function journalDiff({ dir, project, a, b } = {}) {
+  const d = dir || (project ? JR.journalDir(project) : null);
+  if (!d) throw new BridgeError("journal diff: dir or project is required");
+  const files = JR.listSnapshots(d);
+  if (files.length < 2 && !(a && b)) throw new BridgeError(`journal diff: fewer than two snapshots in ${d}`);
+  const A = JR.loadSnapshot(a || files[files.length - 2]), B = JR.loadSnapshot(b || files[files.length - 1]);
+  return JR.diffSnapshots(A, B);
+}
+
+export function journalList({ dir, project } = {}) {
+  const d = dir || (project ? JR.journalDir(project) : null);
+  if (!d) throw new BridgeError("journal ls: dir or project is required");
+  return { dir: d, snapshots: JR.listSnapshots(d).map((f) => { const s = JR.loadSnapshot(f); return { file: f, t: s.t, source: s.source, sequences: s.sequences.length }; }), events: JR.readEvents(d).length };
+}
+
+// Poll: a snapshot every `everySec` while Premiere answers, plus one on
+// each save of the project file. Stops on `stop()` or after `maxMinutes`.
+export async function journalWatch(run, { dir, everySec = 120, maxMinutes = 0, onEvent, log } = {}) {
+  const start = Date.now();
+  let lastMtime = null, polls = 0, saved = 0, events = 0, projectPath = null, d = dir;
+  const say = (m) => { if (log) log(m); };
+  while (true) {
+    polls++;
+    try {
+      const r = await journalSnapshot(run, { dir: d, source: "live" });
+      d = r.dir;
+      if (r.saved) { saved++; events += r.events; say(`snapshot ${r.file.split("/").pop()} (+${r.events} decisions)`); if (onEvent) onEvent(r); }
+      const p = must(await run("return app.project ? app.project.path : null;", { timeoutMs: 8000 }), "path");
+      if (typeof p === "string") {
+        projectPath = p;
+        const mt = JR.fileMtime(p);
+        if (mt && lastMtime && mt > lastMtime) { say(`project saved at ${mt.toISOString()}`); const rs = await journalSnapshot(run, { dir: d, source: "on-save" }); if (rs.saved) { saved++; events += rs.events; } }
+        lastMtime = mt;
+      }
+    } catch (e) {
+      say(`premiere not answering: ${e.message}`);
+    }
+    if (maxMinutes && Date.now() - start > maxMinutes * 60000) break;
+    await new Promise((r) => setTimeout(r, everySec * 1000));
+  }
+  return { dir: d, projectPath, polls, snapshotsSaved: saved, events };
+}

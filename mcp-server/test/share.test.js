@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { gunzipSync } from "node:zlib";
@@ -18,6 +18,12 @@ function fixture() {
   writeFileSync(join(d, "events.jsonl"), ev.map((e) => JSON.stringify(e)).join("\n") + "\n");
   writeFileSync(join(d, "snapshots", "20261102T100000Z-aaaa.json"), JSON.stringify({ t: "2026-11-02T10:00:00.000Z", project: "Client Film.prproj", sequences: [{ name: "Иванов интервью", sequenceID: "abc", fps: 25, width: 1920, height: 1080, end: 10, video: [{ index: 0, clips: [{ name: "Ivanov_take3.MOV", start: 0, end: 4, path: "/Users/denis/a.MOV" }, { name: "b.MOV", start: 4, end: 10 }] }], audio: [] }] }));
   return { home, root };
+}
+
+// Consent given before the fixture's work was done (the fixture is dated 02.11 10:00).
+async function yesBefore(home, opts = {}) {
+  await S.setConsent(true, { home, ...opts });
+  S.updateState((x) => { x.sharingSince = "2026-11-01T00:00:00.000Z"; }, home);
 }
 
 function fakeFetch(log) {
@@ -50,7 +56,7 @@ test("no consent: nothing leaves", async () => {
 test("yes: sends anonymized decisions and shapes once, without names, paths or the salt", async () => {
   const { home, root } = fixture();
   const log = [];
-  await S.setConsent(true, { home, fetchImpl: fakeFetch(log) });
+  await yesBefore(home, { fetchImpl: fakeFetch(log) });
   const r = await S.upload({ home, root, fetchImpl: fakeFetch(log), version: "0.8.0" });
   assert.equal(r.sent, 3); // 2 decisions + 1 sequence shape
   const body = JSON.parse(gunzipSync(log[0].opts.body).toString());
@@ -84,7 +90,7 @@ test("no after yes: asks the receiver to delete, forgets id and salt", async () 
 
 test("a failed send is kept for the next round", async () => {
   const { home, root } = fixture();
-  await S.setConsent(true, { home });
+  await yesBefore(home);
   const r = await S.upload({ home, root, fetchImpl: async () => ({ ok: false, status: 503 }) });
   assert.match(r.error, /503/);
   const log = [];
@@ -108,7 +114,7 @@ test("project folders are remembered for their Auto-Save folders", () => {
 
 test("a no during a send wins: nothing recorded as sent, the receiver is told to delete", async () => {
   const { home, root } = fixture();
-  await S.setConsent(true, { home });
+  await yesBefore(home);
   const id = S.loadState(home).installId;
   const log = [];
   const slowFetch = async (url, opts) => {
@@ -140,4 +146,53 @@ test("autosaves are read a few per round, and stop on a no", async () => {
   await S.setConsent(false, { home, fetchImpl: async () => ({ ok: true, json: async () => ({}) }) });
   const r3 = await S.importNewAutosaves({ home, root });
   assert.equal(r3.files, 0);
+});
+
+// ---- 0.8.2 -----------------------------------------------------------------
+
+test("work from before the yes never goes: old journal and old autosaves stay home", async () => {
+  const { home, root } = fixture(); // journal dated 02.11 10:00, i.e. before "now"
+  const log = [];
+  await S.setConsent(true, { home, fetchImpl: fakeFetch(log) });
+  assert.ok(S.consentStatus(home).since);
+  const r = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r.sent, 0);
+  assert.equal(log.length, 0);
+  // new work after the yes goes
+  const d = join(root, "Client_Film");
+  writeFileSync(join(d, "events.jsonl"), readFileSync(join(d, "events.jsonl"), "utf8") + JSON.stringify({ t: new Date(Date.now() + 1000).toISOString(), sequence: "s", type: "move", kind: "video", frames: 2 }) + "\n");
+  const r2 = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r2.sent, 1);
+  // an autosave written before the yes is not read
+  const proj = mkdtempSync(join(tmpdir(), "proj-old-"));
+  const auto = join(proj, "Adobe Premiere Pro Auto-Save");
+  mkdirSync(auto);
+  const old = join(auto, "film--old.prproj");
+  writeFileSync(old, "not a project");
+  utimesSync(old, new Date("2026-10-01"), new Date("2026-10-01"));
+  S.rememberProject(join(proj, "film.prproj"), home);
+  const a = await S.importNewAutosaves({ home, root });
+  assert.equal(a.files, 0);
+});
+
+test("a project kept out never goes, not even its work from while it was out", async () => {
+  const { home, root } = fixture();
+  const log = [];
+  await yesBefore(home, { fetchImpl: fakeFetch(log) });
+  const x = S.setExcluded("/Users/denis/Clients/Client Film.prproj", true, home);
+  assert.equal(x.project, "Client_Film");
+  assert.ok(S.isExcluded("Client Film", home));
+  assert.deepEqual(S.consentStatus(home).excluded, ["Client_Film"]);
+  assert.equal(S.preview({ home, root }).wouldSend, 0);
+  const r = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r.sent, 0);
+  assert.equal(log.length, 0);
+  S.setExcluded("Client Film.prproj", false, home);
+  const r2 = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r2.sent, 0, "work from while it was out stays home");
+  const d = join(root, "Client_Film");
+  writeFileSync(join(d, "events.jsonl"), readFileSync(join(d, "events.jsonl"), "utf8") + JSON.stringify({ t: new Date(Date.now() + 1000).toISOString(), sequence: "s", type: "move", kind: "video", frames: 2 }) + "\n");
+  const r3 = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r3.sent, 1);
+  assert.throws(() => S.setExcluded("", true, home), /какой проект/);
 });

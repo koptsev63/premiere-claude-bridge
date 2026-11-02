@@ -46,6 +46,7 @@
  *   journal import <folder|file.prproj ...>     read Premiere Auto-Save files into the journal
  *   journal diff | ls | report [--md]           decisions between snapshots; the hand report
  *   share status | on | off | preview | send     help train the assistant (off until the editor says yes)
+ *   share exclude|include [project]             keep a project out of sharing (NDA); default: the open one
  *   update [--check]                             pull the latest bridge (what «обнови мост» does)
  * Sequences are named by exact name or sequenceID; items by nodeId, absolute path or name.
  * Bins are paths from the root ("A/B"), created when missing.
@@ -293,7 +294,12 @@ export async function typed(cmd, argv) {
       if (sub === "preview") return share.preview();
       if (sub === "send") return share.tick({ version: PKG_VERSION });
       if (sub === "status") return share.consentStatus();
-      throw new Error("share: status | on | off | preview | send");
+      if (sub === "exclude" || sub === "include") {
+        const project = argv[1] || (await run("return app.project ? app.project.path : '';", { timeoutMs: 5000 }));
+        if (!project || typeof project !== "string") throw new Error("Назовите проект или откройте его в Premiere");
+        return share.setExcluded(project, sub === "exclude");
+      }
+      throw new Error("share: status | on | off | preview | send | exclude [project] | include [project]");
     }
     case "update":
       return argv.includes("--check") ? upd.updateInfo(PKG_VERSION, { force: true }) : upd.updateBridge(PKG_VERSION);

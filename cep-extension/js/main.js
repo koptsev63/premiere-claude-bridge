@@ -14,6 +14,9 @@
   var shareBox = document.getElementById("share");
   var shareState = document.getElementById("shareState");
   var shareMore = document.getElementById("shareMore");
+  var excludeBox = document.getElementById("exclude");
+  var excludeRow = document.getElementById("excludeRow");
+  var excludeHint = document.getElementById("excludeHint");
   var dataUrl = "https://github.com/koptsev63/premiere-claude-bridge/blob/main/DATA.md";
 
   function showShare(msg) {
@@ -23,6 +26,11 @@
     if (msg.consent === null || msg.consent === undefined) shareState.textContent = "Вы ещё не выбирали. По умолчанию выключено.";
     else if (msg.consent === true) shareState.textContent = "Включено." + (msg.lastUpload ? " Последняя отправка: " + new Date(msg.lastUpload).toLocaleString() : "");
     else shareState.textContent = "Выключено.";
+    var showEx = msg.consent === true && !!msg.project;
+    excludeRow.style.display = showEx ? "flex" : "none";
+    excludeHint.style.display = showEx ? "block" : "none";
+    excludeBox.checked = !!msg.projectExcluded;
+    if (showEx && msg.projectExcluded) shareState.textContent += " Этот проект не отправляется.";
   }
 
   var ws = null;
@@ -134,6 +142,11 @@
   shareBox.addEventListener("change", function () {
     try { ws.send(JSON.stringify({ type: "share-set", consent: shareBox.checked })); log("share: " + shareBox.checked); }
     catch (e) { log("share: not connected"); shareBox.checked = !shareBox.checked; }
+  });
+
+  excludeBox.addEventListener("change", function () {
+    try { ws.send(JSON.stringify({ type: "share-exclude", exclude: excludeBox.checked })); log("exclude project: " + excludeBox.checked); }
+    catch (e) { log("exclude: not connected"); excludeBox.checked = !excludeBox.checked; }
   });
 
   shareMore.addEventListener("click", function () { cs.openURLInDefaultBrowser(dataUrl); });

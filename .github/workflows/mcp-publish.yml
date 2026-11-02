@@ -1,13 +1,16 @@
 name: Publish to MCP Registry
 
-# Tag trigger removed in October 2026: the registry now takes an MCPB bundle
-# whose sha256 must be patched into server.json, which this job does not do.
-# Publish by hand (see mcpb/build.sh) until the job is rewritten.
+# Runs when a release is published (or by hand for an existing release).
+# Takes the .mcpb attached to the release, writes its sha256 into server.json
+# (scripts/server-json.mjs) and publishes the card. Login is GitHub OIDC:
+# no token or password is stored anywhere.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 0.2.0)"
+        description: "Released version to publish (e.g. 0.8.2)"
         required: true
 
 jobs:
@@ -23,35 +26,35 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            VER="${GITHUB_REF#refs/tags/v}"
-            echo "version=$VER" >> "$GITHUB_OUTPUT"
-          fi
+          VER="${{ inputs.version }}"
+          if [ -z "$VER" ]; then VER="${{ github.event.release.tag_name }}"; VER="${VER#v}"; fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
 
-      - name: Sync server.json version with tag
+      - name: Download the release bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VER="${{ steps.ver.outputs.version }}"
-          tmp=$(mktemp)
-          jq --arg v "$VER" '.version = $v | .packages[0].version = $v' server.json > "$tmp"
-          mv "$tmp" server.json
-          echo "--- updated server.json ---"
+          mkdir -p dl
+          gh release download "v$VER" --repo "${{ github.repository }}" --pattern "premiere-claude-bridge-$VER.mcpb" --dir dl
+
+      - name: Write server.json from the bundle
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          node scripts/server-json.mjs "$VER" "dl/premiere-claude-bridge-$VER.mcpb"
           cat server.json
 
       - name: Install mcp-publisher
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher-linux-amd64" -o /usr/local/bin/mcp-publisher
-          chmod +x /usr/local/bin/mcp-publisher
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.7/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
           mcp-publisher --version
+
+      - name: Validate
+        run: mcp-publisher validate
 
       - name: Authenticate (GitHub OIDC)
         run: mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
         run: mcp-publisher publish
-
-      - name: Summary
-        run: |
-          echo "✅ Published premiere-claude-bridge ${{ steps.ver.outputs.version }} to MCP Registry"
-          echo "→ https://registry.modelcontextprotocol.io/"

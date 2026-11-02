@@ -136,3 +136,24 @@ test("a closed session frees the port at once", async () => {
   await sleep(500);
   assert.equal(await holder(port), null);
 });
+
+// 0.8.2: a web page open in the browser must not pose as the panel.
+function tryConnect(port, origin) {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`, origin ? { origin } : {});
+    ws.on("open", () => { ws.close(); resolve("open"); });
+    ws.on("unexpected-response", (_req, res) => resolve(`refused ${res.statusCode}`));
+    ws.on("error", (e) => resolve(`error ${e.message}`));
+  });
+}
+
+test("only the panel (file://) or a local client without Origin may connect", async () => {
+  const port = await freePort();
+  await startBridge(port);
+  await sleep(300);
+  assert.equal(await tryConnect(port, "https://evil.example"), "refused 401");
+  assert.equal(await tryConnect(port, "http://localhost:3000"), "refused 401");
+  assert.equal(await tryConnect(port, "null"), "refused 401");
+  assert.equal(await tryConnect(port, "file://"), "open");
+  assert.equal(await tryConnect(port, null), "open");
+});

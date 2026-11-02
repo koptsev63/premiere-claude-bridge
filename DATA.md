@@ -6,7 +6,8 @@
 
 1. При первой проверке связи Claude один раз задаёт вопрос: «Помочь обучить ассистента монтажу?» Ответы: «Да, помогать» и «Не сейчас». Молчание = нет.
 2. В панели Claude Bridge в Premiere есть галочка «Помогать обучать ассистента». По умолчанию она снята.
-3. Передумали: снимите галочку или скажите Claude «не отправляй мои данные». Всё, что уже было отправлено, удаляется с сервера сразу.
+3. Уходит только работа, сделанная после вашего «да». Всё, что уже лежит на компьютере (старые проекты, их автосохранения, журнал), остаётся здесь.
+4. Передумали: снимите галочку или скажите Claude «не отправляй мои данные». Всё, что уже было отправлено, удаляется с сервера сразу.
 
 ## Что уходит
 
@@ -35,9 +36,13 @@
 - Основание: ваше согласие (статья 6.1.a GDPR). Его можно отозвать так же легко, как дать.
 - Что уже успело войти в обученные правила ассистента, отозвать нельзя. Сами записи удаляются.
 
-## Чужой материал
+## Чужой материал и NDA
 
-Если вы монтируете проект клиента под NDA, не включайте отправку, пока не согласуете с заказчиком. Мост не отправляет ни картинку, ни имена, но решение за вами и за владельцем проекта.
+Любой проект можно исключить: в панели поставьте галочку «Не отправлять этот проект» или скажите Claude «не отправляй этот проект». Из него не уйдёт ничего, ни сейчас, ни потом, даже если вы позже вернёте его обратно: снова пойдёт только новая работа. Что ушло до исключения, остаётся на сервере, пока вы не снимете главную галочку (тогда удаляется всё).
+
+Если вы монтируете проект клиента под NDA, исключите его или не включайте отправку, пока не согласуете с заказчиком. Мост не отправляет ни картинку, ни имена, но решение за вами и за владельцем проекта.
+
+Эта страница и есть политика конфиденциальности моста.
 
 ---
 
@@ -45,6 +50,6 @@
 
 Nothing until you say yes. With your yes, the bridge sends an anonymized outline of your edit: cut points, frames trimmed from heads and tails, moves, splits, speed changes, J/L cuts, shot lengths, cuts per minute, frame size and rate, timestamps and file extensions. It never sends video, audio, captions, or any file, clip, sequence, project or folder name, marker text, your name, email or IP address.
 
-Names become salted hashes; the salt never leaves your computer. You appear as a random install id. Saying no later (panel checkbox, or tell Claude) deletes everything sent under that id at once and drops the id and salt. Preview the next send with `node mcp-server/pk.js share preview`.
+Only work done after your yes is sent; older projects, autosaves and journal entries stay on your machine. Any project can be kept out for good (panel checkbox «Не отправлять этот проект», or tell Claude «don't send this project»); work done while it is out never goes. Names become salted hashes; the salt never leaves your computer. You appear as a random install id. Saying no later (panel checkbox, or tell Claude) deletes everything sent under that id at once and drops the id and salt. Preview the next send with `node mcp-server/pk.js share preview`.
 
-Controller: Vladimir Koptsev, Barcelona, koptsev63@gmail.com. Server in the EU (Hetzner, Helsinki). Kept up to 3 years. Not sold or shared for third-party training. Lawful basis: consent (GDPR art. 6(1)(a)), withdrawable as easily as given. What already shaped trained rules cannot be recalled; the records themselves are deleted.
+Controller: Vladimir Koptsev, Barcelona, koptsev63@gmail.com. Server in the EU (Hetzner, Helsinki). Kept up to 3 years. Not sold or shared for third-party training. Lawful basis: consent (GDPR art. 6(1)(a)), withdrawable as easily as given. What already shaped trained rules cannot be recalled; the records themselves are deleted. This page is the bridge's privacy policy.

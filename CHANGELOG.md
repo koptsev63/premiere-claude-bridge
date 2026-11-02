@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.2] - 2026-11-02 - safety first: the port, what sharing sends, the registry card
+
+From a review of the bridge from five sides (code, competitors, Adobe's
+platform, editors' feedback, distribution), step 1 of the plan.
+
+### Security
+- Any web page open in the browser could connect to the panel port 9876,
+  take the panel's place, read the ExtendScript sent to Premiere and switch
+  journal sharing on. The port now accepts only the panel (Origin `file://`,
+  checked live in Premiere 26) and local clients without an Origin; http(s)
+  pages and sandboxed frames (`null`) get 401.
+
+### Changed
+- Sharing sends only work done after the editor's yes. Before, a yes also
+  sent the journal and every autosave already on the machine, older projects
+  included.
+- Any project can be kept out of sharing for good (NDA): the panel checkbox
+  «Не отправлять этот проект», `pr_share exclude=true`, `pk share exclude`.
+  Work done while it is out never goes, even after it is let back in.
+- DATA.md is now the privacy policy, linked from the bundle manifest and README.
+
+### Fixed
+- The MCP Registry still offered 0.3.0: server.json was edited by hand and
+  pointed at the 0.3.0 bundle. `scripts/server-json.mjs` now writes the card
+  from the release file and its sha256, and the workflow publishes it on
+  every release (GitHub OIDC, no stored token).
+
 ## [0.8.1] - 2026-11-02 - the panel checkbox, checked live
 
 Found by clicking the checkbox in the live panel through the debug port.

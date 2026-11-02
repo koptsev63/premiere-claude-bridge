@@ -21,7 +21,7 @@ import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
 import http from "node:http";
 
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);

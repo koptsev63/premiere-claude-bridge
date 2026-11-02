@@ -105,3 +105,39 @@ test("project folders are remembered for their Auto-Save folders", () => {
   S.rememberProject(join(proj, "film.prproj"), home);
   assert.deepEqual(S.autosaveFolders(S.loadState(home)), [join(proj, "Adobe Premiere Pro Auto-Save")]);
 });
+
+test("a no during a send wins: nothing recorded as sent, the receiver is told to delete", async () => {
+  const { home, root } = fixture();
+  await S.setConsent(true, { home });
+  const id = S.loadState(home).installId;
+  const log = [];
+  const slowFetch = async (url, opts) => {
+    log.push({ url, opts });
+    if (opts.method === "POST") await S.setConsent(false, { home, fetchImpl: async () => ({ ok: true, json: async () => ({ deleted: true }) }) });
+    return { ok: true, status: 200, json: async () => ({ deleted: true }) };
+  };
+  const r = await S.upload({ home, root, fetchImpl: slowFetch });
+  assert.equal(r.withdrawn, true);
+  const st = S.loadState(home);
+  assert.equal(st.consent, false);
+  assert.equal(st.installId, null);
+  assert.ok(log.some((x) => x.opts.method === "DELETE" && x.url.endsWith(id)));
+});
+
+test("autosaves are read a few per round, and stop on a no", async () => {
+  const { home, root } = fixture();
+  await S.setConsent(true, { home });
+  const proj = mkdtempSync(join(tmpdir(), "proj-"));
+  const auto = join(proj, "Adobe Premiere Pro Auto-Save");
+  mkdirSync(auto);
+  for (let i = 0; i < 9; i++) writeFileSync(join(auto, `film--x-2026-11-02_10-0${i}-00.prproj`), "not a project");
+  S.rememberProject(join(proj, "film.prproj"), home);
+  const r1 = await S.importNewAutosaves({ home, root, limit: 6 });
+  assert.equal(r1.files, 6);
+  assert.equal(r1.left, 3);
+  const r2 = await S.importNewAutosaves({ home, root, limit: 6 });
+  assert.equal(r2.files, 3);
+  await S.setConsent(false, { home, fetchImpl: async () => ({ ok: true, json: async () => ({}) }) });
+  const r3 = await S.importNewAutosaves({ home, root });
+  assert.equal(r3.files, 0);
+});

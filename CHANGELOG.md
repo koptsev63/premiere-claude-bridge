@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1] - 2026-11-02 - the panel checkbox, checked live
+
+Found by clicking the checkbox in the live panel through the debug port.
+
+### Fixed
+- Reading Premiere's autosaves ran in one go; on a big project it held the
+  bridge for a long time, so a second click and Claude's commands waited.
+  Now six files per round, yielding between them, stopping on a "no".
+- A "no" given while a send was running could be overwritten by that send.
+  State is now re-read before every write, the "no" is written first, and
+  whatever reached the receiver during the send is deleted.
+
 ## [0.8.0] - 2026-11-02 - updates in one sentence, sharing by consent
 
 His words (02.11): editors are not coders, "how to update with git pull is

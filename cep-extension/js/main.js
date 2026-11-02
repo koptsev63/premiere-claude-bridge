@@ -22,11 +22,15 @@
   function showShare(msg) {
     if (msg.dataUrl) dataUrl = msg.dataUrl;
     shareBox.disabled = false;
-    shareBox.checked = msg.consent === true;
-    if (msg.consent === null || msg.consent === undefined) shareState.textContent = "Вы ещё не выбирали. По умолчанию выключено.";
-    else if (msg.consent === true) shareState.textContent = "Включено." + (msg.lastUpload ? " Последняя отправка: " + new Date(msg.lastUpload).toLocaleString() : "");
-    else shareState.textContent = "Выключено.";
-    var showEx = msg.consent === true && !!msg.project;
+    // 0.8.3 sends "on" (on by default); an older bridge sends only "consent"
+    var on = msg.on === undefined ? msg.consent === true : !!msg.on;
+    var last = msg.lastUpload ? " Последняя отправка: " + new Date(msg.lastUpload).toLocaleString() : "";
+    shareBox.checked = on;
+    if (on && msg.byDefault) shareState.textContent = "Включено по умолчанию. Не хотите отправлять - снимите галочку." + last;
+    else if (on) shareState.textContent = "Включено." + last;
+    else if (msg.consent === false) shareState.textContent = "Выключено.";
+    else shareState.textContent = "Вы ещё не выбирали.";
+    var showEx = on && !!msg.project;
     excludeRow.style.display = showEx ? "flex" : "none";
     excludeHint.style.display = showEx ? "block" : "none";
     excludeBox.checked = !!msg.projectExcluded;

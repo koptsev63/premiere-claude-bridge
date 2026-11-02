@@ -44,13 +44,15 @@ test("anonymize: numbers and decision types stay, names hashed, paths and commen
   assert.notEqual(S.anonymize("x", "salt1"), S.anonymize("x", "salt2"));
 });
 
-test("no consent: nothing leaves", async () => {
+test("an explicit no: nothing leaves, ever", async () => {
   const { home, root } = fixture();
   const log = [];
+  await S.setConsent(false, { home, fetchImpl: fakeFetch(log) });
   const r = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
   assert.equal(r.sent, 0);
   assert.equal(log.length, 0);
-  assert.equal(S.consentStatus(home).consent, null);
+  assert.equal(S.consentStatus(home).on, false);
+  assert.equal(S.loadState(home).installId ?? null, null);
 });
 
 test("yes: sends anonymized decisions and shapes once, without names, paths or the salt", async () => {
@@ -97,8 +99,9 @@ test("a failed send is kept for the next round", async () => {
   assert.equal((await S.upload({ home, root, fetchImpl: fakeFetch(log) })).sent, 3);
 });
 
-test("preview shows what would go, sends nothing", () => {
+test("preview shows what would go, sends nothing", async () => {
   const { home, root } = fixture();
+  await yesBefore(home);
   const p = S.preview({ home, root });
   assert.equal(p.wouldSend, 3);
   assert.ok(!JSON.stringify(p.sample).includes("Ivanov"));
@@ -195,4 +198,60 @@ test("a project kept out never goes, not even its work from while it was out", a
   const r3 = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
   assert.equal(r3.sent, 1);
   assert.throws(() => S.setExcluded("", true, home), /какой проект/);
+});
+
+// ---- 0.8.3: on by default ---------------------------------------------------
+
+test("never chose = on by default from the first run: old work stays home, new work goes", async () => {
+  const { home, root } = fixture(); // journal dated before the first run
+  const log = [];
+  const st0 = S.consentStatus(home);
+  assert.equal(st0.on, true);
+  assert.equal(st0.byDefault, true);
+  assert.equal(S.preview({ home, root }).wouldSend, 0, "preview is honest: the old journal would not go");
+  const r = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r.sent, 0);
+  assert.equal(log.length, 0);
+  const st = S.loadState(home);
+  assert.ok(st.installId && st.salt && st.sharingSince);
+  assert.equal(st.consent ?? null, null, "still not an explicit choice");
+  assert.equal(st.consentVia, "default");
+  const d = join(root, "Client_Film");
+  writeFileSync(join(d, "events.jsonl"), readFileSync(join(d, "events.jsonl"), "utf8") + JSON.stringify({ t: new Date(Date.now() + 1000).toISOString(), sequence: "s", type: "move", kind: "video", frames: 2 }) + "\n");
+  const r2 = await S.upload({ home, root, fetchImpl: fakeFetch(log) });
+  assert.equal(r2.sent, 1);
+});
+
+test("unticking a default-on bridge deletes what was sent and stays off", async () => {
+  const { home, root } = fixture();
+  const log = [];
+  S.ensureStarted(home);
+  const id = S.loadState(home).installId;
+  const r = await S.setConsent(false, { home, fetchImpl: fakeFetch(log) });
+  assert.equal(log[log.length - 1].opts.method, "DELETE");
+  assert.ok(log[log.length - 1].url.endsWith(id));
+  assert.equal(r.status.on, false);
+  S.ensureStarted(home);
+  assert.equal(S.loadState(home).installId, null, "a no is never undone by the default");
+  assert.equal((await S.tick({ home, root, fetchImpl: fakeFetch(log) })).skipped, true);
+});
+
+test("a no given in 0.8.1/0.8.2 stays a no after the update; a yes stays a yes", async () => {
+  const noHome = mkdtempSync(join(tmpdir(), "share-no-"));
+  writeFileSync(join(noHome, "share.json"), JSON.stringify({ consent: false, consentAt: "2026-11-02T12:00:00.000Z", consentVia: "panel", sent: {} }));
+  assert.equal(S.consentStatus(noHome).on, false);
+  assert.equal(S.ensureStarted(noHome).installId, undefined);
+  const yesHome = mkdtempSync(join(tmpdir(), "share-yes-"));
+  writeFileSync(join(yesHome, "share.json"), JSON.stringify({ consent: true, installId: "old-id", salt: "old-salt", sharingSince: "2026-11-02T12:00:00.000Z", sent: {} }));
+  const y = S.ensureStarted(yesHome);
+  assert.equal(y.installId, "old-id");
+  assert.equal(y.sharingSince, "2026-11-02T12:00:00.000Z");
+  assert.equal(S.consentStatus(yesHome).byDefault, false);
+});
+
+test("the notice is remembered once given", () => {
+  const home = mkdtempSync(join(tmpdir(), "share-notice-"));
+  assert.equal(S.consentStatus(home).noticeGiven, null);
+  S.markNoticeGiven(home);
+  assert.ok(S.consentStatus(home).noticeGiven);
 });

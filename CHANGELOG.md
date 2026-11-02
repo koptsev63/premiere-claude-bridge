@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.3] - 2026-11-02 - helping train the assistant is on by default
+
+The owner's decision: «чтобы по умолчанию галочка стояла включённой. Чтобы её
+можно было выключить».
+
+### Changed
+- Journal sharing is on by default. An editor who never chose starts sharing
+  from the first run of 0.8.3; only work from that moment goes, never the
+  journal or autosaves already on the machine (the 0.8.2 rule).
+- An explicit no from 0.8.1 or 0.8.2 stays a no. A no is kept for good and
+  survives updates; unticking deletes everything sent, as before.
+- Claude tells the editor once that sharing is on and how to turn it off
+  (pr_status `share.tellEditor`); the panel says «Включено по умолчанию».
+- Lawful basis in DATA.md moves from consent (a pre-ticked box is not
+  consent under GDPR) to legitimate interest with the right to object at any
+  time (art. 6(1)(f), art. 21). Terms version 2.
+- Unticking always asks the receiver to delete when an anonymous id exists,
+  also for a bridge that was on by default (before, only after an explicit yes).
+
 ## [0.8.2] - 2026-11-02 - safety first: the port, what sharing sends, the registry card
 
 From a review of the bridge from five sides (code, competitors, Adobe's

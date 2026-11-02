@@ -3,7 +3,7 @@
   "name": "io.github.koptsev63/premiere-claude-bridge",
   "title": "Premiere Claude Bridge",
   "description": "Assistant editor for Premiere Pro and DaVinci Resolve: logs, transcribes, rough cuts, subtitles, QC",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "repository": {
     "url": "https://github.com/koptsev63/premiere-claude-bridge",
     "source": "github"
@@ -12,9 +12,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/koptsev63/premiere-claude-bridge/releases/download/v0.8.2/premiere-claude-bridge-0.8.2.mcpb",
-      "version": "0.8.2",
-      "fileSha256": "586e390a5407d5e2910772a209ba2c5a28a8c086e779995e1859bd749f5d32fd",
+      "identifier": "https://github.com/koptsev63/premiere-claude-bridge/releases/download/v0.8.3/premiere-claude-bridge-0.8.3.mcpb",
+      "version": "0.8.3",
+      "fileSha256": "b77be14e0e6e15ed2bd978f5d9c00bae775d78a577ccb56ea0930851a2928cee",
       "transport": {
         "type": "stdio"
       },

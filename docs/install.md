@@ -40,6 +40,9 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cd ../../..
 
+# 4b. Optional: packages for the dailies-prep / nle-handoff add-ons (0.8.4)
+# skills/film-editing/tools/.venv/bin/pip install numpy av Pillow pyaaf2 pyavb
+
 # 5. Register with Claude Code — edit ~/.claude.json
 # Add the "premiere" MCP server entry (see README Quickstart step 2)
 

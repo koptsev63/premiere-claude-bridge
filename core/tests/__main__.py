@@ -42,6 +42,10 @@ from core.tests import (
     test_variants,
     test_xml_handoff,
     test_xmeml,
+    # dailies prep and NLE handoff add-ons by Denis Nazarov (November 2026)
+    test_prproj_build,
+    test_avb_build,
+    test_avp_build,
 )
 
 MODULES = [
@@ -81,6 +85,10 @@ MODULES = [
     test_shotmatch,
     # .drt pull audit against the editor's cut (October 2026)
     test_drt_audit,
+    # dailies prep and NLE handoff add-ons by Denis Nazarov (November 2026)
+    test_prproj_build,
+    test_avb_build,
+    test_avp_build,
 ]
 
 

@@ -432,6 +432,15 @@ Lets Claude actually watch a clip. Extracts 30-100 frames + transcript via three
 
 See [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md) for credit and [`skills/film-editing/SKILL.md` §XIV](skills/film-editing/SKILL.md) for integrated workflow.
 
+### `dailies-prep/` and `nle-handoff/` *(add-ons by Denis Nazarov, 0.8.4)*
+
+The day's footage gets ready for the cut, and a Resolve cut travels on to Premiere and Avid:
+- **dailies-prep**: takes matched by timecode and MXF headers, recorder sound aligned to the camera by correlation with a confidence per link (`core/dailies_sync.py`), every timeline clip gets its own sound back inside Resolve (`core/adapters/resolve_restore_sound.py`), frame checks in steps from cheap to dense (`core/framecheck.py`).
+- **nle-handoff**: a `.prproj` built from the open Resolve project on top of a real Premiere project as a template (`core/prproj_build.py`, format notes in [`docs/prproj-format.md`](docs/prproj-format.md)), an Avid bin with masters, sync and group clips (`core/avb_build.py`), a separate `.avp` (`core/avp_build.py`), AAF and XML checked before sending (`core/handoff_check.py`).
+- The skills are installed only after their plain-words `ABOUT.md` has been shown: `python -m core.addons_install list`, then `describe <skill>`, then `install <skill> --yes`.
+
+Honest limits: the Premiere project, the Avid bin and the `.avp` have not been opened in the target applications yet, and projects saved by Premiere Pro 26 are not read as templates. The author's guide: [`docs/addons.md`](docs/addons.md) (Russian).
+
 
 ## Architecture
 

@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.8.4] - 2026-11-05 - dailies prep and NLE handoff add-ons
+
+A set of add-ons by Denis Nazarov, editor of DUALITY and Wild Brigade: the
+day's footage gets ready for the cut, and a Resolve cut travels to Premiere
+and Avid. Nothing in the bridge is replaced; the set only adds files.
+
+### Added
+- `core/dailies_sync.py`: takes matched by timecode and MXF headers, recorder
+  sound aligned to the camera by correlation, a confidence report per link
+  (`scan` -> `meta.json`, `sync` -> `takes.json`).
+- `core/adapters/resolve_restore_sound.py`: every clip of a Resolve timeline
+  gets the sound of its own take back, one recorder channel per track; camera
+  sound kept, muted or left out. Runs inside Resolve.
+- `core/framecheck.py`: frame checks in steps, cheap first (numbers, overview,
+  edges), dense sheets around cuts only for a seamless cut.
+- `core/prproj_build.py` + `core/adapters/resolve_spec.py` +
+  `core/adapters/resolve_prproj_job.py`: a `.prproj` built from the open
+  Resolve project on top of a real Premiere project used as a template;
+  `docs/prproj-format.md` describes the format.
+- `core/avb_build.py`, `core/avp_build.py`: an Avid bin with masters,
+  sync clips and group clips; a separate `.avp` and `Settings.xml`.
+- `core/handoff_check.py`: AAF and XML checked before sending, tape names
+  written in.
+- Two skills, `skills/dailies-prep/` and `skills/nle-handoff/`, each with an
+  `ABOUT.md` in plain words, and `skills/addons-installer/` +
+  `core/addons_install.py`: the skills are installed only after their
+  description has been shown (`list` -> `describe` -> `install --yes`).
+- Tests `core/tests/test_prproj_build.py`, `test_avb_build.py`,
+  `test_avp_build.py` are part of `python -m core.tests`; the parts that
+  need a template or `pyavb` skip without them.
+- `docs/addons.md`: the author's own guide to the set (Russian).
+
+### Known limits (from the author, checked here on 05.11)
+- The Premiere project, the Avid bin and the `.avp` were not opened in the
+  target applications yet; structure and references are verified, the first
+  run at an editor's desk is the real test.
+- `prproj_build` on two projects saved by Premiere Pro 26 (2026) stops
+  before writing: `LookupError: template lacks a plain video/audio item or a
+  Motion clip` on one, `KeyError: <project.icon.view.grid.order> not found`
+  on the other. The template has to be a project saved by the oldest
+  Premiere the result must open in; 2026 projects are not read yet.
+- Premiere does not receive Resolve grades and effects, volume keyframes and
+  fades, transitions, markers, opacity, compound clips or titles; the builder
+  reports every one it had to drop.
+- Extra Python packages for the set: `numpy`, `av`, `Pillow`, `pyaaf2`,
+  `pyavb`. Not installed by the installer.
+
 ## [0.8.3] - 2026-11-02 - helping train the assistant is on by default
 
 The owner's decision: «чтобы по умолчанию галочка стояла включённой. Чтобы её

@@ -7,7 +7,9 @@
 [![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](#status)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-![AI assistant editor for Premiere Pro and DaVinci Resolve](docs/img/social-card.png)
+![Real session: one prompt, Claude assembles a vertical reel in Premiere Pro](docs/demo/reel-session.gif)
+
+*Real session, no cuts: one request in Claude, and the bridge imports the clips, builds the vertical sequence, lays the shots on the timeline and adds markers and captions. [Watch the mp4](docs/demo/reel-session.mp4).*
 
 ## Install in one sentence
 
@@ -99,6 +101,10 @@ A contact sheet with a frame every seven seconds cannot see a three-second shot.
 Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour point and bakes the result into LUTs, about 60 times faster than grading every frame in Python. Details in [CHANGELOG](CHANGELOG.md).
 
 ## Demo
+
+[![Real session in Premiere Pro](docs/demo/reel-session-poster.jpg)](docs/demo/reel-session.mp4)
+
+The clip above is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
 
 ```
 You:    "Open Premiere. Import all .MTS from ~/Desktop/Footage/.

@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.8.5] - 2026-11-14 - sharing finds the editor's projects on its own
+
+An editor cut for days with «Помогать обучать ассистента» ticked and nothing
+reached the receiver. The bridge learned a project folder only when Claude
+asked the open Premiere for it, with the panel connected at that moment; work
+done with Claude closed, or in a project Claude never touched, was never read.
+
+### Fixed
+- Projects are found from Premiere's own preferences on disk
+  (`Documents/Adobe/Premiere Pro/<version>/Profile-*/Adobe Premiere Pro Prefs`):
+  the recent projects list and the auto-save location (next to the project,
+  in Documents, a custom folder, or Creative Cloud). No Claude, no panel needed.
+- The saved `.prproj` itself is read as well as the autosaves, so an editor
+  with auto-save off or set elsewhere is still seen. All saves of a project are
+  read oldest first, so every diff runs forward.
+- A diff whose starting point is from before the yes stays home (DATA.md
+  promise: only work after the switch goes).
+- A project that does not read no longer fails silently: `lastImportError`
+  names the file and the reason; a project with media and no sequence yet is
+  not a failure.
+- The panel no longer keeps a stale tick when Claude closes: the checkbox greys
+  out and says nothing is sent right now and the work is caught up later.
+- The bridge reports its real version: `server.js` reads it from
+  `package.json` (0.8.4 still called itself 0.8.3 and kept offering an update).
+- Several Claude sessions run several bridges on one machine: a lock file keeps
+  one autopilot round at a time, so the same work is not sent twice.
+
+### Added
+- `share.doctor()`, `pr_share action=doctor`, `node mcp-server/pk.js share doctor`:
+  in words, whether sharing works here and why not (Premiere found, auto-save
+  on or off, projects found, saved since the switch, last round, last error).
+  `pr_status` adds `share.why` while sharing is on and nothing has gone yet.
+
+### Known limits
+- The autopilot still runs inside the bridge, that is while Claude is open.
+  Work saved with Claude closed is caught up on the next start, as far back as
+  Premiere keeps autosaves (20 versions by default) plus the saved project.
+
 ## [0.8.4] - 2026-11-05 - dailies prep and NLE handoff add-ons
 
 A set of add-ons by Denis Nazarov, editor of DUALITY and Wild Brigade: the

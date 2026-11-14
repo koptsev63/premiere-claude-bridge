@@ -45,7 +45,7 @@
  *   journal watch [--every 120] [--minutes N]   keep snapshotting while Premiere runs (+ one per save)
  *   journal import <folder|file.prproj ...>     read Premiere Auto-Save files into the journal
  *   journal diff | ls | report [--md]           decisions between snapshots; the hand report
- *   share status | on | off | preview | send     help train the assistant (on by default, off on request)
+ *   share status | on | off | preview | send | doctor   help train the assistant (on by default, off on request); doctor = why nothing went
  *   share exclude|include [project]             keep a project out of sharing (NDA); default: the open one
  *   update [--check]                             pull the latest bridge (what «обнови мост» does)
  * Sequences are named by exact name or sequenceID; items by nodeId, absolute path or name.
@@ -294,12 +294,13 @@ export async function typed(cmd, argv) {
       if (sub === "preview") return share.preview();
       if (sub === "send") return share.tick({ version: PKG_VERSION });
       if (sub === "status") return share.consentStatus();
+      if (sub === "doctor") return share.doctor();
       if (sub === "exclude" || sub === "include") {
         const project = argv[1] || (await run("return app.project ? app.project.path : '';", { timeoutMs: 5000 }));
         if (!project || typeof project !== "string") throw new Error("Назовите проект или откройте его в Premiere");
         return share.setExcluded(project, sub === "exclude");
       }
-      throw new Error("share: status | on | off | preview | send | exclude [project] | include [project]");
+      throw new Error("share: status | on | off | preview | send | doctor | exclude [project] | include [project]");
     }
     case "update":
       return argv.includes("--check") ? upd.updateInfo(PKG_VERSION, { force: true }) : upd.updateBridge(PKG_VERSION);

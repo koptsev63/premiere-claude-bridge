@@ -196,7 +196,7 @@ export function diffSnapshots(prev, next) {
 // Flatten a diff into journal rows.
 export function eventRows(diff, meta = {}) {
   const rows = [];
-  for (const s of diff.sequences) for (const e of s.events) rows.push({ t: diff.to, from: diff.from, sequence: s.sequence, sequenceID: s.sequenceID, ...e, ...meta });
+  for (const s of diff.sequences) for (const e of s.events) rows.push({ t: diff.to, from: diff.from, sequence: s.sequence, sequenceID: s.sequenceID, ...e, ...meta, from_t: diff.from }); // from_t: the baseline time, even when an event uses from/to for values
   return rows;
 }
 

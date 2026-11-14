@@ -10,10 +10,14 @@
 4. Если вы выключили отправку в версии 0.8.1 или 0.8.2, она останется выключенной.
 5. Захотите снова: поставьте галочку. Пойдёт только работа с этого момента.
 
+## Где мост ищет вашу работу
+
+На вашем компьютере, не дожидаясь, пока Claude спросит Premiere: в списке недавних проектов из настроек Premiere, в самих сохранённых проектах и в папках автосохранений. Мост работает, пока открыт Claude. Работа, сохранённая при закрытом Claude, уходит при следующем открытии. Список проектов, их пути и названия остаются на компьютере. Наружу уходит только то, что перечислено ниже, в обезличенном виде.
+
 ## Что уходит
 
 - Решения монтажа: где разрез, сколько кадров снято с начала и с конца плана, куда сдвинут клип, где склейка разрезана, где изменена скорость, J- и L-склейки.
-- Форма секвенции: длины планов, сколько склеек в минуту, размер кадра, частота кадров.
+- Форма секвенции в том виде, в каком проект сохранили после включения: длины планов, сколько склеек в минуту, размер кадра, частота кадров.
 - Время решения (дата и час) и расширение файла (mov, mp4), без имени.
 
 ## Что не уходит
@@ -51,6 +55,6 @@
 
 On by default from 0.8.3, off with one click. The bridge sends an anonymized outline of your edit: cut points, frames trimmed from heads and tails, moves, splits, speed changes, J/L cuts, shot lengths, cuts per minute, frame size and rate, timestamps and file extensions. It never sends video, audio, captions, or any file, clip, sequence, project or folder name, marker text, your name, email or IP address.
 
-Only work done after the first run of 0.8.3 (or after you turn it back on) is sent; older projects, autosaves and journal entries stay on your machine. Any project can be kept out for good (panel checkbox «Не отправлять этот проект», or tell Claude «don't send this project»); work done while it is out never goes. Names become salted hashes; the salt never leaves your computer. You appear as a random install id. Claude tells you once that it is on and how to turn it off. Turning it off (panel checkbox, or tell Claude «don't send my journal») stops it for good, survives updates and deletes everything sent under that id at once and drops the id and salt. Preview the next send with `node mcp-server/pk.js share preview`.
+The bridge finds your work on your machine, without waiting for Claude to ask Premiere: Premiere's recent projects list in its preferences, the saved projects and their auto-save folders; that list, its paths and names stay on your machine. It runs while Claude is open; work saved with Claude closed goes on the next start. A sequence's shape is sent as saved after the switch. Only work done after the first run of 0.8.3 (or after you turn it back on) is sent; older projects, autosaves and journal entries stay on your machine. Any project can be kept out for good (panel checkbox «Не отправлять этот проект», or tell Claude «don't send this project»); work done while it is out never goes. Names become salted hashes; the salt never leaves your computer. You appear as a random install id. Claude tells you once that it is on and how to turn it off. Turning it off (panel checkbox, or tell Claude «don't send my journal») stops it for good, survives updates and deletes everything sent under that id at once and drops the id and salt. Preview the next send with `node mcp-server/pk.js share preview`.
 
 Controller: Vladimir Koptsev, Barcelona, koptsev63@gmail.com. Server in the EU (Hetzner, Helsinki). Kept up to 3 years. Not sold or shared for third-party training. Lawful basis: legitimate interest in improving the editing assistant (GDPR art. 6(1)(f)), with anonymized data and the right to object at any time (art. 21) by one click. A no given in 0.8.1 or 0.8.2 stays a no. What already shaped trained rules cannot be recalled; the records themselves are deleted. This page is the bridge's privacy policy.

@@ -22,6 +22,7 @@
   function showShare(msg) {
     if (msg.dataUrl) dataUrl = msg.dataUrl;
     shareBox.disabled = false;
+    excludeBox.disabled = false;
     // 0.8.3 sends "on" (on by default); an older bridge sends only "consent"
     var on = msg.on === undefined ? msg.consent === true : !!msg.on;
     var last = msg.lastUpload ? " Последняя отправка: " + new Date(msg.lastUpload).toLocaleString() : "";
@@ -121,6 +122,10 @@
 
     ws.onclose = function () {
       setStatus("disconnected", "Disconnected — retrying");
+      // 0.8.5: without Claude nobody reads the work right now; say so instead of a stale tick
+      shareBox.disabled = true;
+      excludeBox.disabled = true;
+      if (shareBox.checked) shareState.textContent = "Панель не на связи с Claude. Галочка действует: сохранённая работа уйдёт, когда Claude будет открыт. Изменить галочку можно, когда панель снова подключится.";
       log("WS closed, retry in " + (RECONNECT_DELAY / 1000) + "s");
       reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
     };

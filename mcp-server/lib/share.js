@@ -16,14 +16,22 @@
 // 0.8.2: only work done after the yes is sent (sharingSince), never the
 // journal or autosaves that were there before; and the editor can keep any
 // project out (projects under NDA): «не отправляй этот проект».
+//
+// 0.8.5: the bridge used to learn a project folder only when Claude asked the
+// open Premiere for it, so an editor who cuts with Claude closed sent nothing.
+// Now it also reads Premiere's own list of recent projects and its auto-save
+// setting from the preferences on disk, and reads the saved .prproj files as
+// well as the autosaves. A diff whose starting point is from before the yes
+// stays home. Every round leaves a trace (lastTick, lastImportError), and
+// doctor() says in words why nothing went.
 
 import { randomUUID, createHash } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, openSync, closeSync, unlinkSync, renameSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
 import { homedir } from "node:os";
 import { gzipSync } from "node:zlib";
 import * as JR from "./journal.js";
-import { snapshotFromProject } from "./prproj.js";
+import { snapshotFromProject, readProjectXml } from "./prproj.js";
 
 export const HOME = process.env.PREMIERE_BRIDGE_HOME || join(homedir(), ".premiere-bridge");
 export const ENDPOINT = (process.env.PREMIERE_SHARE_URL || "https://bridge.204-168-219-232.sslip.io").replace(/\/+$/, "");
@@ -43,12 +51,16 @@ export function isOn(s) { return !!s && s.consent !== false; }
 // The anonymous id, the salt and the start moment, made on first use.
 export function ensureStarted(home = HOME) {
   let st = loadState(home);
-  if (!isOn(st) || (st.installId && st.salt && (st.sharingSince || st.consent === true))) return st;
+  if (!isOn(st) || (st.installId && st.salt && st.sharingSince)) return st;
   updateState((s) => {
     if (!isOn(s)) return;
     if (!s.installId) s.installId = randomUUID();
     if (!s.salt) s.salt = randomUUID() + randomUUID();
-    if (!s.sharingSince && s.consent !== true) { s.sharingSince = new Date().toISOString(); s.consentVia = s.consentVia || "default"; s.consentVersion = CONSENT_VERSION; }
+    if (!s.sharingSince) {
+      // never chose: on by default from now; a 0.8.1 yes had no start moment: from now too, never back to the beginning
+      s.sharingSince = new Date().toISOString();
+      if (s.consent !== true) { s.consentVia = s.consentVia || "default"; s.consentVersion = CONSENT_VERSION; }
+    }
   }, home);
   return loadState(home);
 }
@@ -62,14 +74,27 @@ export function markNoticeGiven(home = HOME) {
 
 export function statePath(home = HOME) { return join(home, "share.json"); }
 
+const FRESH = () => ({ consent: null, sent: {}, autosaveSeen: {}, projectDirs: [] });
+const pause = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch {} };
+
+// Several bridges share this file. Only a missing file means "never chose"; a
+// file that does not parse is retried, never replaced by the default, or a
+// stored "no" or an exclusion could be lost.
 export function loadState(home = HOME) {
-  try { return JSON.parse(readFileSync(statePath(home), "utf8")); }
-  catch { return { consent: null, sent: {}, autosaveSeen: {}, projectDirs: [] }; }
+  for (let i = 0; ; i++) {
+    let raw;
+    try { raw = readFileSync(statePath(home), "utf8"); }
+    catch (e) { if (e && e.code === "ENOENT") return FRESH(); if (i >= 4) throw e; pause(25); continue; }
+    try { return JSON.parse(raw); }
+    catch (e) { if (i >= 4) throw new Error("share.json не читается: " + e.message); pause(25); }
+  }
 }
 
 export function saveState(s, home = HOME) {
   mkdirSync(home, { recursive: true });
-  writeFileSync(statePath(home), JSON.stringify(s, null, 2));
+  const tmp = statePath(home) + "." + process.pid + "." + randomUUID().slice(0, 8) + ".tmp";
+  writeFileSync(tmp, JSON.stringify(s, null, 2));
+  renameSync(tmp, statePath(home)); // atomic: a reader sees the old file or the new one, never half
   return s;
 }
 
@@ -120,6 +145,8 @@ export async function setConsent(choice, { via = "claude", home = HOME, fetchImp
       s.sent = {};
       s.sentItems = 0;
       delete s.sharingSince;
+      delete s.lastImportError;
+      s.lastError = null;
     }
     s.consentAt = new Date().toISOString();
     s.consentVia = via;
@@ -204,14 +231,15 @@ export function collect(state, { root = JR.JOURNAL_ROOT } = {}) {
   const excluded = new Set(state.excluded || []);
   const items = [], marks = {};
   for (const d of projectDirs(root)) {
-    const key = d.split("/").pop();
+    const key = basename(d); // on Windows a split on "/" kept the whole path and exclusions never matched
     const p = hashWith(salt)(key);
     const done = state.sent?.[key] || { lines: 0, snapshot: null };
     const rows = JR.readEvents(d);
     const snaps = JR.listSnapshots(d);
     const last = snaps[snaps.length - 1];
     if (excluded.has(key)) { marks[key] = { lines: rows.length, snapshot: last || done.snapshot }; continue; } // skipped for good
-    for (const r of rows.slice(done.lines)) if (after(r.t)) items.push({ item: "decision", project: p, ...anonymize(r, salt) });
+    const baseline = (r) => (typeof r.from_t === "string" ? r.from_t : typeof r.from === "string" && ISO.test(r.from) ? r.from : null);
+    for (const r of rows.slice(done.lines)) if (after(r.t) && (!baseline(r) || after(baseline(r)))) items.push({ item: "decision", project: p, ...anonymize(r, salt) });
     let snapshot = done.snapshot;
     if (last && last !== snapshot) {
       try {
@@ -288,7 +316,82 @@ export async function deleteRemote(installId, { fetchImpl = globalThis.fetch } =
 export function rememberProject(projectPath, home = HOME) {
   if (!projectPath || typeof projectPath !== "string") return;
   const dir = dirname(projectPath);
-  updateState((s) => { s.projectDirs = Array.from(new Set([dir, ...(s.projectDirs || [])])).slice(0, 50); }, home);
+  updateState((s) => {
+    s.projectDirs = Array.from(new Set([dir, ...(s.projectDirs || [])])).slice(0, 50);
+    if (/\.prproj$/i.test(projectPath) && !/Auto-Save/i.test(basename(dirname(projectPath)))) s.projectFiles = Array.from(new Set([projectPath, ...(s.projectFiles || [])])).slice(0, 50);
+  }, home);
+}
+
+// ---- Premiere's own preferences: recent projects and where autosaves go ----
+// <Documents>/Adobe/Premiere Pro/<version>/Profile-<user>/Adobe Premiere Pro Prefs
+// is XML with BE.Prefs.MRU.Document.N (recent projects) and the auto-save
+// settings. Read on this machine only; nothing from it leaves as it is.
+
+export const AUTOSAVE_DIR = "Adobe Premiere Pro Auto-Save";
+
+// Where Premiere keeps its preferences: Documents, or OneDrive's Documents on
+// a Windows machine with folder redirection. PREMIERE_PREFS_DIR overrides
+// (tests point it at a temporary folder, never at the real one).
+export function prefsBases() {
+  if (process.env.PREMIERE_PREFS_DIR) return [process.env.PREMIERE_PREFS_DIR];
+  const docs = [join(homedir(), "Documents"), join(homedir(), "OneDrive", "Documents")];
+  if (process.env.OneDrive) docs.push(join(process.env.OneDrive, "Documents"));
+  return Array.from(new Set(docs.map((d) => join(d, "Adobe", "Premiere Pro"))));
+}
+export const prefsBase = () => prefsBases()[0];
+
+const unxml = (v) => v.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+
+export function premierePrefs(bases = prefsBases()) {
+  const out = [];
+  out.errors = [];
+  for (const base of [].concat(bases)) {
+  let versions = [];
+  try { versions = readdirSync(base); } catch (e) { if (e && e.code !== "ENOENT") out.errors.push(`${e.code || "error"}: ${base}`); continue; }
+  for (const ver of versions) {
+    const vdir = join(base, ver);
+    let profiles = [];
+    try { profiles = readdirSync(vdir).filter((n) => n.startsWith("Profile-")); } catch { continue; }
+    for (const prof of profiles) {
+      const file = join(vdir, prof, "Adobe Premiere Pro Prefs");
+      let xml;
+      try { xml = readFileSync(file, "utf8"); } catch { continue; }
+      const val = (k) => { const m = new RegExp("<" + k.replace(/\./g, "\\.") + ">([^<]*)<").exec(xml); return m ? unxml(m[1]) : null; };
+      const mru = [...xml.matchAll(/<BE\.Prefs\.MRU\.Document\.\d+>([^<]+)</g)].map((m) => unxml(m[1]));
+      out.push({
+        version: ver, versionDir: vdir, mru,
+        autoSave: val("BE.Prefs.AutoSave.DoSave") !== "false",
+        autoSaveFolder: val("BE.Prefs.ScratchDisks.FirstAutoSaveFolder"),
+        toCloud: val("BE.Prefs.AutoSave.DoSaveToCloud") === "true",
+      });
+    }
+  }
+  }
+  return out;
+}
+
+const inAutoSave = (f) => /Auto-Save/i.test(basename(dirname(f)));
+const isDir = (d) => { try { return statSync(d).isDirectory(); } catch { return false; } };
+const isFile = (f) => { try { return statSync(f).isFile(); } catch { return false; } };
+
+// Everything the autopilot reads: saved projects and auto-save folders, from
+// what the live bridge saw and from Premiere's preferences.
+export function sources(state, { bases = prefsBases() } = {}) {
+  const prefs = premierePrefs(bases);
+  const projects = new Set((state.projectFiles || []).filter((f) => !inAutoSave(f)));
+  for (const p of prefs) for (const f of p.mru) if (/\.prproj$/i.test(f) && !inAutoSave(f)) projects.add(f);
+  const projectFiles = [...projects].filter(isFile);
+  const folders = new Set(autosaveFolders(state));
+  for (const f of projectFiles) folders.add(join(dirname(f), AUTOSAVE_DIR));
+  for (const p of prefs) {
+    folders.add(join(p.versionDir, AUTOSAVE_DIR)); // "My Documents" location
+    const v = p.autoSaveFolder;
+    if (v && !/^SameAsProject$|^MyDocuments$/i.test(v)) folders.add(/Auto-Save/i.test(basename(v)) ? v : join(v, AUTOSAVE_DIR));
+  }
+  if (prefs.some((p) => p.toCloud)) {
+    try { for (const n of readdirSync(homedir())) if (/^Creative Cloud Files/.test(n)) folders.add(join(homedir(), n, AUTOSAVE_DIR)); } catch {}
+  }
+  return { prefs, prefsErrors: prefs.errors, projectFiles, folders: [...folders].filter(isDir) };
 }
 
 export function autosaveFolders(state) {
@@ -300,35 +403,125 @@ export function autosaveFolders(state) {
 export const AUTOSAVES_PER_TICK = 6;
 const yieldNow = () => new Promise((r) => setImmediate(r));
 
-export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK } = {}) {
+export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK, bases } = {}) {
   const s = ensureStarted(home);
   if (!isOn(s)) return { files: 0, events: 0, left: 0, stopped: true };
-  let files = 0, events = 0, left = 0;
-  for (const folder of autosaveFolders(s)) {
-    const seen = s.autosaveSeen?.[folder] || 0;
-    const since = s.sharingSince ? Date.parse(s.sharingSince) : 0; // autosaves from before the yes are never read for sharing
-    const fresh = readdirSync(folder).filter((f) => f.toLowerCase().endsWith(".prproj")).map((f) => join(folder, f))
-      .map((f) => ({ f, m: statSync(f).mtimeMs })).filter((x) => x.m > seen && x.m >= since).sort((a, b) => a.m - b.m);
-    for (const { f, m } of fresh) {
-      if (files >= limit) { left++; continue; }
-      await yieldNow();
-      if (!isOn(loadState(home))) return { files, events, stopped: true };
-      try {
-        const snap = snapshotFromProject(f, { mtime: new Date(m) });
-        const r = JR.record(JR.journalDir(snap.project, root), snap, { source: snap.source, file: f });
-        files++; events += r.events || 0;
-      } catch { files++; }
-      updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [folder]: Math.max(x.autosaveSeen?.[folder] || 0, m) }; }, home);
+  const since = s.sharingSince ? Date.parse(s.sharingSince) : 0; // nothing saved before the yes is read for sharing
+  const src = sources(s, { bases: bases ?? prefsBases() });
+  const seenOf = (k) => s.autosaveSeen?.[k] || 0;
+  const fresh = [];
+  for (const folder of src.folders) {
+    let names = [];
+    try { names = readdirSync(folder); } catch { continue; }
+    for (const n of names) {
+      if (!n.toLowerCase().endsWith(".prproj")) continue;
+      const f = join(folder, n);
+      let m; try { m = statSync(f).mtimeMs; } catch { continue; }
+      if (m > seenOf(folder) && m >= since) fresh.push({ f, m, key: folder });
     }
   }
-  return { files, events, left };
+  for (const f of src.projectFiles) {
+    let m; try { m = statSync(f).mtimeMs; } catch { continue; }
+    if (m > seenOf(f) && m >= since) fresh.push({ f, m, key: f });
+  }
+  fresh.sort((a, b) => a.m - b.m); // oldest first, so every diff runs forward
+  let files = 0, events = 0, left = 0, failed = 0, lastFail = null;
+  for (const { f, m, key } of fresh) {
+    if (files >= limit) { left++; continue; }
+    await yieldNow();
+    if (!isOn(loadState(home))) return { files, events, stopped: true };
+    try {
+      const snap = snapshotFromProject(f, { mtime: new Date(m) });
+      const seqs = snap.sequences || [];
+      if (seqs.every((q) => !(q.video || []).length && !(q.audio || []).length)) {
+        // nothing on any track: fine for a project with media only, a reading failure if the file has clips on tracks
+        if (/<(Video|Audio)ClipTrackItem\s/.test(readProjectXml(f))) throw new Error("в проекте есть клипы на дорожках, но мост их не прочитал: новый формат Premiere или файл повреждён");
+      }
+      const r = JR.record(JR.journalDir(snap.project, root), snap, { source: snap.source, file: f });
+      events += r.events || 0;
+    } catch (e) { failed++; lastFail = { at: new Date().toISOString(), file: basename(f), error: String(e && e.message || e).slice(0, 300) }; }
+    files++;
+    updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [key]: Math.max(x.autosaveSeen?.[key] || 0, m) }; }, home);
+  }
+  updateState((x) => {
+    x.lastImport = { at: new Date().toISOString(), files, events, failed, left, projects: src.projectFiles.length, folders: src.folders.length };
+    if (lastFail) x.lastImportError = lastFail;
+    else if (files) delete x.lastImportError; // a clean round: the old reason no longer holds
+  }, home);
+  return { files, events, left, failed };
+}
+
+// Every Claude session starts its own bridge, so several autopilots can run on
+// one machine. One round at a time across all of them, or the same work goes
+// twice. A lock older than LOCK_STALE_MS is from a bridge that died mid-round.
+export const LOCK_STALE_MS = 5 * 60 * 1000;
+export function acquireLock(home = HOME) {
+  mkdirSync(home, { recursive: true });
+  const f = join(home, "share.lock");
+  const token = process.pid + ":" + randomUUID();
+  for (let i = 0; i < 2; i++) {
+    try {
+      const fd = openSync(f, "wx"); writeFileSync(fd, token); closeSync(fd);
+      // release only our own lock: a round that outlived the stale limit must not delete the next owner's
+      return () => { try { if (readFileSync(f, "utf8") === token) unlinkSync(f); } catch {} };
+    } catch {
+      try {
+        const age = Date.now() - statSync(f).mtimeMs;
+        if (age > LOCK_STALE_MS || age < -LOCK_STALE_MS) unlinkSync(f); else return null; // stale, or dated in the future by a clock change
+      } catch { return null; }
+    }
+  }
+  return null;
 }
 
 // One round of the autopilot: read new autosaves, send what is new.
 export async function tick({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl, version } = {}) {
   const s = ensureStarted(home);
   if (!isOn(s)) return { skipped: true };
-  const imported = await importNewAutosaves({ home, root });
-  const sent = await upload({ home, root, fetchImpl, version });
-  return { imported, ...sent };
+  const release = acquireLock(home);
+  if (!release) return { busy: true }; // another bridge on this machine is in a round
+  try {
+    const imported = await importNewAutosaves({ home, root });
+    const sent = await upload({ home, root, fetchImpl, version });
+    updateState((x) => { x.lastTick = new Date().toISOString(); }, home);
+    return { imported, ...sent };
+  } finally { release(); }
+}
+
+// In words: is sharing working on this machine, and if not, why.
+// light: for pr_status, without walking the journal; cached a few minutes.
+let doctorCache = null;
+export function doctor({ home = HOME, root = JR.JOURNAL_ROOT, bases, light = false } = {}) {
+  if (light && doctorCache && doctorCache.home === home && Date.now() - doctorCache.at < 5 * 60 * 1000) return doctorCache.value;
+  const s = loadState(home);
+  const src = sources(s, { bases: bases ?? prefsBases() });
+  const on = isOn(s);
+  const since = s.sharingSince ? Date.parse(s.sharingSince) : 0;
+  const recent = src.projectFiles.filter((f) => { try { return statSync(f).mtimeMs >= since; } catch { return false; } });
+  const pending = on && !light ? collect({ ...s, salt: s.salt || "doctor" }, { root }).items.length : null;
+  let lockAge = null;
+  try { lockAge = Math.round((Date.now() - statSync(join(home, "share.lock")).mtimeMs) / 1000); } catch {}
+  const problems = [];
+  if (!on) problems.push("Отправка выключена: редактор снял галочку или сказал «не отправляй».");
+  if (on && src.prefsErrors.length) problems.push(`Нет доступа к настройкам Premiere (${src.prefsErrors.join("; ")}): разрешите Claude доступ к папке Документы.`);
+  else if (on && !src.prefs.length) problems.push("Не нашёл настройки Premiere в папке Документы: не знаю, какие проекты открывались.");
+  if (src.prefs.length && src.prefs.every((p) => !p.autoSave)) problems.push("В Premiere выключено автосохранение: мост увидит только сохранённые вручную версии проекта.");
+  if (on && !src.projectFiles.length && !src.folders.length) problems.push("Не нашёл ни одного проекта Premiere и ни одной папки автосохранений.");
+  if (on && src.projectFiles.length && !recent.length) problems.push("После включения галочки ни один проект не сохранялся.");
+  if (on && !s.lastTick && !s.lastUpload) problems.push("Автопилот ещё ни разу не запускался: он работает, пока открыт Claude с мостом. Откройте Claude хотя бы раз за день, он догонит сохранённое.");
+  if (on && s.lastImport && s.lastImport.left) problems.push(`В очереди ещё ${s.lastImport.left} сохранений: мост читает по ${AUTOSAVES_PER_TICK} за 10 минут, пока открыт Claude.`);
+  if (lockAge != null && lockAge > LOCK_STALE_MS / 1000) problems.push("Висит старая блокировка отправки, следующий круг её снимет.");
+  if (s.lastImportError) problems.push(`Не прочитался проект ${s.lastImportError.file}: ${s.lastImportError.error}`);
+  if (s.lastError) problems.push(`Сервер не принял отправку: ${s.lastError.error}`);
+  if (on && !problems.length && !(s.sentItems > 0)) problems.push("Проекты находятся, но отправлять пока нечего: уйдёт, когда после включения появятся новые сохранения.");
+  const value = {
+    on, since: s.sharingSince || null, installId: on ? s.installId || null : null,
+    premiere: src.prefs.map((p) => ({ version: p.version, autoSave: p.autoSave, autoSaveFolder: p.autoSaveFolder, recentProjects: p.mru.length })),
+    projectsFound: src.projectFiles.length, savedSinceOn: recent.length, autosaveFolders: src.folders.length,
+    lastTick: s.lastTick || null, lastImport: s.lastImport || null, lastUpload: s.lastUpload || null, sentItems: s.sentItems || 0,
+    waitingToSend: pending,
+    verdict: problems.length ? problems : ["Всё в порядке: проекты находятся, отправка идёт."],
+  };
+  if (light) doctorCache = { home, at: Date.now(), value };
+  return value;
 }

@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, extname, basename } from "node:path";
 import { z } from "zod";
 import { PanelPort } from "./lib/port.js";
@@ -21,7 +21,8 @@ import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
 import http from "node:http";
 
-const VERSION = "0.8.3";
+// 0.8.5: read from package.json; a hand-typed number stayed 0.8.3 in the 0.8.4 release
+const VERSION = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
 const CEF_DEBUG_PORT = Number(process.env.PK_PORT || 8088);
 const WS_HOST = "127.0.0.1";
 const WS_PORT = Number(process.env.PREMIERE_BRIDGE_PORT || 9876);
@@ -694,18 +695,19 @@ async function extrasForStatus() {
     share.markNoticeGiven();
   } else {
     out.share = { on: st.on, byDefault: st.byDefault, since: st.since, lastUpload: st.lastUpload, sentItems: st.sentItems, excluded: st.excluded };
+    if (st.on && !st.sentItems) { try { out.share.why = share.doctor({ light: true }).verdict; } catch {} } // on but nothing went yet: say why
   }
   return out;
 }
 
 tool(
   "pr_share",
-  "Sharing the editor's journal to help train the assistant. On by default (only work from the update on), off whenever the editor says so. action=status (default) shows the state and what was sent; consent=false records the EDITOR's own no («не отправляй журнал»): it stops sharing for good and deletes everything already sent; consent=true turns it back on (work from then on). Never decide for them. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot.",
+  "Sharing the editor's journal to help train the assistant. On by default (only work from the update on), off whenever the editor says so. action=status (default) shows the state and what was sent; consent=false records the EDITOR's own no («не отправляй журнал»): it stops sharing for good and deletes everything already sent; consent=true turns it back on (work from then on). Never decide for them. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot. action=doctor says in words whether sharing works on this machine and why not (projects found from Premiere's preferences, autosave setting, last round, last error).",
   {
     consent: z.boolean().optional().describe("The editor's own choice: false = stop and delete what was sent, true = turn back on"),
     exclude: z.boolean().optional().describe("true = never send this project; false = let it back in"),
     project: z.string().optional().describe("Project name or .prproj path for exclude; default: the project open in Premiere"),
-    action: z.enum(["status", "preview", "send"]).optional(),
+    action: z.enum(["status", "preview", "send", "doctor"]).optional(),
   },
   async ({ consent, exclude, project, action }) => {
     if (exclude !== undefined) {
@@ -722,6 +724,7 @@ tool(
       return ok(r);
     }
     if (action === "preview") return ok(share.preview());
+    if (action === "doctor") return ok(share.doctor());
     if (action === "send") return ok(await autopilot(true));
     return ok(share.consentStatus());
   }

@@ -455,9 +455,9 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
 // one machine. One round at a time across all of them, or the same work goes
 // twice. A lock older than LOCK_STALE_MS is from a bridge that died mid-round.
 export const LOCK_STALE_MS = 5 * 60 * 1000;
-export function acquireLock(home = HOME) {
+export function acquireLock(home = HOME, name = "share.lock") {
   mkdirSync(home, { recursive: true });
-  const f = join(home, "share.lock");
+  const f = join(home, name);
   const token = process.pid + ":" + randomUUID();
   for (let i = 0; i < 2; i++) {
     try {

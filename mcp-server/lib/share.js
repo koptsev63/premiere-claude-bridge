@@ -24,6 +24,14 @@
 // well as the autosaves. A diff whose starting point is from before the yes
 // stays home. Every round leaves a trace (lastTick, lastImportError), and
 // doctor() says in words why nothing went.
+//
+// 0.8.7: an editor who cuts in DaVinci Resolve had the box ticked and nothing
+// went: the bridge only knew Premiere. Now it also reads Resolve's own project
+// library (every project is a Project.db file there), the Project backups
+// Resolve writes and any .drp in the backup folder (lib/drp.js), with the same
+// rules: only what was saved after the yes, projects kept out by name, no
+// names or paths leave. doctor() says whether Resolve is found and whether its
+// backups are on.
 
 import { randomUUID, createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, openSync, closeSync, unlinkSync, renameSync } from "node:fs";
@@ -32,6 +40,7 @@ import { homedir } from "node:os";
 import { gzipSync } from "node:zlib";
 import * as JR from "./journal.js";
 import { snapshotFromProject, readProjectXml } from "./prproj.js";
+import * as RS from "./drp.js";
 
 export const HOME = process.env.PREMIERE_BRIDGE_HOME || join(homedir(), ".premiere-bridge");
 export const ENDPOINT = (process.env.PREMIERE_SHARE_URL || "https://bridge.204-168-219-232.sslip.io").replace(/\/+$/, "");
@@ -237,7 +246,7 @@ export function collect(state, { root = JR.JOURNAL_ROOT } = {}) {
     const rows = JR.readEvents(d);
     const snaps = JR.listSnapshots(d);
     const last = snaps[snaps.length - 1];
-    if (excluded.has(key)) { marks[key] = { lines: rows.length, snapshot: last || done.snapshot }; continue; } // skipped for good
+    if (excluded.has(key) || excluded.has(key.replace(RESOLVE_SUFFIX_RE, ""))) { marks[key] = { lines: rows.length, snapshot: last || done.snapshot }; continue; } // skipped for good
     const baseline = (r) => (typeof r.from_t === "string" ? r.from_t : typeof r.from === "string" && ISO.test(r.from) ? r.from : null);
     for (const r of rows.slice(done.lines)) if (after(r.t) && (!baseline(r) || after(baseline(r)))) items.push({ item: "decision", project: p, ...anonymize(r, salt) });
     let snapshot = done.snapshot;
@@ -376,7 +385,7 @@ const isFile = (f) => { try { return statSync(f).isFile(); } catch { return fals
 
 // Everything the autopilot reads: saved projects and auto-save folders, from
 // what the live bridge saw and from Premiere's preferences.
-export function sources(state, { bases = prefsBases() } = {}) {
+export function sources(state, { bases = prefsBases(), resolveDirs = RS.resolvePrefsDirs() } = {}) {
   const prefs = premierePrefs(bases);
   const projects = new Set((state.projectFiles || []).filter((f) => !inAutoSave(f)));
   for (const p of prefs) for (const f of p.mru) if (/\.prproj$/i.test(f) && !inAutoSave(f)) projects.add(f);
@@ -391,8 +400,12 @@ export function sources(state, { bases = prefsBases() } = {}) {
   if (prefs.some((p) => p.toCloud)) {
     try { for (const n of readdirSync(homedir())) if (/^Creative Cloud Files/.test(n)) folders.add(join(homedir(), n, AUTOSAVE_DIR)); } catch {}
   }
-  return { prefs, prefsErrors: prefs.errors, projectFiles, folders: [...folders].filter(isDir) };
+  return { prefs, prefsErrors: prefs.errors, projectFiles, folders: [...folders].filter(isDir), resolve: RS.resolveSources(resolveDirs) };
 }
+
+// A Resolve project's journal lives apart from a Premiere project of the same name.
+export const RESOLVE_SUFFIX = ".resolve";
+const RESOLVE_SUFFIX_RE = /\.resolve$/;
 
 export function autosaveFolders(state) {
   return (state.projectDirs || []).map((d) => join(d, "Adobe Premiere Pro Auto-Save")).filter((d) => existsSync(d));
@@ -403,11 +416,11 @@ export function autosaveFolders(state) {
 export const AUTOSAVES_PER_TICK = 6;
 const yieldNow = () => new Promise((r) => setImmediate(r));
 
-export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK, bases } = {}) {
+export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, limit = AUTOSAVES_PER_TICK, bases, resolveDirs } = {}) {
   const s = ensureStarted(home);
   if (!isOn(s)) return { files: 0, events: 0, left: 0, stopped: true };
   const since = s.sharingSince ? Date.parse(s.sharingSince) : 0; // nothing saved before the yes is read for sharing
-  const src = sources(s, { bases: bases ?? prefsBases() });
+  const src = sources(s, { bases: bases ?? prefsBases(), resolveDirs: resolveDirs ?? RS.resolvePrefsDirs() });
   const seenOf = (k) => s.autosaveSeen?.[k] || 0;
   const fresh = [];
   for (const folder of src.folders) {
@@ -424,12 +437,35 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     let m; try { m = statSync(f).mtimeMs; } catch { continue; }
     if (m > seenOf(f) && m >= since) fresh.push({ f, m, key: f });
   }
+  // Resolve: the live Project.db of every project, then backups and .drp in the backup folder
+  for (const f of [...src.resolve.projects, ...src.resolve.backups]) {
+    if (!/\.drp$/i.test(f) && !src.resolve.canReadDb) continue; // doctor says why
+    let m; try { m = statSync(f).mtimeMs; } catch { continue; }
+    if (m > seenOf(f) && m >= since) fresh.push({ f, m, key: f, resolve: true });
+  }
   fresh.sort((a, b) => a.m - b.m); // oldest first, so every diff runs forward
   let files = 0, events = 0, left = 0, failed = 0, lastFail = null;
-  for (const { f, m, key } of fresh) {
+  for (const { f, m, key, resolve } of fresh) {
     if (files >= limit) { left++; continue; }
     await yieldNow();
     if (!isOn(loadState(home))) return { files, events, stopped: true };
+    if (resolve) {
+      try {
+        const snap = RS.snapshotFromResolve(f, { mtime: new Date(m), scratch: join(home, "tmp"), source: src.resolve.projects.includes(f) ? "resolve-db" : "resolve-backup" });
+        // kept out by name: not even journalled
+        if (!(loadState(home).excluded || []).includes(projectKey(snap.project))) {
+          const r = JR.record(JR.journalDir(snap.project + RESOLVE_SUFFIX, root), snap, { source: snap.source, file: f });
+          events += r.events || 0;
+        }
+      } catch (e) {
+        const why = { at: new Date().toISOString(), file: RS.projectNameFromPath(f), error: String(e && e.message || e).slice(0, 300) };
+        if (e && e.retry) { if (!e.quiet) lastFail = why; left++; continue; } // Resolve was saving, or no disk room: the same file, next round
+        failed++; lastFail = why;
+      }
+      files++;
+      updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [key]: Math.max(x.autosaveSeen?.[key] || 0, m) }; }, home);
+      continue;
+    }
     try {
       const snap = snapshotFromProject(f, { mtime: new Date(m) });
       const seqs = snap.sequences || [];
@@ -444,7 +480,7 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [key]: Math.max(x.autosaveSeen?.[key] || 0, m) }; }, home);
   }
   updateState((x) => {
-    x.lastImport = { at: new Date().toISOString(), files, events, failed, left, projects: src.projectFiles.length, folders: src.folders.length };
+    x.lastImport = { at: new Date().toISOString(), files, events, failed, left, projects: src.projectFiles.length, folders: src.folders.length, resolveProjects: src.resolve.projects.length, resolveBackups: src.resolve.backups.length };
     if (lastFail) x.lastImportError = lastFail;
     else if (files) delete x.lastImportError; // a clean round: the old reason no longer holds
   }, home);
@@ -491,23 +527,30 @@ export async function tick({ home = HOME, root = JR.JOURNAL_ROOT, fetchImpl, ver
 // In words: is sharing working on this machine, and if not, why.
 // light: for pr_status, without walking the journal; cached a few minutes.
 let doctorCache = null;
-export function doctor({ home = HOME, root = JR.JOURNAL_ROOT, bases, light = false } = {}) {
+export function doctor({ home = HOME, root = JR.JOURNAL_ROOT, bases, resolveDirs, light = false } = {}) {
   if (light && doctorCache && doctorCache.home === home && Date.now() - doctorCache.at < 5 * 60 * 1000) return doctorCache.value;
   const s = loadState(home);
-  const src = sources(s, { bases: bases ?? prefsBases() });
+  const src = sources(s, { bases: bases ?? prefsBases(), resolveDirs: resolveDirs ?? RS.resolvePrefsDirs() });
   const on = isOn(s);
   const since = s.sharingSince ? Date.parse(s.sharingSince) : 0;
-  const recent = src.projectFiles.filter((f) => { try { return statSync(f).mtimeMs >= since; } catch { return false; } });
+  const savedSince = (f) => { try { return statSync(f).mtimeMs >= since; } catch { return false; } };
+  const recent = src.projectFiles.filter(savedSince);
+  const rs = src.resolve, resolveFound = rs.configs.length > 0;
+  const rsFiles = [...rs.projects, ...rs.backups], rsRecent = rsFiles.filter(savedSince);
   const pending = on && !light ? collect({ ...s, salt: s.salt || "doctor" }, { root }).items.length : null;
   let lockAge = null;
   try { lockAge = Math.round((Date.now() - statSync(join(home, "share.lock")).mtimeMs) / 1000); } catch {}
   const problems = [];
   if (!on) problems.push("Отправка выключена: редактор снял галочку или сказал «не отправляй».");
   if (on && src.prefsErrors.length) problems.push(`Нет доступа к настройкам Premiere (${src.prefsErrors.join("; ")}): разрешите Claude доступ к папке Документы.`);
-  else if (on && !src.prefs.length) problems.push("Не нашёл настройки Premiere в папке Документы: не знаю, какие проекты открывались.");
+  else if (on && !src.prefs.length && !resolveFound) problems.push("Не нашёл настройки Premiere в папке Документы и настройки DaVinci Resolve: не знаю, какие проекты открывались.");
   if (src.prefs.length && src.prefs.every((p) => !p.autoSave)) problems.push("В Premiere выключено автосохранение: мост увидит только сохранённые вручную версии проекта.");
-  if (on && !src.projectFiles.length && !src.folders.length) problems.push("Не нашёл ни одного проекта Premiere и ни одной папки автосохранений.");
-  if (on && src.projectFiles.length && !recent.length) problems.push("После включения галочки ни один проект не сохранялся.");
+  if (on && rs.errors.length) problems.push(`Нет доступа к настройкам DaVinci Resolve (${rs.errors.join("; ")}): разрешите Claude доступ к этой папке.`);
+  if (on && resolveFound && rs.projects.length && !rs.canReadDb) problems.push(`DaVinci Resolve найден, но эта версия Node (${process.versions.node}) не читает его базу проектов: нужен Node 22.5 или новее. Пока мост видит только .drp в папке бэкапов.`);
+  if (resolveFound && rs.configs.every((c) => !c.liveSave && c.backups === false)) problems.push("В DaVinci Resolve выключены и Live Save, и Project backups: мост увидит работу только после ручного сохранения проекта (Cmd+S / Ctrl+S).");
+  if (on && resolveFound && !rsFiles.length) problems.push("DaVinci Resolve найден, но ни одного его проекта на этом компьютере не нашёл: проекты на сетевой базе (PostgreSQL) мост не читает.");
+  if (on && !src.projectFiles.length && !src.folders.length && !rsFiles.length && (src.prefs.length || !resolveFound)) problems.push("Не нашёл ни одного проекта Premiere или DaVinci Resolve и ни одной папки автосохранений.");
+  if (on && (src.projectFiles.length || rsFiles.length) && !recent.length && !rsRecent.length) problems.push("После включения галочки ни один проект не сохранялся.");
   if (on && !s.lastTick && !s.lastUpload) problems.push("Автопилот ещё ни разу не запускался: он работает, пока открыт Claude с мостом. Откройте Claude хотя бы раз за день, он догонит сохранённое.");
   if (on && s.lastImport && s.lastImport.left) problems.push(`В очереди ещё ${s.lastImport.left} сохранений: мост читает по ${AUTOSAVES_PER_TICK} за 10 минут, пока открыт Claude.`);
   if (lockAge != null && lockAge > LOCK_STALE_MS / 1000) problems.push("Висит старая блокировка отправки, следующий круг её снимет.");
@@ -517,6 +560,8 @@ export function doctor({ home = HOME, root = JR.JOURNAL_ROOT, bases, light = fal
   const value = {
     on, since: s.sharingSince || null, installId: on ? s.installId || null : null,
     premiere: src.prefs.map((p) => ({ version: p.version, autoSave: p.autoSave, autoSaveFolder: p.autoSaveFolder, recentProjects: p.mru.length })),
+    resolve: rs.configs.map((c) => ({ version: c.version, backups: c.backups, backupEveryMinutes: c.backupEvery, liveSave: c.liveSave, backupFolderFound: rs.backupFolders.includes(c.backupLocation), libraries: c.libraries.length })),
+    resolveProjects: rs.projects.length, resolveBackups: rs.backups.length, resolveSavedSinceOn: rsRecent.length, resolveReadable: rs.canReadDb,
     projectsFound: src.projectFiles.length, savedSinceOn: recent.length, autosaveFolders: src.folders.length,
     lastTick: s.lastTick || null, lastImport: s.lastImport || null, lastUpload: s.lastUpload || null, sentItems: s.sentItems || 0,
     waitingToSend: pending,

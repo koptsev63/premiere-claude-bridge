@@ -9,6 +9,8 @@ import * as S from "../lib/share.js";
 // Never the real Premiere preferences: every test points at a temporary folder.
 const NO_PREFS = mkdtempSync(join(tmpdir(), "no-prefs-"));
 process.env.PREMIERE_PREFS_DIR = NO_PREFS;
+// Nor the real DaVinci Resolve: its preferences, library and backups stay out of every test.
+process.env.RESOLVE_PREFS_DIR = NO_PREFS;
 
 function fixture() {
   process.env.PREMIERE_PREFS_DIR = NO_PREFS;

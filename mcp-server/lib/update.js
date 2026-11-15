@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HOME } from "./share.js";
+import { HOME, acquireLock } from "./share.js";
 
 export const REPO = "koptsev63/premiere-claude-bridge";
 export const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
@@ -80,4 +80,65 @@ export async function updateBridge(current, { dir = REPO_DIR, run = sh, fetchImp
       ? ["Закройте Claude Code (или Claude Desktop) и откройте снова, чтобы включилась новая версия", "Панель в Premiere: закройте и снова откройте Окно > Расширения > Claude Bridge"]
       : ["У вас последняя версия"],
   };
+}
+
+// ---- 0.8.6: updates arrive on their own -------------------------------------
+// A git install moves itself to the latest RELEASE tag (never to an unreleased
+// main), only fast-forward, only from the default branch, never over the
+// editor's own edits or commits. The running bridge keeps its code until
+// Claude restarts; pr_status then says a new version is waiting. A bundle
+// (.mcpb) install cannot replace itself: it keeps the "обнови мост" hint.
+// Off: PREMIERE_BRIDGE_AUTO_UPDATE=0, or `pk update auto off` (kept in
+// ~/.premiere-bridge/update-auto.json).
+
+function autoPath(home = HOME) { return join(home, "update-auto.json"); }
+export function autoState(home = HOME) {
+  try { return JSON.parse(readFileSync(autoPath(home), "utf8")); } catch { return { enabled: true }; }
+}
+function saveAuto(s, home = HOME) { try { mkdirSync(home, { recursive: true }); writeFileSync(autoPath(home), JSON.stringify(s, null, 2)); } catch {} return s; }
+export function setAuto(enabled, home = HOME) { return saveAuto({ ...autoState(home), enabled: !!enabled, changedAt: new Date().toISOString() }, home); }
+export function autoEnabled(home = HOME) {
+  if (/^(0|false|off|no)$/i.test(process.env.PREMIERE_BRIDGE_AUTO_UPDATE || "")) return false;
+  return autoState(home).enabled !== false;
+}
+
+// The version on disk: after an update it is ahead of the running one.
+export function diskVersion(dir = REPO_DIR) {
+  try { return JSON.parse(readFileSync(join(dir, "mcp-server", "package.json"), "utf8")).version; } catch { return null; }
+}
+
+export async function autoUpdate(current, { dir = REPO_DIR, run = sh, fetchImpl, home = HOME, force = false } = {}) {
+  const note = (r) => { saveAuto({ ...autoState(home), last: { at: new Date().toISOString(), ...r } }, home); return r; };
+  if (!autoEnabled(home)) return { skipped: "выключено" };
+  if (installKind(dir) !== "git") return { skipped: "bundle" };
+  const info = await updateInfo(current, { fetchImpl, force });
+  if (!info.latest) return note({ skipped: "нет связи с GitHub", error: info.error || null });
+  const onDisk = diskVersion(dir) || current;
+  if (cmpVersion(info.latest, onDisk) <= 0) return { skipped: "последняя версия", latest: info.latest };
+  const release = acquireLock(home, "update.lock"); // several bridges per machine: one git at a time
+  if (!release) return { skipped: "обновляет другая копия моста" };
+  try {
+    const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], dir);
+    let base = "main";
+    try { base = run("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], dir).replace(/^origin\//, ""); } catch {}
+    if (branch !== base) return note({ skipped: `ветка ${branch}, не ${base}: обновляю только основную` });
+    if (run("git", ["status", "--porcelain", "--untracked-files=no"], dir)) return note({ skipped: "в папке моста есть правки, не трогаю" });
+    const tag = "v" + info.latest;
+    run("git", ["fetch", "--quiet", "--tags", "origin"], dir);
+    const before = run("git", ["rev-parse", "--short", "HEAD"], dir);
+    try { run("git", ["merge", "--ff-only", "--quiet", `refs/tags/${tag}`], dir); }
+    catch (e) { return note({ skipped: "есть свои коммиты поверх релиза, не трогаю", error: String(e.stderr || e.message).slice(0, 300) }); }
+    const after = run("git", ["rev-parse", "--short", "HEAD"], dir);
+    if (after !== before) run("npm", ["install", "--omit=dev", "--no-audit", "--no-fund"], join(dir, "mcp-server"));
+    return note({ updated: after !== before, from: onDisk, to: diskVersion(dir) || info.latest, before, after });
+  } catch (e) {
+    return note({ error: String(e.stderr || e.message).slice(0, 400) });
+  } finally { release(); }
+}
+
+// For pr_status: the editor hears once per version that it is waiting for a restart.
+export function restartNotice(running, dir = REPO_DIR) {
+  const disk = diskVersion(dir);
+  if (!disk || cmpVersion(disk, running) <= 0) return null;
+  return { installed: disk, running, say: `Мост сам обновился до ${disk}. Закройте и снова откройте Claude, а в Premiere панель Claude Bridge, чтобы включилась новая версия.` };
 }

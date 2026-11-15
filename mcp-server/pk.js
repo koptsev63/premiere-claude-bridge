@@ -303,6 +303,11 @@ export async function typed(cmd, argv) {
       throw new Error("share: status | on | off | preview | send | doctor | exclude [project] | include [project]");
     }
     case "update":
+      if (argv[0] === "auto") {
+        if (argv[1] === "on" || argv[1] === "off") return upd.setAuto(argv[1] === "on");
+        if (argv[1] === "now") return upd.autoUpdate(PKG_VERSION, { force: true });
+        return { enabled: upd.autoEnabled(), ...upd.autoState() };
+      }
       return argv.includes("--check") ? upd.updateInfo(PKG_VERSION, { force: true }) : upd.updateBridge(PKG_VERSION);
     default: return undefined;
   }

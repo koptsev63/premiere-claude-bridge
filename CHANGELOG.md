@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.8.6] - 2026-11-15 - updates arrive on their own
+
+Editors stayed on old versions: an update needed the editor to say
+«обнови мост», and a fix only reached them when someone remembered to ask.
+
+### Added
+- Background updates for a git install: a minute and a half after start, then
+  every 6 hours, the bridge moves itself to the latest release tag (never to
+  unreleased commits on main), fast-forward only, only from the default branch,
+  never over the editor's own edits or commits, one bridge at a time per
+  machine (`update.lock`). The panel updates with it (it is a link to the
+  repository folder).
+- `pr_status` says when a new version is installed and waits for a restart
+  (`update.restartNeeded`, `say`): close and reopen Claude and the panel.
+- Off and on: `pr_update_bridge auto=false|true` (the editor's «не обновляй
+  сам»), `node mcp-server/pk.js update auto off|on|now`, or
+  `PREMIERE_BRIDGE_AUTO_UPDATE=0`.
+
+### Known limits
+- A Claude Desktop bundle (.mcpb) cannot replace itself; it keeps the
+  «обнови мост» hint with the download link.
+- The running bridge keeps its code until Claude restarts.
+
 ## [0.8.5] - 2026-11-14 - sharing finds the editor's projects on its own
 
 An editor cut for days with «Помогать обучать ассистента» ticked and nothing

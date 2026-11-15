@@ -683,7 +683,10 @@ async function extrasForStatus() {
   try { share.ensureStarted(); } catch {} // on by default: the start moment is the first status check
   const st = share.consentStatus();
   const out = { bridgeVersion: VERSION, update: await upd.updateInfo(VERSION) };
-  if (out.update && !out.update.available) out.update = { current: VERSION, latest: out.update.latest, available: false };
+  const waiting = upd.restartNotice(VERSION);
+  if (waiting) out.update = { current: VERSION, installed: waiting.installed, available: false, restartNeeded: true, say: waiting.say };
+  else if (out.update && !out.update.available) out.update = { current: VERSION, latest: out.update.latest, available: false };
+  out.autoUpdate = upd.autoEnabled() ? "on" : "off";
   if (st.on && st.byDefault && !st.noticeGiven) {
     // On by default: the editor is told once, plainly, how to turn it off.
     out.share = {
@@ -732,13 +735,24 @@ tool(
 
 tool(
   "pr_update_bridge",
-  "Update the bridge to the latest release (what the editor means by «обнови мост»). A git install pulls and reinstalls (never touches local edits); a Claude Desktop bundle gets the download link. Afterwards tell the editor, in plain words, to restart Claude and reopen the panel in Premiere.",
-  { check: z.boolean().optional().describe("true = only say whether a new version exists") },
-  async ({ check }) => {
+  "Update the bridge to the latest release (what the editor means by «обнови мост»). A git install pulls and reinstalls (never touches local edits); a Claude Desktop bundle gets the download link. Afterwards tell the editor, in plain words, to restart Claude and reopen the panel in Premiere. Since 0.8.6 a clean git install also updates itself to each new release in the background; auto=false turns that off (the editor's «не обновляй сам»), auto=true back on.",
+  { check: z.boolean().optional().describe("true = only say whether a new version exists"), auto: z.boolean().optional().describe("Background updates on (true) or off (false)") },
+  async ({ check, auto }) => {
+    if (auto !== undefined) return ok({ ...upd.setAuto(auto), say: auto ? "Мост будет обновляться сам." : "Мост больше не обновляется сам; обновить можно словами «обнови мост»." });
     if (check) return ok(await upd.updateInfo(VERSION, { force: true }));
     return ok(await upd.updateBridge(VERSION));
   }
 );
+
+// 0.8.6: updates arrive on their own. A minute and a half after start, then
+// every 6 hours: a clean git install moves to the latest release tag; the new
+// code runs after Claude restarts (pr_status says so). Off: pk update auto off.
+const AUTO_UPDATE_MS = Number(process.env.PREMIERE_AUTO_UPDATE_EVERY_MS || 6 * 3600 * 1000);
+async function autoUpdateRound() {
+  try { const r = await upd.autoUpdate(VERSION); if (r.updated || r.error) log("auto-update:", r); } catch (e) { log("auto-update failed:", e.message); }
+}
+setTimeout(autoUpdateRound, 90_000).unref();
+setInterval(autoUpdateRound, AUTO_UPDATE_MS).unref();
 
 // The autopilot: every 10 minutes, if the editor said yes, read Premiere's
 // new autosaves into the journal and send what is new. Never asks Premiere

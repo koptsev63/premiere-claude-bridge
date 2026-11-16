@@ -705,11 +705,11 @@ async function extrasForStatus() {
 
 tool(
   "pr_share",
-  "Sharing the editor's journal to help train the assistant. On by default (only work from the update on), off whenever the editor says so. action=status (default) shows the state and what was sent; consent=false records the EDITOR's own no («не отправляй журнал»): it stops sharing for good and deletes everything already sent; consent=true turns it back on (work from then on). Never decide for them. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere. action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot. action=doctor says in words whether sharing works on this machine and why not (projects found from Premiere's preferences, autosave setting, last round, last error).",
+  "Sharing the editor's journal to help train the assistant. On by default (only work from the update on), off whenever the editor says so. action=status (default) shows the state and what was sent; consent=false records the EDITOR's own no («не отправляй журнал»): it stops sharing for good and deletes everything already sent; consent=true turns it back on (work from then on). Never decide for them. exclude=true keeps one project out for good (what the editor means by «не отправляй этот проект», e.g. under NDA); exclude=false lets it back in; project defaults to the one open in Premiere (for a DaVinci Resolve project, pass its name as Resolve shows it in the Project Manager). action=preview shows exactly what the next send would contain; action=send sends now instead of waiting for the 10-minute autopilot. action=doctor says in words whether sharing works on this machine and why not (projects found from Premiere's preferences and DaVinci Resolve's project library, autosave and Resolve backup settings, last round, last error).",
   {
     consent: z.boolean().optional().describe("The editor's own choice: false = stop and delete what was sent, true = turn back on"),
     exclude: z.boolean().optional().describe("true = never send this project; false = let it back in"),
-    project: z.string().optional().describe("Project name or .prproj path for exclude; default: the project open in Premiere"),
+    project: z.string().optional().describe("Project name or .prproj path for exclude (a Resolve project: its name); default: the project open in Premiere"),
     action: z.enum(["status", "preview", "send", "doctor"]).optional(),
   },
   async ({ consent, exclude, project, action }) => {

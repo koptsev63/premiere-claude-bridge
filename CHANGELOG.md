@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.8.7] - 2026-11-15 - sharing learns from DaVinci Resolve too
+
+An editor cut a promo in DaVinci Resolve 20.3 with «Помогать обучать
+ассистента» ticked, and nothing reached the receiver: the bridge only knew
+Premiere.
+
+### Added
+- `lib/drp.js` reads a Resolve project into the same snapshot shape as a saved
+  `.prproj` (sequences, tracks, clips with start/end on the timeline and in/out
+  in the source in seconds, media path), so the journal, the diff and sharing
+  work unchanged. Two ways in: a `.drp` (zip with `SeqContainer/*.xml`) and a
+  `Project.db` (SQLite: Resolve's own project library and its project backups,
+  which are copies of it). The timeline start (01:00:00:00) is taken off,
+  `<In>` with a fractional part rounds to the frame, a reversed or retimed clip
+  carries its forward source range (`MediaTimemapBA` keyframes).
+- Sharing finds Resolve on its own: `config.user.xml` and `dblist.conf` in
+  Resolve's preferences (macOS `~/Library/Preferences/Blackmagic Design/DaVinci
+  Resolve`, Windows `%APPDATA%\Blackmagic Design\DaVinci Resolve\Preferences`),
+  every `Project.db` in the project libraries, and project backups and `.drp`
+  files in the backup folder (`~/Movies/Resolve Project Backups` by default).
+  Same rules as Premiere: only what was saved after the yes, a project kept out
+  by name is not even journalled, no names or paths leave. A Resolve project's
+  journal lives apart from a Premiere project of the same name (`<name>.resolve`).
+- A `Project.db` is copied and the copy is read; a save in progress (a
+  `-journal` file next to it, or the file changing during the copy) waits for
+  the next round.
+- `pr_share action=doctor` says whether Resolve is found, its version, whether
+  Project backups and Live Save are on, how many Resolve projects and backups
+  it sees and how many were saved since the yes; a Resolve-only editor is no
+  longer told that Premiere is missing.
+- Excluding or letting back in a project leaves a mark: a Resolve save older
+  than the mark is never read, the first one after it starts a fresh baseline,
+  so work done while a project was out never becomes a decision, even when the
+  bridge was not running during the exclusion. A backup without a project name
+  is not read at all.
+- A file extension goes out only when it is a known media type, never the tail
+  of a free-text name such as «Mr.Smith».
+- `RESOLVE_PREFS_DIR` points the bridge at another Resolve preferences folder
+  and switches the default folders off (tests use temporary folders).
+
+### Found on the way
+- Resolve 18 and newer keep a local project as `Project.db`, and its "Project
+  backups" are copies of that file, not `.drp` (checked on Resolve 21.0.3 and
+  in its binary). A `.drp` appears only when someone exports one.
+- "Timeline backups" (`Timeline.<stamp>` in the same folder) are a different,
+  compressed binary format and are not read.
+
+### Known limits
+- Reading `Project.db` needs `node:sqlite` (Node 22.5 or newer); on older Node
+  the bridge reads only `.drp` files and doctor says so.
+- Network (PostgreSQL) project libraries are not read.
+- The Windows paths come from Blackmagic forum answers, not from a Windows
+  machine.
+
 ## [0.8.6] - 2026-11-15 - updates arrive on their own
 
 Editors stayed on old versions: an update needed the editor to say

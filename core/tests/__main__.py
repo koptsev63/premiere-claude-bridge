@@ -38,6 +38,7 @@ from core.tests import (
     test_shotmatch,
     test_silence,
     test_subtitles,
+    test_taste,
     test_value,
     test_variants,
     test_xml_handoff,
@@ -89,6 +90,8 @@ MODULES = [
     test_prproj_build,
     test_avb_build,
     test_avp_build,
+    # editor rules from a live cut, Denis (16.11.2026)
+    test_taste,
 ]
 
 

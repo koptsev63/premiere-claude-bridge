@@ -27,6 +27,7 @@ from typing import Any
 
 from core.cutlist import Cut, Cutlist, Marker
 from core.review_loop import analyze_cutlist
+from core.taste import ShotMeta, check_series, has_phrase_data, phrase_order
 from core.value import ValuePool
 
 # Beat name -> duration (s). Pre-tuned so durations satisfy §VII pacing
@@ -48,6 +49,15 @@ class ClipMeta:
     peak_time: float | None  # decisive-moment anchor (audio peak), s
     value: float
     meat: bool = False
+    # phrase hooks (core.taste, Denis 16.11.2026): optional, never guessed
+    tags: tuple[str, ...] = ()
+    subject: str = ""
+    motion: float | None = None
+    hue: float | None = None
+
+    def shot_meta(self) -> ShotMeta:
+        return ShotMeta(id=self.clip, tags=tuple(self.tags), subject=self.subject,
+                        motion=self.motion, hue=self.hue)
 
 
 _FIT_TOL = 0.2  # a clip may be up to this many seconds short of a beat
@@ -104,6 +114,33 @@ def _assign(
     return pick, notes
 
 
+def _phrase_action_run(seq: list[ClipMeta], beat_durs: list[float],
+                       notes: list[str]) -> list[ClipMeta]:
+    """Order the ACTION run (the arc's fast series) as a phrase when the clips
+    carry tags / motion / hue: impact first, last links to the PIT shot
+    (core.taste.phrase_order). A clip is only moved into a beat it is long
+    enough for; otherwise the run keeps the length-aware order."""
+    run = [i for i, b in enumerate(_ARC) if b == "ACTION"]
+    metas = [seq[i] for i in run]
+    if not has_phrase_data(m.shot_meta() for m in metas):
+        return seq
+    after_i = run[-1] + 1
+    after = seq[after_i].shot_meta() if after_i < len(seq) else None
+    by_id = {}
+    for m in metas:
+        by_id.setdefault(m.clip, []).append(m)
+    order = [by_id[s.id].pop(0) for s in phrase_order([m.shot_meta() for m in metas], after)]
+    if all(m.dur >= beat_durs[i] - _FIT_TOL for i, m in zip(run, order)):
+        seq = list(seq)
+        for i, m in zip(run, order):
+            seq[i] = m
+    else:
+        notes.append("action run: phrase order does not fit the beat lengths, kept as assigned")
+    for problem in check_series([seq[i].shot_meta() for i in run], after):
+        notes.append(f"action run: {problem}")
+    return seq
+
+
 def build_variant(
     name: str, metas: list[ClipMeta], fps: float = 25.0,
     protected: set[str] | None = None,
@@ -113,6 +150,7 @@ def build_variant(
         raise KeyError(f"unknown strategy {name!r}; {list(STRATEGIES)}")
     durs = STRATEGIES[name]
     seq, notes = _assign(list(metas), durs, protected or set())
+    seq = _phrase_action_run(seq, durs, notes)
     if notes_out is not None:
         notes_out.extend(notes)
 
@@ -162,6 +200,10 @@ def build_variants(
             peak_time=rec.get("audio_peak_time_sec"),
             value=v.score,
             meat=v.meat,
+            tags=tuple(rec.get("tags") or ()),
+            subject=str(rec.get("subject") or ""),
+            motion=rec.get("motion"),
+            hue=rec.get("dominant_hue"),
         ))
 
     out: dict[str, dict[str, Any]] = {}

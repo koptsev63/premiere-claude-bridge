@@ -11,14 +11,21 @@ the edit and the on-screen titles.
 chain (each overlay is one `drawtext` gated by enable=between(t,s,e)).
 `burn()` renders it. Pure parts (filter building, marker mapping) are
 unit-tested without ffmpeg.
+
+Two-hit titles (editor rule, Denis 16.11.2026): a title whose animation
+lands in two hits (word one, word two) carries `hits` - seconds from the
+title start. `align_to_strong_beat()` slides the title so its SECOND hit
+lands on the nearest strong beat (1 or 3 of a bar, `core.beats.strong_beats`).
+No `hits`, or a single hit: the title stays where it was.
 """
 
 from __future__ import annotations
 
+import bisect
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # brand DNA
 LIME = "0xC8FF00"
@@ -54,6 +61,7 @@ class Overlay:
     end: float
     kind: str = "lower_third"   # lower_third | title | brand
     fontfile: str | None = None
+    hits: list[float] | None = None  # animation hits, s from start (word 1, word 2)
 
     def drawtext(self, video_w: int = 1920, video_h: int = 1080) -> str:
         t = _esc(self.text)
@@ -74,6 +82,31 @@ class Overlay:
                 f"{enable}")
 
 
+def align_to_strong_beat(ov: Overlay, strong: Sequence[float]) -> Overlay:
+    """Shift a two-hit title so hits[1] lands on the nearest strong beat.
+
+    strong : strong beat times on the timeline, s (beats 1 and 3 of a bar).
+    The duration is kept; a shift that would start the title before 0 takes
+    the next strong beat instead. Returns the overlay unchanged when it has
+    fewer than two hits or there is no strong beat (current behaviour).
+    """
+    if not ov.hits or len(ov.hits) < 2 or not strong:
+        return ov
+    sb = sorted(float(b) for b in strong)
+    h2 = float(ov.hits[1])
+    target = ov.start + h2
+    k = bisect.bisect_left(sb, target)
+    cands = sorted((b for b in sb[max(0, k - 1):k + 1]), key=lambda b: abs(b - target))
+    cands += [b for b in sb[k + 1:]]            # later beats, if the near ones underflow
+    for b in cands:
+        start = b - h2
+        if start >= -1e-9:
+            shift = start - ov.start
+            return replace(ov, start=round(max(0.0, start), 3),
+                           end=round(ov.end + shift, 3))
+    return ov
+
+
 def filtergraph(overlays: list[Overlay], video_w: int = 1920,
                 video_h: int = 1080) -> str:
     """Comma-joined drawtext chain for ffmpeg -vf (empty if none)."""
@@ -81,15 +114,21 @@ def filtergraph(overlays: list[Overlay], video_w: int = 1920,
 
 
 def from_markers(cutlist: Any, hold: float = 2.5,
-                 kind: str = "lower_third") -> list[Overlay]:
+                 kind: str = "lower_third", hits: Sequence[float] | None = None,
+                 strong_beats: Sequence[float] | None = None) -> list[Overlay]:
     """Auto lower-thirds from a cutlist's markers: each marker's name
     (and comment) becomes an on-screen title held `hold` seconds from the
-    marker time. Reuses the edit's own beat data."""
+    marker time. Reuses the edit's own beat data.
+
+    hits + strong_beats: the titles share a two-hit animation; each one is
+    slid so its second hit lands on a strong beat (`align_to_strong_beat`).
+    """
     out: list[Overlay] = []
     for m in getattr(cutlist, "markers", []):
         text = m.name + (f" — {m.comment}" if getattr(m, "comment", "") else "")
-        out.append(Overlay(text=text, start=float(m.time),
-                            end=float(m.time) + hold, kind=kind))
+        ov = Overlay(text=text, start=float(m.time), end=float(m.time) + hold,
+                     kind=kind, hits=list(hits) if hits else None)
+        out.append(align_to_strong_beat(ov, strong_beats or []))
     return out
 
 

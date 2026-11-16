@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased] - editor taste rules
+
+Draft. Denis cut a 63 s promo by hand (16.11.2026) and named five rules he
+cuts by; the engine now knows them. `core/` only, no new required
+dependency: numpy (already optional in core) for the audio and colour
+parts; scipy speeds up the median filter when present, with a numpy
+fallback.
+
+### Added
+- Percussive accents: `core.beats.hpss()` and `percussive_accents()` find
+  onsets on the drums only (median-filter HPSS); strings, pads and swells
+  no longer count as hits. `detect_beats()` / the new `analyze_samples()`
+  return `accents`, `free_spans` and `beat_strength`, and take tempo and
+  grid phase from the drums when there are enough hits.
+- `core.rhythm_gate --music TRACK`: every cut must land on a drum hit; a cut
+  in a span with no drums (free span) is free unless it breaks the pulse
+  (a shot under half a beat, or a cut 1-3 frames before a strong hit).
+  In a fast series a cut on a weak beat or the bar-end fill fails.
+- Beat strength per beat ("strong" on 1 and 3, "weak", "fill");
+  `snap_cutlist_to_beats(..., strengths)` snaps to strong beats only.
+- `core.taste` (new): a fast series as a phrase (impact shot first, last
+  shot links to the next one, no repeated content) and neighbouring shots
+  that differ in dominant hue rather than brightness. `core.variants`
+  orders its ACTION run this way when clips carry tags, motion or hue.
+- Two-hit titles: `Overlay.hits`; `align_to_strong_beat()` puts the second
+  hit on the nearest strong beat.
+
+### Known limits
+- No tagging model: series rules use whatever tags, subject, motion and hue
+  the caller supplies and skip what is missing.
+- Accent times sit about one STFT hop (12 ms) early on sharp clicks; the
+  gate forgives under one frame early.
+
 ## [0.8.7] - 2026-11-15 - sharing learns from DaVinci Resolve too
 
 An editor cut a promo in DaVinci Resolve 20.3 with «Помогать обучать

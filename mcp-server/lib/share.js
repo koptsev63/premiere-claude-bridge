@@ -404,8 +404,10 @@ export function sources(state, { bases = prefsBases(), resolveDirs = RS.resolveP
 }
 
 // A Resolve project's journal lives apart from a Premiere project of the same name.
+// The suffix goes on after the name is cut to length, so it is always there.
 export const RESOLVE_SUFFIX = ".resolve";
 const RESOLVE_SUFFIX_RE = /\.resolve$/;
+export const resolveJournalKey = (project) => JR.slug(project) + RESOLVE_SUFFIX;
 
 export function autosaveFolders(state) {
   return (state.projectDirs || []).map((d) => join(d, "Adobe Premiere Pro Auto-Save")).filter((d) => existsSync(d));
@@ -450,12 +452,25 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     await yieldNow();
     if (!isOn(loadState(home))) return { files, events, stopped: true };
     if (resolve) {
+      // Kept out by name: not even journalled, and the next save after it is let
+      // back in starts a fresh baseline, so work done while out never becomes a diff.
+      const out = (name) => (loadState(home).excluded || []).includes(projectKey(name));
+      const gap = (k) => updateState((x) => { x.resolveGap = { ...(x.resolveGap || {}), [k]: new Date().toISOString() }; }, home);
       try {
-        const snap = RS.snapshotFromResolve(f, { mtime: new Date(m), scratch: join(home, "tmp"), source: src.resolve.projects.includes(f) ? "resolve-db" : "resolve-backup" });
-        // kept out by name: not even journalled
-        if (!(loadState(home).excluded || []).includes(projectKey(snap.project))) {
-          const r = JR.record(JR.journalDir(snap.project + RESOLVE_SUFFIX, root), snap, { source: snap.source, file: f });
-          events += r.events || 0;
+        const live = src.resolve.projects.includes(f);
+        const folderName = live ? RS.projectNameFromPath(f) : null;
+        if (folderName && out(folderName)) gap(resolveJournalKey(folderName)); // a library project is named by its folder: no copy of an NDA project at all
+        else {
+          const snap = RS.snapshotFromResolve(f, { mtime: new Date(m), scratch: join(home, "tmp"), source: live ? "resolve-db" : "resolve-backup" });
+          const k = resolveJournalKey(snap.project);
+          if (out(snap.project)) gap(k);
+          else if (loadState(home).resolveGap?.[k]) {
+            JR.saveSnapshot(join(root, k), snap); // a new starting point, no decisions from across the gap
+            updateState((x) => { if (x.resolveGap) delete x.resolveGap[k]; }, home);
+          } else {
+            const r = JR.record(join(root, k), snap, { source: snap.source, file: f });
+            events += r.events || 0;
+          }
         }
       } catch (e) {
         const why = { at: new Date().toISOString(), file: RS.projectNameFromPath(f), error: String(e && e.message || e).slice(0, 300) };
@@ -480,6 +495,8 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     updateState((x) => { x.autosaveSeen = { ...(x.autosaveSeen || {}), [key]: Math.max(x.autosaveSeen?.[key] || 0, m) }; }, home);
   }
   updateState((x) => {
+    // Resolve keeps a few rolling backups and deletes the old ones: forget what is gone
+    for (const k of Object.keys(x.autosaveSeen || {})) if (RS.isResolveFile(k) && !existsSync(k)) delete x.autosaveSeen[k];
     x.lastImport = { at: new Date().toISOString(), files, events, failed, left, projects: src.projectFiles.length, folders: src.folders.length, resolveProjects: src.resolve.projects.length, resolveBackups: src.resolve.backups.length };
     if (lastFail) x.lastImportError = lastFail;
     else if (files) delete x.lastImportError; // a clean round: the old reason no longer holds

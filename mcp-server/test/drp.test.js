@@ -3,10 +3,12 @@
 // PREMIERE_PREFS_DIR point at temporary folders in every test.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, existsSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { deflateRawSync, gunzipSync, crc32 } from "node:zlib";
+import * as Z from "node:zlib";
+const { deflateRawSync, gunzipSync, zstdCompressSync } = Z;
+const crc32 = Z.crc32 || (() => 0); // the reader does not check it; Node before 22.2 has no zlib.crc32
 import * as R from "../lib/drp.js";
 import * as S from "../lib/share.js";
 
@@ -286,4 +288,106 @@ test("resolve: RESOLVE_PREFS_DIR alone decides, and no default folder is added",
   const src = R.resolveSources();
   assert.deepEqual([src.configs.length, src.projects.length, src.backups.length], [0, 0, 0]);
   assert.ok(!existsSync(join(NO_PREFS, "config.user.xml")));
+});
+
+// ---- found on real Resolve 21 projects (review, 16.11.2026) -------------------
+
+// KeyframesBA as Resolve 21 writes it: protobuf (field 1 = keyframe {1: X, 2: Y}),
+// behind 0x80, or 0x81 and a zstd frame.
+function pbKeyframes(points, zstd) {
+  const dblField = (f, v) => { const b = Buffer.alloc(9); b[0] = (f << 3) | 1; b.writeDoubleLE(v, 1); return b; };
+  const msgs = points.map(([x, y]) => {
+    const inner = Buffer.concat([x ? dblField(1, x) : Buffer.alloc(0), y ? dblField(2, y) : Buffer.alloc(0), Buffer.from([0x1a, 0x02, 0x00, 0x00])]);
+    return Buffer.concat([Buffer.from([0x0a, inner.length]), inner]);
+  });
+  const body = Buffer.concat(msgs);
+  return zstd ? Buffer.concat([Buffer.from([0x81]), zstdCompressSync(body)]) : Buffer.concat([Buffer.from([0x80]), body]);
+}
+const r21map = (points, zstd) => qmapBuf([["YMin", 6, -1], ["KeyframesBA", 12, pbKeyframes(points, zstd)]]).toString("hex");
+
+test("resolve 21: keyframes in protobuf, plain or zstd, are read", { skip: !zstdCompressSync && "this Node has no zstd" }, () => {
+  assert.deepEqual(R.timemapPoints(r21map([[0, 0], [60000, 0]], false)), [[0, 0], [60000, 0]]);
+  assert.deepEqual(R.timemapPoints(r21map([[0, 85.8], [85.88, 0]], true)), [[0, 85.8], [85.88, 0]]);
+  // the reversed shot from the October grading pull: 25 fps, In 191, 72 frames, source 1884-1955
+  const r = R.sourceRange(191, 72, { fps: 25, mediaFps: 25, points: R.timemapPoints(r21map([[0, 85.8], [85.88, 0]], true)) });
+  assert.equal(r.reverse, true);
+  assert.ok(Math.abs(r.inPoint * 25 - 1884) < 1e-6 && Math.abs(r.outPoint * 25 - 1956) < 1e-6);
+  assert.deepEqual(R.sourceRange(-2147, 72, { fps: 25, points: null }), { inPoint: null, outPoint: null }, "a negative In gives no range, not a negative one");
+  assert.deepEqual(R.sourceRange(10, 24, { fps: 24, points: undefined }), { inPoint: null, outPoint: null }, "an unreadable retime gives no range");
+  assert.equal(R.timemapPoints("02" + "00".repeat(40)), null, "0x02 + doubles is not a retime");
+});
+
+test("resolve 21: no In, a fractional Duration and a 0x0 timeline still read right", () => {
+  const model = { project: "p", timelines: [{ id: "t", name: "T", fps: 24, extStart: 0, tracks: [
+    { kind: "video", index: 0, items: [{ type: "VideoClip", name: "a.mov", start: "0", duration: "48", in: null, path: "/x/a.mov", timemap: PLAIN }] },
+    { kind: "audio", index: 0, items: [{ type: "AudioClip", name: "m.wav", start: "0", duration: "3766|" + dbl(0.76), in: "", path: "/x/m.wav", timemap: PLAIN }] },
+  ] }] };
+  const q = R.snapshotFromModel(model).sequences[0];
+  assert.deepEqual([q.video[0].clips[0].inPoint, q.video[0].clips[0].outPoint], [0, 2], "a clip from the first frame has In 0, not none");
+  assert.equal(q.audio[0].clipCount, 1, "a fractional Duration is not a dropped clip");
+  assert.ok(Math.abs(q.audio[0].clips[0].end - 3766.76 / 24) < 1e-9);
+  assert.deepEqual(R.resolution("00".repeat(16)), {}, "0x0 = project settings, unknown");
+});
+
+test("resolve: work done while a project was kept out never goes after it is let back in", async () => {
+  process.env.PREMIERE_PREFS_DIR = NO_PREFS;
+  const home = mkdtempSync(join(tmpdir(), "share-home-"));
+  const root = mkdtempSync(join(tmpdir(), "share-journal-"));
+  const { backups } = resolvePrefs(home, {});
+  await S.setConsent(true, { home });
+  S.updateState((x) => { x.sharingSince = "2026-11-15T09:00:00.000Z"; }, home);
+  const save = (name, trim, iso) => { const f = join(backups, name); writeFileSync(f, drp({ trim })); at(f, iso); };
+  save("s1.drp", 0, "2026-11-15T10:00:00Z");
+  await S.importNewAutosaves({ home, root });
+  await S.upload({ home, root, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({}) }) });
+  S.setExcluded("Клиент Промо", true, home);
+  save("s2.drp", 6, "2026-11-15T11:00:00Z"); // NDA work: a trim
+  await S.importNewAutosaves({ home, root });
+  S.setExcluded("Клиент Промо", false, home);
+  save("s3.drp", 6, "2026-11-15T12:00:00Z"); // let back in, nothing new done
+  const r = await S.importNewAutosaves({ home, root });
+  assert.equal(r.events, 0, "the trim done while out is not a decision");
+  assert.ok(!S.preview({ home, root }).sample.some((i) => i.item === "decision"));
+  save("s4.drp", 10, "2026-11-15T13:00:00Z"); // new work after it is back: goes
+  const r4 = await S.importNewAutosaves({ home, root });
+  assert.ok(r4.events >= 1);
+  assert.ok(S.preview({ home, root }).sample.some((i) => i.item === "decision"));
+  process.env.RESOLVE_PREFS_DIR = NO_PREFS;
+});
+
+test("resolve: a long project name keeps its journal suffix, and its exclusion holds", async () => {
+  process.env.PREMIERE_PREFS_DIR = NO_PREFS;
+  const home = mkdtempSync(join(tmpdir(), "share-home-"));
+  const root = mkdtempSync(join(tmpdir(), "share-journal-"));
+  const { backups } = resolvePrefs(home, {});
+  await S.setConsent(true, { home });
+  S.updateState((x) => { x.sharingSince = "2026-11-15T09:00:00.000Z"; }, home);
+  const long = "Очень длинное название проекта клиента под NDA для промо ролика выставки 2026 версия финальная";
+  const f = join(backups, "long.drp");
+  writeFileSync(f, drp({ project: long }));
+  at(f, "2026-11-15T10:00:00Z");
+  await S.importNewAutosaves({ home, root });
+  const [dir] = readdirSync(root);
+  assert.ok(dir.endsWith(".resolve"));
+  assert.ok(S.preview({ home, root }).wouldSend > 0);
+  S.setExcluded(long, true, home);
+  assert.equal(S.preview({ home, root }).wouldSend, 0, "journalled before the exclusion, still kept out");
+  process.env.RESOLVE_PREFS_DIR = NO_PREFS;
+});
+
+test("resolve: backups Resolve has deleted are forgotten", async () => {
+  process.env.PREMIERE_PREFS_DIR = NO_PREFS;
+  const home = mkdtempSync(join(tmpdir(), "share-home-"));
+  const root = mkdtempSync(join(tmpdir(), "share-journal-"));
+  const { backups } = resolvePrefs(home, {});
+  await S.setConsent(true, { home });
+  const f = join(backups, "gone.drp");
+  writeFileSync(f, drp());
+  at(f, new Date(Date.now() + 60000).toISOString());
+  await S.importNewAutosaves({ home, root });
+  assert.ok(S.loadState(home).autosaveSeen[f]);
+  unlinkSync(f);
+  await S.importNewAutosaves({ home, root });
+  assert.equal(S.loadState(home).autosaveSeen[f], undefined);
+  process.env.RESOLVE_PREFS_DIR = NO_PREFS;
 });

@@ -31,7 +31,7 @@
 // copy is read, so Resolve never waits on a lock of ours.
 
 import { readFileSync, copyFileSync, unlinkSync, statSync, statfsSync, existsSync, readdirSync, mkdirSync } from "node:fs";
-import { inflateRawSync } from "node:zlib";
+import * as zlib from "node:zlib";
 import { basename, dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -49,21 +49,30 @@ export function doubleLE(hex, i = 0) {
   return Number.isFinite(v) ? v : null;
 }
 
-// Resolution: width and height as big-endian 64-bit integers.
+// Resolution: width and height as big-endian 64-bit integers. All zero = the
+// timeline follows the project settings: unknown here, so left out.
 export function resolution(hex) {
   const b = hexBuf(hex);
   if (!b || b.length < 16) return {};
-  return { width: Number(b.readBigUInt64BE(0)), height: Number(b.readBigUInt64BE(8)) };
+  const width = Number(b.readBigUInt64BE(0)), height = Number(b.readBigUInt64BE(8));
+  return width > 0 && height > 0 ? { width, height } : {};
 }
 
-// "5509|80ffffffffffef3f" -> 5510 (frames). "191" -> 191. "" -> null.
-export function parseIn(raw) {
+// "3766|0020dbf97e6ae83f" -> 3766.76: the integer part plus a little-endian
+// double fraction. Start, Duration and In all come this way.
+export function frames(raw) {
   if (raw == null || raw === "") return null;
   const [ip, hx] = String(raw).split("|");
   let v = Number(ip);
   if (!Number.isFinite(v)) return null;
   if (hx && hx.length === 16) { const f = hexBuf(hx); if (f) { const d = f.readDoubleLE(0); if (Number.isFinite(d)) v += d; } }
-  return Math.round(v);
+  return v;
+}
+
+// "5509|80ffffffffffef3f" -> 5510 (whole frames). "191" -> 191. "" -> null.
+export function parseIn(raw) {
+  const v = frames(raw);
+  return v == null ? null : Math.round(v);
 }
 
 // A Qt-serialised QVariantMap as Resolve writes it (port of core/drt_audit.py _qmap).
@@ -90,15 +99,56 @@ export function qmap(b) {
   return d;
 }
 
-// MediaTimemapBA -> sorted [[X clip s, Y source s]]; null for a plain clip.
+// Resolve 21 keeps KeyframesBA as protobuf: 0x80 + bytes, or 0x81 + a zstd
+// frame of them (checked on Project.db files, 15.11.2026). Repeated field 1 is
+// a keyframe; in it field 1 is X and field 2 is Y (doubles, left out when 0).
+function varint(b, o) {
+  let v = 0, sh = 0, x;
+  do { if (o >= b.length) throw new Error("protobuf: short"); x = b[o++]; v += (x & 0x7f) * 2 ** sh; sh += 7; } while (x & 0x80);
+  return [v, o];
+}
+function protoFields(b) {
+  const out = [];
+  let o = 0;
+  while (o < b.length) {
+    let key; [key, o] = varint(b, o);
+    const f = Math.floor(key / 8), w = key % 8;
+    if (w === 0) { let v; [v, o] = varint(b, o); out.push([f, w, v]); }
+    else if (w === 1) { if (o + 8 > b.length) throw new Error("protobuf: short"); out.push([f, w, b.readDoubleLE(o)]); o += 8; }
+    else if (w === 5) { o += 4; }
+    else if (w === 2) { let l; [l, o] = varint(b, o); if (o + l > b.length) throw new Error("protobuf: short"); out.push([f, w, b.subarray(o, o + l)]); o += l; }
+    else throw new Error("protobuf wire type " + w);
+  }
+  return out;
+}
+export function protoKeyframes(raw) {
+  if (!Buffer.isBuffer(raw) || !raw.length) return null;
+  let body;
+  if (raw[0] === 0x80) body = raw.subarray(1);
+  else if (raw[0] === 0x81) { if (typeof zlib.zstdDecompressSync !== "function") return null; body = zlib.zstdDecompressSync(raw.subarray(1)); }
+  else return null;
+  const pts = [];
+  for (const [f, w, v] of protoFields(body)) {
+    if (f !== 1 || w !== 2) continue;
+    let x = 0, y = 0;
+    for (const [g, gw, gv] of protoFields(v)) { if (gw !== 1) continue; if (g === 1) x = gv; else if (g === 2) y = gv; }
+    pts.push([x, y]);
+  }
+  return pts;
+}
+
+// MediaTimemapBA -> sorted [[X clip s, Y source s]]; null for a plain clip;
+// undefined when there is a retime this reader cannot decode.
 export function timemapPoints(hex) {
   if (!hex || hex.length <= 18) return null;
   const b = hexBuf(hex);
-  if (!b) return null;
+  if (!b || b[0] !== 0 || b.length < 8) return null; // 0x02 + doubles: no keyframes
   let kf;
-  try { kf = qmap(b).KeyframesBA; } catch { return null; }
-  if (!kf || typeof kf !== "object" || Buffer.isBuffer(kf)) return null;
-  const pts = Object.values(kf).filter((p) => p && typeof p === "object" && typeof p.X === "number" && typeof p.Y === "number").map((p) => [p.X, p.Y]);
+  try { kf = qmap(b).KeyframesBA; } catch { return undefined; }
+  let pts;
+  if (Buffer.isBuffer(kf)) { try { pts = protoKeyframes(kf); } catch { return undefined; } if (pts === null) return kf.length ? undefined : null; }
+  else if (kf && typeof kf === "object") pts = Object.values(kf).filter((p) => p && typeof p === "object" && typeof p.X === "number" && typeof p.Y === "number").map((p) => [p.X, p.Y]);
+  else return null;
   pts.sort((a, b) => a[0] - b[0]);
   return pts.length ? pts : null;
 }
@@ -111,13 +161,20 @@ function interp(pts, x) {
   return x1 === x0 ? y1 : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
 }
 
-// Source range of one clip in seconds. inFrames counts clip time on a retimed clip.
+// Source range of one clip in seconds. inFrames counts clip time on a retimed
+// clip. points undefined = a retime we cannot read, negative In = a clip Resolve
+// itself has lost track of (seen after a relink): no range rather than a wrong one.
 export function sourceRange(inFrames, durFrames, { fps, mediaFps, points } = {}) {
-  if (inFrames == null) return { inPoint: null, outPoint: null };
+  if (inFrames == null || points === undefined || inFrames < 0) return { inPoint: null, outPoint: null };
   const mfps = mediaFps > 0 ? mediaFps : fps;
   const x0 = inFrames / mfps, len = durFrames / fps;
   const identity = !points || points.every(([, y]) => y === 0) || (points.length === 2 && points[0][0] === 0 && points[0][1] === 0 && Math.abs(points[1][1] - points[1][0]) < 1e-6);
   if (identity) return { inPoint: x0, outPoint: x0 + len };
+  if (points.length === 2 && points[0][0] === 0 && points[0][1] > 0 && points[1][1] === 0) {
+    // played backwards in full: clip frame k shows source frame n-1-k, n = Xmax * fps (core/drt_audit.py, confirmed by the editor's timecode)
+    const n = Math.round(points[1][0] * mfps), head = n - 1 - inFrames, d = Math.round(durFrames * mfps / fps);
+    return { inPoint: (head - d + 1) / mfps, outPoint: (head + 1) / mfps, reverse: true };
+  }
   const y0 = interp(points, x0), y1 = interp(points, x0 + len);
   return { inPoint: Math.min(y0, y1), outPoint: Math.max(y0, y1), reverse: y1 < y0 || undefined };
 }
@@ -132,15 +189,18 @@ export function snapshotFromModel(model, { t, source, file } = {}) {
     const fps = tl.fps > 0 ? tl.fps : 25;
     const offset = Math.round((tl.extStart || 0) * fps);
     const all = tl.tracks.flatMap((tr) => tr.items);
-    const base = all.length && all.every((it) => Number(it.start) >= offset) ? offset : 0; // never push a clip before zero
+    const base = all.length && all.every((it) => frames(it.start) >= offset) ? offset : 0; // never push a clip before zero
     const seq = { name: tl.name || "", sequenceID: tl.id, width: tl.width, height: tl.height, fps, video: [], audio: [], markers: null, end: 0 };
     for (const tr of tl.tracks) {
       const clips = [];
       for (const it of tr.items) {
-        const s = Number(it.start), d = Number(it.duration);
-        if (it.start == null || it.duration == null || !Number.isFinite(s) || !Number.isFinite(d)) continue;
+        const s = frames(it.start), d = frames(it.duration);
+        if (s == null || d == null) continue;
         const start = (s - base) / fps, end = start + d / fps;
-        const r = sourceRange(parseIn(it.in), d, { fps, mediaFps: it.mediaFps, points: timemapPoints(it.timemap) });
+        // a media clip that starts at the first frame of its file has no <In> at all
+        const media = /^(Video|Audio)Clip$/.test(it.type || "") || !!it.path;
+        const cin = parseIn(it.in) ?? (media ? 0 : null);
+        const r = sourceRange(cin, d, { fps, mediaFps: it.mediaFps, points: timemapPoints(it.timemap) });
         const row = { name: it.name || basename(it.path || "") || "", start, end, duration: end - start, inPoint: r.inPoint, outPoint: r.outPoint, path: it.path || "" };
         if (r.reverse) row.reverse = true;
         clips.push(row);
@@ -176,7 +236,7 @@ export function readZip(path, want = () => true) {
     const lnl = buf.readUInt16LE(local + 26), lxl = buf.readUInt16LE(local + 28);
     const data = buf.subarray(local + 30 + lnl + lxl, local + 30 + lnl + lxl + csize);
     if (method === 0) out.set(name, data.toString("utf8"));
-    else if (method === 8) out.set(name, inflateRawSync(data).toString("utf8"));
+    else if (method === 8) out.set(name, zlib.inflateRawSync(data).toString("utf8"));
   }
   return out;
 }
@@ -411,6 +471,8 @@ function walk(dir, depth, keep, out = [], budget = { n: 5000 }) {
 }
 
 const isProjectDb = (n) => /^Project\.db$/i.test(n);
+// A path the Resolve side of sharing reads (its autosaveSeen keys).
+export const isResolveFile = (p) => /\.drp$/i.test(p) || /(^|[\\/])Project\.db(\.[^.\\/]+)?$/i.test(p);
 export const isBackupFile = (n) => /\.drp$/i.test(n) || (/^Project\.db(\.[^.]+)?$/i.test(n) && !/-(journal|wal|shm)$/i.test(n));
 
 // Projects in the libraries and backups in the backup folder.

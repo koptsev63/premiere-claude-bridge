@@ -26,10 +26,13 @@ from pathlib import Path
 from core.beats import (
     analyze_samples,
     beat_strengths,
+    estimate_bpm,
     free_spans,
     percussive_accents,
     snap_cutlist_to_beats,
+    strong_accents,
     strong_beats,
+    tempo_autocorr,
 )
 from core.cutlist import Cut, Cutlist, Marker
 from core.overlays import Overlay, align_to_strong_beat, from_markers
@@ -144,6 +147,79 @@ def test_rule1_percussive_accents() -> None:
            any(s0 <= 4.1 and s1 >= 7.9 for s0, s1 in fs), str(fs))
     check_("the drum sections are not free",
            not any(s0 < 2.0 < s1 for s0, s1 in fs) and not any(s0 < 9.0 < s1 for s0, s1 in fs), str(fs))
+
+
+def synth_ticks(dur: float, strong: list[float], ticks: list[float], tick_amp: float,
+                pad: list[tuple[float, float]]):
+    """Strong drum hits (0.8) plus a steady ostinato of weak ticks (tick_amp)
+    plus a sine pad."""
+    n = int(dur * SR)
+    x = np.zeros(n)
+    t = np.arange(n) / SR
+    hits = [(c, 0.8) for c in strong] + [(c, tick_amp) for c in ticks]
+    for k, (c, a) in enumerate(hits):
+        i = int(round(c * SR))
+        b = _click(k + 1)
+        x[i:i + len(b)] += a * b[:max(0, n - i)]
+    for start, hz in pad:
+        x += 0.3 * np.clip((t - start) / 0.08, 0.0, 1.0) * np.sin(2 * np.pi * hz * t)
+    return x.astype(np.float32)
+
+
+def test_rule1_weak_ticks_regression() -> None:
+    """Regression from the real TW hero track (Suno, 96.1 BPM, Denis's cut of
+    15.11.2026): a steady 16th ostinato of weak percussive ticks ran through a
+    strings passage. Every tick counted as an accent, so the passage was not
+    free and Denis's cut there read as "on"; the IOI vote on those ticks gave
+    199 BPM. Here: 96 BPM, strong hits in bars 1-2 and 5-6 only, weak 16th
+    ticks all the way, a pad on top."""
+    print("rule 1 - weak steady ticks set no accent, do not double the tempo")
+    if not HAS_NP:
+        return skip("weak ticks", "numpy missing")
+    beat = 0.625
+    strong = [round(0.3125 + k * beat, 4) for k in range(24) if not 8 <= k < 16]
+    ticks = [round(0.3125 + k * beat / 4, 4) for k in range(96)]
+    ticks = [t for t in ticks if all(abs(t - h) > 1e-6 for h in strong)]
+    res = analyze_samples(synth_ticks(15.5, strong, ticks, 0.02, [(0.0, 220.0), (7.0, 330.0)]), SR)
+    perc_t = [t for t, _ in res["perc_onsets"]]
+    check_("the ticks are percussive onsets", len(perc_t) >= 80, str(len(perc_t)))
+    check_("(the old bug) an IOI vote on every percussive onset doubles the tempo",
+           estimate_bpm(perc_t)[0] > 150, str(estimate_bpm(perc_t)))
+    check_("tempo is the strong-hit tempo, 96 BPM within 2%",
+           abs(res["bpm"] - 96.0) / 96.0 <= 0.02 and res["tempo_source"] == "autocorr",
+           f"{res['bpm']} {res['tempo_source']}")
+    acc = [t for t, _ in res["accents"]]
+    check_("accents = the strong hits only",
+           len(acc) == len(strong) and all(any(abs(a - h) <= 0.03 for h in strong) for a in acc),
+           f"{len(acc)} vs {len(strong)}")
+    fs = res["free_spans"]
+    check_("the tick-only bars are one free span", any(s0 <= 4.8 and s1 >= 10.2 for s0, s1 in fs), str(fs))
+    period = 60.0 / res["bpm"]
+    sh = shots_at([0.0, 2.8125, 7.03125, 8.2, 11.5625], 15.0)
+    st = {round(p.t, 3): p.status
+          for p in accent_placement(sh, res["accents"], fs, period, 24.0)}
+    check_("a cut on a weak tick in those bars is free, not on", st[7.031] == "free", str(st))
+    check_("an off-tick cut there is free", st[8.2] == "free", str(st))
+    check_("cuts on strong hits outside them are on", st[2.812] == "on" and st[11.562] == "on", str(st))
+    check_("strong_accents: half the loudest or 1.6x the median",
+           strong_accents([(0, 0.2), (1, 0.22), (2, 0.25), (3, 0.45), (4, 0.9)]) == [(3.0, 0.45), (4.0, 0.9)])
+    check_("an evenly loud drum section keeps every hit",
+           len(strong_accents([(k, 0.9 + 0.01 * (k % 3)) for k in range(12)])) == 12)
+
+
+def test_rule1_tempo_fold() -> None:
+    print("rule 1 - tempo autocorrelation folds an ambiguous double tempo")
+    if not HAS_NP:
+        return skip("tempo fold", "numpy missing")
+    rate = 100.0
+    e = np.zeros(3000)
+    e[::32] += 1.0          # 187.5 BPM subdivision, as strong as ...
+    e[::64] += 0.15         # ... the 93.75 BPM beat (slightly accented)
+    bpm, clarity, cands = tempo_autocorr(e, rate)
+    check_("fold 187.5 -> 93.75 BPM", abs(bpm - 93.75) < 1.0, f"{bpm} {cands}")
+    check_("clear periodicity", clarity > 1.15, str(clarity))
+    flat = np.random.default_rng(1).random(3000)
+    check_("noise has no clear tempo", tempo_autocorr(flat, rate)[1] < 1.15)
 
 
 def test_rule1_median_fallback() -> None:

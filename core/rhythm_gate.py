@@ -32,7 +32,8 @@ validated against his material yet.
 With --music TRACK (or `check(..., music=core.beats.detect_beats(...))`) two
 editor rules from a live cut (Denis, 16.11.2026) are checked as well:
   * accents   - every cut lands on a PERCUSSIVE accent (drums only, from
-                `core.beats.percussive_accents`). A cut inside a free span
+                `core.beats.strong_accents`: the drum peaks, not every
+                percussive tick). A cut inside a free span
                 (no percussive accent nearby, e.g. strings only) is free and
                 not penalised, unless it breaks the pulse: a neighbouring shot
                 shorter than half a beat, or the cut 1-3 frames before a strong
@@ -82,7 +83,6 @@ MIN_FINAL_SEC = 2.0       # final shot shorter than this = no button / card
 ON_EARLY_FRAMES = 1.0     # a cut less than this early on an accent is on it
 ON_LATE_FRAMES = 2.0      # ... and up to this late (core.hits: two frames)
 PULSE_EARLY_FRAMES = (1.0, 3.0)  # this many frames before a strong hit = miss
-STRONG_HIT = 0.5          # accent strength (share of the loudest) = strong hit
 SERIES_MIN_SHOTS = 3      # this many short shots in a row = fast series
 SERIES_MAX_BEATS = 2.0    # a series shot is at most this many beats long
 
@@ -208,7 +208,9 @@ def accent_placement(shots: list[Shot], accents, free_spans, period: float,
                      fps: float) -> list[CutPlacement]:
     """Where every cut sits against the percussive accents.
 
-    accents    : [(t, strength 0..1)] or [t] (`core.beats.percussive_accents`)
+    accents    : [(t, strength 0..1)] or [t]: the STRONG percussive peaks
+                 (`core.beats.strong_accents`, the "accents" of detect_beats);
+                 every one of them is a strong hit for the pulse rule
     free_spans : [(start, end)] with no percussive accent (`core.beats.free_spans`)
     period     : beat length, s (60 / bpm); 0 disables the half-beat test
 
@@ -237,7 +239,7 @@ def accent_placement(shots: list[Shot], accents, free_spans, period: float,
         # the next strong hit after the cut: missed by 1-3 frames?
         lo, hi = PULSE_EARLY_FRAMES
         nxt = next(((ta, st) for ta, st in acc[k:] if ta > t), None)
-        if nxt and nxt[1] >= STRONG_HIT and lo * fr - 1e-6 <= nxt[0] - t <= hi * fr + 1e-6:
+        if nxt and lo * fr - 1e-6 <= nxt[0] - t <= hi * fr + 1e-6:
             out.append(CutPlacement(t, "pulse", nxt[0], round(t - nxt[0], 4),
                                     f"{(nxt[0] - t) * fps:.1f} frames before a strong hit"))
             continue

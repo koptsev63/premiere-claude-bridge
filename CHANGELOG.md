@@ -11,9 +11,16 @@ fallback.
 ### Added
 - Percussive accents: `core.beats.hpss()` and `percussive_accents()` find
   onsets on the drums only (median-filter HPSS); strings, pads and swells
-  no longer count as hits. `detect_beats()` / the new `analyze_samples()`
-  return `accents`, `free_spans` and `beat_strength`, and take tempo and
-  grid phase from the drums when there are enough hits.
+  no longer count as hits. `strong_accents()` keeps the peaks only (half
+  the loudest hit, or 1.6x the track's median onset): a steady ostinato of
+  weak ticks sets no accent. `detect_beats()` / the new `analyze_samples()`
+  return `perc_onsets`, `accents`, `free_spans`, `beat_strength` and
+  `tempo_source`.
+- Tempo from the autocorrelation of the full-mix onset strength
+  (`tempo_autocorr()`), with an octave rule that folds an ambiguous tempo
+  into 70-140 BPM, then `refine_grid()` for tempo and phase. On the TW hero
+  track (Suno, by hand 96.1 BPM) the old IOI vote said 185, a drum-only
+  vote 199; now 96.08. An unclear periodicity falls back to the IOI vote.
 - `core.rhythm_gate --music TRACK`: every cut must land on a drum hit; a cut
   in a span with no drums (free span) is free unless it breaks the pulse
   (a shot under half a beat, or a cut 1-3 frames before a strong hit).

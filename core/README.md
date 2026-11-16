@@ -199,12 +199,20 @@ python -m core.rhythm_gate cutlist.json --genre promo --music TRACK.wav
 
 1. **Accents come from percussion only.** `core/beats.py`: `hpss()`
    (median-filter harmonic/percussive split of the STFT magnitude; numpy,
-   scipy's median filter when installed, else a numpy fallback), `percussive_accents()` (onsets of the percussive part only),
-   `free_spans()`; `analyze_samples()` / `detect_beats()` return `accents`
-   and `free_spans` and take tempo and grid phase from the drums. A cut
-   must land on a percussive accent; inside a free span (no drums, e.g.
-   strings only) it is free unless it breaks the pulse (a neighbouring shot
-   under half a beat, or the cut 1-3 frames before a strong hit it misses).
+   scipy's median filter when installed, else a numpy fallback),
+   `percussive_accents()` (every onset of the percussive part),
+   `strong_accents()` (the peaks among them: at least half the loudest hit,
+   or 1.6x the track's median onset; a steady ostinato of weak ticks sets
+   no accent), `free_spans()`. `analyze_samples()` / `detect_beats()`
+   return `perc_onsets`, `accents` (strong peaks only) and `free_spans`.
+   Tempo: autocorrelation of the full-mix onset strength
+   (`tempo_autocorr()`), an ambiguous octave folded into 70-140 BPM so a
+   steady 8th/16th subdivision cannot double it, then `refine_grid()` fits
+   tempo and phase to the whole track; an unclear periodicity falls back to
+   the old IOI vote. A cut must land on an accent; inside a free span (no
+   drum peaks, e.g. strings with only soft ticks) it is free unless it
+   breaks the pulse (a neighbouring shot under half a beat, or the cut 1-3
+   frames before an accent it misses).
    `core/rhythm_gate.py`: `accent_placement()` (on / free / off / pulse),
    `check(..., music=...)`, `--music`.
 2. **Strong beats in a fast series.** `core/beats.py`: `beat_strengths()`

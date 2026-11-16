@@ -16,6 +16,9 @@ Pure, unit-tested core (no ffmpeg):
 Percussive accents (editor rule, Denis 16.11.2026 - needs numpy):
   hpss(samples, sr)                       - median-filter harmonic/percussive split
   percussive_accents(samples, sr)         - [(t, strength)] onsets of the drums only
+  strong_accents(onsets)                  - the peaks among them: cut targets
+  tempo_autocorr(env, frame_rate)         - tempo with the octave (fold) rule
+  refine_grid(env, frame_rate, bpm)       - fine tempo + phase of the grid
   free_spans(accents, duration, min_gap_s) - spans with no percussive accent
   beat_strengths(beats, accents, period)  - "strong" | "weak" | "fill" per beat
   strong_beats(beats, strengths)          - beats 1 and 3 of every bar
@@ -322,10 +325,13 @@ def estimate_bpm(
 HPSS_N_FFT = 1024
 HPSS_HOP = 256
 HPSS_KERNEL = 17          # median kernel, bins (percussive) and frames (harmonic)
-ACCENT_FLOOR = 0.10       # accent must reach this share of the loudest hit
-STRONG_ACCENT = 0.5       # accent at this share of the loudest = "strong hit"
-FILL_MIN_ACCENTS = 3      # this many accents inside the last beat = bar-end fill
-MIN_ACCENTS_FOR_TEMPO = 4  # fewer percussive accents: tempo from the full mix
+ACCENT_FLOOR = 0.10       # onset must reach this share of the loudest hit
+STRONG_ACCENT = 0.5       # onset at this share of the loudest = strong peak
+STRONG_MEDIAN_RATIO = 1.6  # ... or this many times the track's median onset
+FILL_MIN_ACCENTS = 3      # this many onsets inside the last beat = bar-end fill
+TEMPO_FOLD = (70.0, 140.0)  # an ambiguous tempo is folded into this range
+TEMPO_FOLD_RATIO = 0.85   # octave candidate this close to the best = ambiguous
+TEMPO_MIN_CLARITY = 1.15  # best autocorrelation / mean over lags; below = unclear
 
 
 def _stft_mag(x, n_fft: int = HPSS_N_FFT, hop: int = HPSS_HOP):
@@ -370,8 +376,11 @@ def hpss(samples, sr: int = DEF_SR, *, n_fft: int = HPSS_N_FFT,
     """
     if not _HAS_NUMPY:  # pragma: no cover
         raise RuntimeError("core.beats.hpss needs numpy (pip install numpy)")
-    np = _np
-    S = _stft_mag(samples, n_fft, hop)
+    return _hpss_mag(_stft_mag(samples, n_fft, hop), kernel)
+
+
+def _hpss_mag(S, kernel: int = HPSS_KERNEL):
+    """HPSS of a magnitude spectrogram already computed (see `hpss`)."""
     if S.shape[1] == 0:
         return S, S
     H = _median_along(S, kernel, axis=1)   # smooth along time  -> sustained
@@ -394,17 +403,29 @@ def percussive_accents(
     Spectral flux of the log-compressed percussive spectrogram, peak-picked
     with the same adaptive gate as the full-mix detector, plus an absolute
     floor (`floor` x the loudest hit) so a quiet passage with no drums yields
-    no accents instead of noise. Strength is relative to the loudest hit.
+    no onsets instead of noise. Strength is relative to the loudest hit.
+    These are ALL percussive onsets, ghost notes and steady ticks included;
+    the accents a cut must land on are `strong_accents()` of this list.
     """
     if not _HAS_NUMPY:  # pragma: no cover
         return []
-    np = _np
     _, P = hpss(samples, sr, hop=hop)
+    return _onsets_from_perc(P, len(samples), sr, hop, sensitivity, floor)
+
+
+def _flux(M):
+    """Half-wave spectral flux of a log-compressed magnitude spectrogram."""
+    np = _np
+    L = np.log1p(100.0 * M)
+    flux = np.maximum(np.diff(L, axis=1), 0.0).sum(axis=0)
+    return np.concatenate([[0.0], flux])
+
+
+def _onsets_from_perc(P, n_samples: int, sr: int, hop: int,
+                      sensitivity: float, floor: float) -> list[tuple[float, float]]:
     if P.shape[1] < 3:
         return []
-    L = np.log1p(100.0 * P)
-    flux = np.maximum(np.diff(L, axis=1), 0.0).sum(axis=0)
-    flux = np.concatenate([[0.0], flux])
+    flux = _flux(P)
     peak = float(flux.max())
     if peak <= 0:
         return []
@@ -415,9 +436,139 @@ def percussive_accents(
     frames = pick_onsets(env, thr, min_gap)
     # the last window runs into the zero padding: a sound cut off by the end
     # of the file splatters across the spectrum and reads as a hit there
-    last = (len(samples) - HPSS_N_FFT) / sr
+    last = (n_samples - HPSS_N_FFT) / sr
     return [(round(f * hop / sr, 3), round(env[f] / peak, 3)) for f in frames
             if f * hop / sr <= last]
+
+
+def strong_accents(
+    onsets: Sequence[tuple[float, float]],
+    ratio: float = STRONG_MEDIAN_RATIO,
+    loud: float = STRONG_ACCENT,
+) -> list[tuple[float, float]]:
+    """The percussive onsets that are accents: the peaks you see on the wave.
+
+    Denis: the accents that force a cut are the drum peaks, not every
+    percussive onset. A steady ostinato of weak ticks (a shaker, 16th hats)
+    is percussive but sets no accent, and a passage with only such ticks is
+    free to cut in. Rule, relative to the track itself:
+
+        strength >= loud              (half the loudest hit or more), or
+        strength >= ratio * median    (clearly above the typical onset)
+
+    The median is the level of the track's ordinary percussion; a peak has to
+    stand ratio (1.6) times above it. The `loud` branch keeps an evenly loud
+    drum section (where the median is itself high) full of accents. A
+    local-neighbourhood test was rejected for that reason: in a section of
+    equal loud hits nothing stands out locally, yet every hit is a cut point.
+    Measured on a Suno track Denis cut (TW hero, 15.11.2026): 267 onsets,
+    median 0.26, threshold 0.42 - 57 accents; the strings passage at
+    17-25 s keeps only its steady ticks (0.14-0.38) and comes out free.
+    """
+    ol = [(float(t), float(v)) for t, v in onsets]
+    if not ol:
+        return []
+    vals = sorted(v for _, v in ol)
+    m = len(vals) // 2
+    med = vals[m] if len(vals) % 2 else (vals[m - 1] + vals[m]) / 2.0
+    thr = min(loud, ratio * med)
+    return [(t, v) for t, v in ol if v >= thr - 1e-9]
+
+
+def _onset_strength(S):
+    """Full-mix onset strength for tempo: spectral flux minus its local mean
+    (about 0.35 s), half-wave rectified."""
+    np = _np
+    f = _flux(S)
+    k = 31
+    f = f - np.convolve(f, np.ones(k) / k, mode="same")
+    return np.maximum(f, 0.0)
+
+
+def tempo_autocorr(
+    env,
+    frame_rate: float,
+    min_bpm: float = DEF_MIN_BPM,
+    max_bpm: float = DEF_MAX_BPM,
+    fold: tuple[float, float] = TEMPO_FOLD,
+    fold_ratio: float = TEMPO_FOLD_RATIO,
+) -> tuple[float, float, list[tuple[float, float]]]:
+    """Tempo from the autocorrelation of an onset-strength envelope.
+
+    Returns (bpm, clarity, candidates). candidates are the local maxima of the
+    autocorrelation inside [min_bpm, max_bpm] as (bpm, score / best), best
+    first; clarity = best score / mean score over the lag range (about 1 means
+    no periodicity at all).
+
+    Octave rule: a steady subdivision (8ths, 16ths) correlates almost as well
+    as the beat. When the best candidate is outside `fold` (70-140 BPM) and a
+    candidate at half or double its tempo (within 3%) scores at least
+    `fold_ratio` of the best, the in-range one is taken. The peak lag is
+    refined by a parabola through its neighbours (sub-frame precision).
+    """
+    np = _np
+    e = np.asarray(env, dtype=np.float64)
+    lo = max(1, int(math.floor(60.0 * frame_rate / max_bpm)))
+    hi = int(math.ceil(60.0 * frame_rate / min_bpm))
+    if len(e) <= hi + 2 or not e.any():
+        return 0.0, 0.0, []
+    n = len(e)
+    lags = np.arange(lo - 1, hi + 2)
+    ac = np.array([float(np.dot(e[:n - L], e[L:])) / (n - L) for L in lags])
+    inner = range(1, len(lags) - 1)
+    peaks = [i for i in inner if ac[i] >= ac[i - 1] and ac[i] >= ac[i + 1] and ac[i] > 0]
+    if not peaks:
+        return 0.0, 0.0, []
+    mean = float(ac[1:-1].mean())
+    best = max(ac[i] for i in peaks)
+
+    def refine(i: int) -> float:
+        a, b, c = ac[i - 1], ac[i], ac[i + 1]
+        den = a - 2 * b + c
+        off = 0.5 * (a - c) / den if den < 0 else 0.0
+        return 60.0 * frame_rate / (lags[i] + max(-0.5, min(0.5, off)))
+
+    cands = sorted(((refine(i), float(ac[i] / best)) for i in peaks), key=lambda c: -c[1])
+    bpm = cands[0][0]
+    if not fold[0] <= bpm <= fold[1]:
+        for mult in (0.5, 2.0):
+            want = bpm * mult
+            alt = [c for c in cands if abs(c[0] / want - 1.0) <= 0.03
+                   and c[1] >= fold_ratio and fold[0] <= c[0] <= fold[1]]
+            if alt:
+                bpm = alt[0][0]
+                break
+    clarity = float(best / mean) if mean > 0 else 0.0
+    return round(bpm, 1), round(clarity, 3), [(round(b, 1), round(r, 3)) for b, r in cands[:6]]
+
+
+def refine_grid(env, frame_rate: float, bpm: float, span: float = 0.015,
+                step_bpm: float = 0.02) -> tuple[float, float]:
+    """Fine tempo and phase: the (bpm, offset s) whose even grid collects the
+    most onset strength per beat, searched within +-span of `bpm`.
+
+    The autocorrelation peak is quantised to whole frames (about 1% at 96
+    BPM); over a minute that drifts the grid by several frames. Fitting the
+    grid to the whole envelope fixes both tempo and phase (on the TW hero
+    track: 96.3 -> 96.08 BPM, the tempo measured by hand).
+    """
+    np = _np
+    e = np.asarray(env, dtype=np.float64)
+    if bpm <= 0 or len(e) == 0:
+        return bpm, 0.0
+    best = (-1.0, bpm, 0.0)
+    for b in np.arange(bpm * (1 - span), bpm * (1 + span) + 1e-9, step_bpm):
+        stride = 60.0 / b * frame_rate
+        base = np.arange(0.0, len(e), stride)
+        for k in range(int(math.ceil(stride))):
+            idx = np.round(base + k).astype(int)
+            idx = idx[idx < len(e)]
+            if len(idx) == 0:
+                continue
+            sc = float(e[idx].sum()) / len(idx)
+            if sc > best[0]:
+                best = (sc, float(b), k / frame_rate)
+    return round(best[1], 2), round(best[2], 3)
 
 
 def free_spans(
@@ -600,25 +751,31 @@ def analyze_samples(
     Returns
     -------
     dict with keys:
-      bpm           : float - estimated tempo (full-mix onsets, as before)
-      confidence    : float in [0, 1] - tempo-lock score (onsets on the grid)
-      beats         : list[float] - even beat grid at the BPM, 3 decimals
-      downbeats     : list[float] - every 4th beat (assumes 4/4 time)
-      onsets        : list[float] - raw full-mix note attacks (for inspection)
-      accents       : list[(t, strength)] - percussive onsets only (cut targets)
-      beat_strength : list[str] - "strong" | "weak" | "fill", one per beat
-      free_spans    : list[(start, end)] - no percussive accent: cuts are free
+      bpm            : float - estimated tempo
+      tempo_source   : "autocorr" | "onsets" - which estimator gave it
+      confidence     : float in [0, 1] - tempo-lock score (accents on the grid)
+      beats          : list[float] - even beat grid at the BPM, 3 decimals
+      downbeats      : list[float] - every 4th beat (assumes 4/4 time)
+      onsets         : list[float] - raw full-mix note attacks (for inspection)
+      perc_onsets    : list[(t, strength)] - every percussive onset (ticks too)
+      accents        : list[(t, strength)] - strong percussive peaks only
+                       (`strong_accents`): the cut targets
+      beat_strength  : list[str] - "strong" | "weak" | "fill", one per beat
+      free_spans     : list[(start, end)] - no accent: cuts are free there
 
-    Tempo and grid phase come from the percussive accents when there are at
-    least MIN_ACCENTS_FOR_TEMPO of them (a pad entering before the drums, or
-    a string passage, no longer shifts or bends the grid), otherwise from the
-    full-mix onsets as before. Without numpy, accents and
-    free_spans are empty and every beat is labelled by bar position only.
+    Tempo (numpy path): autocorrelation of the full-mix onset strength with
+    the octave rule of `tempo_autocorr` (a steady 8th/16th ostinato cannot
+    double the tempo; an ambiguous tempo is folded into 70-140 BPM). If that
+    periodicity is unclear (clarity < TEMPO_MIN_CLARITY), or without numpy,
+    the full-mix IOI vote of `estimate_bpm` decides, as before. Then
+    `refine_grid` fits tempo (+-1.5%) and phase to the whole envelope; on the
+    IOI path the grid locks to the first full-mix onset as before. Without numpy, accents
+    and free_spans are empty and every beat is labelled by bar position only.
     """
     if samples is None or len(samples) == 0:
-        return {"bpm": 0.0, "confidence": 0.0, "beats": [],
-                "downbeats": [], "onsets": [], "accents": [],
-                "beat_strength": [], "free_spans": []}
+        return {"bpm": 0.0, "tempo_source": "onsets", "confidence": 0.0,
+                "beats": [], "downbeats": [], "onsets": [], "perc_onsets": [],
+                "accents": [], "beat_strength": [], "free_spans": []}
 
     energies = rms_frames(samples, win, hop)
     # Detect on the onset-flux envelope, not raw RMS: continuous music is too
@@ -630,28 +787,44 @@ def analyze_samples(
 
     hop_s = hop / sr
     onset_times = [round(f * hop_s, 3) for f in onset_frames]
-
-    accents = percussive_accents(samples, sr, sensitivity=sensitivity) \
-        if _HAS_NUMPY else []
-    accent_times = [t for t, _ in accents]
-
-    pulse = accent_times if len(accent_times) >= MIN_ACCENTS_FOR_TEMPO \
-        else onset_times
-    bpm, _ = estimate_bpm(pulse, min_bpm, max_bpm)
     duration = len(samples) / sr
-    beats = _beat_grid(pulse, bpm, duration)
+
+    perc: list[tuple[float, float]] = []
+    accents: list[tuple[float, float]] = []
+    bpm, source, t0 = 0.0, "onsets", None
+    if _HAS_NUMPY:
+        S = _stft_mag(samples, HPSS_N_FFT, HPSS_HOP)
+        _, P = _hpss_mag(S)
+        perc = _onsets_from_perc(P, len(samples), sr, HPSS_HOP, sensitivity, ACCENT_FLOOR)
+        accents = strong_accents(perc)
+        rate = sr / HPSS_HOP
+        env = _onset_strength(S)
+        ac_bpm, clarity, _ = tempo_autocorr(env, rate, min_bpm, max_bpm)
+        if ac_bpm > 0 and clarity >= TEMPO_MIN_CLARITY:
+            bpm, t0 = refine_grid(env, rate, ac_bpm)
+            source = "autocorr"
+    if source == "onsets":
+        bpm, _ = estimate_bpm(onset_times, min_bpm, max_bpm)
+
     period = 60.0 / bpm if bpm > 0 else 0.0
+    if t0 is not None and period > 0:
+        beats = _beat_grid([t0], bpm, duration)
+    else:
+        beats = _beat_grid(onset_times, bpm, duration)
+    pulse = [t for t, _ in accents] or onset_times
     confidence = _grid_confidence(beats, pulse, period)
     downbeats = beats[::4]
 
     return {
         "bpm": bpm,
+        "tempo_source": source,
         "confidence": confidence,
         "beats": beats,
         "downbeats": downbeats,
         "onsets": onset_times,
+        "perc_onsets": perc,
         "accents": accents,
-        "beat_strength": beat_strengths(beats, accents, period or None),
+        "beat_strength": beat_strengths(beats, perc, period or None),
         "free_spans": free_spans(accents, duration,
                                  max(1.5, 2.0 * period)) if accents else
         ([(0.0, round(duration, 3))] if _HAS_NUMPY else []),

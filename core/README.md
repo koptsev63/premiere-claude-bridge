@@ -185,3 +185,57 @@ python -m core.screen_comp PLATE.mp4 CONTENT.mp4 OUT.mp4 --config screen.json
 
 The Premiere-side counterpart of `resolve_run exec` lives next to the MCP
 server: `node mcp-server/pk.js` (see the main README, "Direct path").
+
+## Editor rules from a live cut (Denis, 16.11.2026)
+
+Denis cut a 63 s promo by hand and named five rules he cuts by. Each one is
+now in the engine; `python -m core.tests.test_taste` checks all five on
+synthetic data (drum clicks plus a sine pad for strings, synthetic shots).
+
+```bash
+# cuts against the drums and the strong beats (exit 1 for trailer / teaser)
+python -m core.rhythm_gate cutlist.json --genre promo --music TRACK.wav
+```
+
+1. **Accents come from percussion only.** `core/beats.py`: `hpss()`
+   (median-filter harmonic/percussive split of the STFT magnitude; numpy,
+   scipy's median filter when installed, else a numpy fallback),
+   `percussive_accents()` (every onset of the percussive part),
+   `strong_accents()` (the peaks among them: at least half the loudest hit,
+   or 1.6x the track's median onset; a steady ostinato of weak ticks sets
+   no accent), `free_spans()`. `analyze_samples()` / `detect_beats()`
+   return `perc_onsets`, `accents` (strong peaks only) and `free_spans`.
+   Tempo: autocorrelation of the full-mix onset strength
+   (`tempo_autocorr()`), an ambiguous octave folded into 70-140 BPM so a
+   steady 8th/16th subdivision cannot double it, then `refine_grid()` fits
+   tempo and phase to the whole track; an unclear periodicity falls back to
+   the old IOI vote. A cut must land on an accent; inside a free span (no
+   drum peaks, e.g. strings with only soft ticks) it is free unless it
+   breaks the pulse (a neighbouring shot under half a beat, or the cut 1-3
+   frames before an accent it misses).
+   `core/rhythm_gate.py`: `accent_placement()` (on / free / off / pulse),
+   `check(..., music=...)`, `--music`.
+2. **Strong beats in a fast series.** `core/beats.py`: `beat_strengths()`
+   labels every beat "strong" (1 and 3 of a bar of 4), "weak" or "fill"
+   (dense percussive hits in beat 4, denser than the rest of the bar);
+   `strong_beats()`; `snap_cutlist_to_beats(..., strengths)` snaps to strong
+   beats only. `core/rhythm_gate.py`: `fast_series()` (3+ shots of at most
+   2 beats) and `series_on_weak_beats()`.
+3. **A series is a phrase.** `core/taste.py` (new, standalone: the engine
+   had no fast-series builder): `phrase_order()` puts the impact shot first
+   (tag "impact", else largest motion or brightness jump), ends on the shot
+   that links to the next one (same subject or tag, else closest dominant
+   hue), keeps same-content shots apart; `check_series()` reports breaks.
+   `core/variants.py` applies it to the ACTION run when the clips carry
+   `tags` / `subject` / `motion` / `dominant_hue` (report keys); without
+   them nothing changes. There is no tagging model: `tags` and `subject`
+   are the hook.
+4. **Neighbours differ in dominant colour, not brightness.**
+   `core/taste.py`: `dominant_hue()` (saturation-weighted hue histogram of
+   a few frames), `hue_distance()` (circular), `hue_flags()`, `clip_hue()`
+   (three 32x18 frames via ffmpeg). The engine had no brightness-alternation
+   rule to replace (`core.framecheck` only flags light jumps inside a clip).
+5. **A two-hit title lands its second hit on a strong beat.**
+   `core/overlays.py`: `Overlay.hits` (seconds from the title start),
+   `align_to_strong_beat()`, `from_markers(..., hits, strong_beats)`.
+   Without `hits`, or with one hit, titles stay where they were.

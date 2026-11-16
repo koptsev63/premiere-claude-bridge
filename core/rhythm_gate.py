@@ -2,7 +2,7 @@
 
 Run on a locked cut before it is shown or delivered:
 
-    python3 -m core.rhythm_gate SOURCE --genre trailer [--fps 25] [--brief DIR] [--json]
+    python3 -m core.rhythm_gate SOURCE --genre trailer [--fps 25] [--brief DIR] [--music TRACK] [--json]
 
 SOURCE is one of:
   * a bridge cutlist .json ("cuts": [...]) - exact shot lengths plus beat labels;
@@ -28,11 +28,27 @@ slow down at the end, so "must accelerate" is not a rule here).
 
 Other genres get the same report with exit 0: no threshold there has been
 validated against his material yet.
+
+With --music TRACK (or `check(..., music=core.beats.detect_beats(...))`) two
+editor rules from a live cut (Denis, 16.11.2026) are checked as well:
+  * accents   - every cut lands on a PERCUSSIVE accent (drums only, from
+                `core.beats.strong_accents`: the drum peaks, not every
+                percussive tick). A cut inside a free span
+                (no percussive accent nearby, e.g. strings only) is free and
+                not penalised, unless it breaks the pulse: a neighbouring shot
+                shorter than half a beat, or the cut 1-3 frames before a strong
+                percussive hit it misses ("pulse"). `accent_placement()`.
+  * strong    - in a fast series (3+ shots in a row, each at most 2 beats) a
+                cut on the grid lands on a strong beat (1 or 3 of the bar),
+                not on a weak beat or the bar-end fill. `series_on_weak_beats()`.
+Off-accent, pulse and weak-beat cuts fail for the gated genres and are notes
+elsewhere; `info["free_spans"]` lists the free spans.
 """
 
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import statistics
 import subprocess
@@ -62,6 +78,13 @@ MONOTONY_RUN = 4          # this many same-length shots in a row
 SAME_LEN_FRAMES = 2       # "same length" tolerance
 FLASH_FRAMES = 6          # shorter than this = flash
 MIN_FINAL_SEC = 2.0       # final shot shorter than this = no button / card
+
+# Editor rules from a live cut (Denis, 16.11.2026)
+ON_EARLY_FRAMES = 1.0     # a cut less than this early on an accent is on it
+ON_LATE_FRAMES = 2.0      # ... and up to this late (core.hits: two frames)
+PULSE_EARLY_FRAMES = (1.0, 3.0)  # this many frames before a strong hit = miss
+SERIES_MIN_SHOTS = 3      # this many short shots in a row = fast series
+SERIES_MAX_BEATS = 2.0    # a series shot is at most this many beats long
 
 
 @dataclass
@@ -162,6 +185,120 @@ def load_shots(source: str) -> tuple[list[Shot], str, Cutlist | None]:
 # --------------------------------------------------------------------------- #
 
 
+@dataclass
+class CutPlacement:
+    t: float              # cut time on the timeline, s
+    status: str           # on | free | off | pulse
+    accent: float | None  # nearest percussive accent, s
+    delta: float | None   # t - accent, s (negative = early)
+    why: str = ""
+
+
+def _accents(accents) -> list[tuple[float, float]]:
+    out = []
+    for a in accents:
+        if isinstance(a, (tuple, list)):
+            out.append((float(a[0]), float(a[1]) if len(a) > 1 else 1.0))
+        else:
+            out.append((float(a), 1.0))
+    return sorted(out)
+
+
+def accent_placement(shots: list[Shot], accents, free_spans, period: float,
+                     fps: float) -> list[CutPlacement]:
+    """Where every cut sits against the percussive accents.
+
+    accents    : [(t, strength 0..1)] or [t]: the STRONG percussive peaks
+                 (`core.beats.strong_accents`, the "accents" of detect_beats);
+                 every one of them is a strong hit for the pulse rule
+    free_spans : [(start, end)] with no percussive accent (`core.beats.free_spans`)
+    period     : beat length, s (60 / bpm); 0 disables the half-beat test
+
+    status
+      on    - within ON_EARLY_FRAMES before .. ON_LATE_FRAMES after an accent
+      pulse - breaks the pulse: 1-3 frames before a strong hit it misses, or a
+              free cut next to a shot shorter than half a beat
+      free  - inside a free span (no drums to land on): not penalised
+      off   - between percussive accents where there are drums
+    The first shot's start is not a cut and is skipped.
+    """
+    fr = 1.0 / fps
+    acc = _accents(accents)
+    ts = [a for a, _ in acc]
+    out: list[CutPlacement] = []
+    for i in range(1, len(shots)):
+        t = shots[i].start
+        k = bisect.bisect_left(ts, t)
+        near = [j for j in (k - 1, k) if 0 <= j < len(ts)]
+        j = min(near, key=lambda j: abs(t - ts[j])) if near else None
+        a = ts[j] if j is not None else None
+        d = round(t - a, 4) if a is not None else None
+        if d is not None and -ON_EARLY_FRAMES * fr < d <= ON_LATE_FRAMES * fr + 1e-6:
+            out.append(CutPlacement(t, "on", a, d))
+            continue
+        # the next strong hit after the cut: missed by 1-3 frames?
+        lo, hi = PULSE_EARLY_FRAMES
+        nxt = next(((ta, st) for ta, st in acc[k:] if ta > t), None)
+        if nxt and lo * fr - 1e-6 <= nxt[0] - t <= hi * fr + 1e-6:
+            out.append(CutPlacement(t, "pulse", nxt[0], round(t - nxt[0], 4),
+                                    f"{(nxt[0] - t) * fps:.1f} frames before a strong hit"))
+            continue
+        if any(s0 <= t <= s1 for s0, s1 in free_spans):
+            short = [n for n in (i - 1, i) if period > 0 and shots[n].duration < period / 2]
+            if short:
+                out.append(CutPlacement(t, "pulse", a, d,
+                                        f"shot {short[0] + 1} is under half a beat"))
+            else:
+                out.append(CutPlacement(t, "free", a, d))
+            continue
+        out.append(CutPlacement(t, "off", a, d))
+    return out
+
+
+def fast_series(shots: list[Shot], period: float) -> list[tuple[int, int]]:
+    """(first index, count) of runs of SERIES_MIN_SHOTS+ shots each at most
+    SERIES_MAX_BEATS beats long."""
+    if period <= 0:
+        return []
+    lim = SERIES_MAX_BEATS * period + 1e-3
+    runs, i = [], 0
+    while i < len(shots):
+        j = i
+        while j < len(shots) and shots[j].duration <= lim:
+            j += 1
+        if j - i >= SERIES_MIN_SHOTS:
+            runs.append((i, j - i))
+        i = max(j, i + 1)
+    return runs
+
+
+def series_on_weak_beats(shots: list[Shot], beats: list[float],
+                         strengths: list[str], fps: float) -> list[tuple[float, str]]:
+    """Cuts of a fast series that land on a weak beat or a bar-end fill.
+
+    Only cuts that sit on the grid (within two frames of a beat) are judged;
+    a cut off the grid is the accent check's business. Returns [(t, label)].
+    """
+    if not beats or len(beats) != len(strengths):
+        return []
+    period = (beats[-1] - beats[0]) / (len(beats) - 1) if len(beats) > 1 else 0.0
+    tol = ON_LATE_FRAMES / fps
+    bad = []
+    for first, n in fast_series(shots, period):
+        cuts = [shots[k].start for k in range(first, first + n)]
+        end = shots[first + n - 1]
+        cuts.append(round(end.start + end.duration, 3))
+        for t in cuts:
+            if t <= 1e-6:
+                continue
+            k = bisect.bisect_left(beats, t)
+            near = [j for j in (k - 1, k) if 0 <= j < len(beats)]
+            j = min(near, key=lambda j: abs(t - beats[j]))
+            if abs(t - beats[j]) <= tol and strengths[j] != "strong":
+                bad.append((t, strengths[j]))
+    return bad
+
+
 def _pct(sorted_vals: list[float], q: float) -> float:
     return sorted_vals[int(round(q * (len(sorted_vals) - 1)))]
 
@@ -191,7 +328,7 @@ def monotony_runs(durs: list[float], tol: float) -> list[tuple[int, int, float]]
 
 def check(shots: list[Shot], genre: str, fps: float, *, source: str = "",
           shot_source: str = "", cutlist: Cutlist | None = None,
-          brief_dir: str | None = None) -> GateReport:
+          brief_dir: str | None = None, music: dict | None = None) -> GateReport:
     durs = [s.duration for s in shots]
     rep = GateReport(source=source, genre=genre, shot_source=shot_source,
                      shots=len(durs), total_sec=round(sum(durs), 2))
@@ -220,6 +357,9 @@ def check(shots: list[Shot], genre: str, fps: float, *, source: str = "",
         for flag in analyze_cutlist(cutlist).beat_pacing_flags:
             rep.fails.append(f"beat pacing: {flag}")
 
+    if music:
+        _check_music(rep, shots, music, fps)
+
     flashes = [i for i, d in enumerate(durs) if d < FLASH_FRAMES * frame]
     if flashes:
         where = ", ".join(f"{shots[i].start:.2f}s" for i in flashes[:8])
@@ -247,6 +387,36 @@ def check(shots: list[Shot], genre: str, fps: float, *, source: str = "",
     if shot_source == "detected":
         rep.info["note"] = "shot lengths from scene detection: a dissolve merges shots, a flash adds one"
     return rep
+
+
+def _check_music(rep: GateReport, shots: list[Shot], music: dict, fps: float) -> None:
+    """Accent and strong-beat rules against a `core.beats` analysis dict."""
+    bpm = float(music.get("bpm") or 0.0)
+    period = 60.0 / bpm if bpm > 0 else 0.0
+    accents = music.get("accents") or []
+    free = [tuple(x) for x in music.get("free_spans") or []]
+    rep.info["free_spans"] = free
+    if accents or free:
+        places = accent_placement(shots, accents, free, period, fps)
+        by = {k: [p for p in places if p.status == k] for k in ("on", "free", "off", "pulse")}
+        rep.info["cuts_on_accent"] = len(by["on"])
+        rep.info["cuts_free"] = len(by["free"])
+        if by["off"]:
+            where = ", ".join(
+                f"{p.t:.2f}s ({p.delta:+.2f} from {p.accent:.2f})" if p.accent is not None
+                else f"{p.t:.2f}s" for p in by["off"][:8])
+            rep.fails.append(
+                f"{len(by['off'])} cut(s) between percussive accents where the drums play: {where}. "
+                "Move them onto a drum hit.")
+        for p in by["pulse"]:
+            rep.fails.append(f"cut at {p.t:.2f}s breaks the pulse: {p.why}")
+    beats, strengths = music.get("beats") or [], music.get("beat_strength") or []
+    weak = series_on_weak_beats(shots, beats, strengths, fps)
+    if weak:
+        where = ", ".join(f"{t:.2f}s ({lab})" for t, lab in weak[:8])
+        rep.fails.append(
+            f"fast series cut on {len(weak)} weak beat(s) or bar-end fill: {where}. "
+            "Cut a series on beats 1 and 3.")
 
 
 # --------------------------------------------------------------------------- #
@@ -299,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--genre", required=True, choices=sorted(GENRE_BRIEF))
     ap.add_argument("--fps", type=float, default=25.0)
     ap.add_argument("--brief", help="folder with the genre digests (trailer.md, documentary.md, ...)")
+    ap.add_argument("--music", help="music track: check cuts against percussive accents and strong beats")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     try:
@@ -306,7 +477,12 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, OSError, subprocess.CalledProcessError) as e:
         print(f"rhythm gate: cannot read shots: {e}", file=sys.stderr)
         return 2
-    rep = check(shots, a.genre, a.fps, source=a.source, shot_source=kind, cutlist=cl, brief_dir=a.brief)
+    music = None
+    if a.music:
+        from core.beats import detect_beats
+        music = detect_beats(a.music)
+    rep = check(shots, a.genre, a.fps, source=a.source, shot_source=kind, cutlist=cl,
+                brief_dir=a.brief, music=music)
     if a.json:
         print(json.dumps({**asdict(rep), "passed": rep.passed, "gated": rep.gated}, ensure_ascii=False, indent=1))
     else:

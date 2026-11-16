@@ -183,6 +183,8 @@ export function setExcluded(project, exclude = true, home = HOME) {
     const set = new Set(s.excluded || []);
     if (exclude) set.add(key); else set.delete(key);
     s.excluded = list = Array.from(set).sort();
+    // A Resolve project is not journalled while out; saves from before this moment never become a diff
+    s.resolveGap = { ...(s.resolveGap || {}), [resolveJournalKey(String(project).split(/[\\/]/).pop())]: new Date().toISOString() };
   }, home);
   return { project: key, excluded: exclude, all: list };
 }
@@ -197,6 +199,9 @@ export function isExcluded(project, home = HOME) {
 const KEEP_STRING = new Set(["type", "kind", "item", "source", "t", "from_t", "to_t", "unit"]);
 const DROP = new Set(["file", "path", "comment", "comments", "note", "projectPath", "mediaPath", "hash"]);
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
+
+// The only file extensions that go out: a known media type, never the tail of a free-text name ("Mr.Smith").
+const MEDIA_EXT = new Set("mov mp4 m4v mxf avi mkv webm mts m2ts braw r3d ari arx crm dng exr dpx tif tiff png jpg jpeg heic gif psd ai svg wav aif aiff mp3 m4a aac flac ogg caf bwf mpg mpeg prproj drp".split(" "));
 
 export function hashWith(salt) {
   return (v) => "h" + createHash("sha256").update(String(salt)).update("\u0000").update(String(v)).digest("hex").slice(0, 12);
@@ -216,7 +221,7 @@ export function anonymize(value, salt, key = "") {
     for (const [k, v] of Object.entries(value)) {
       if (DROP.has(k)) continue;
       // keep the file extension of media: "mov", "mp4" says something about the material, nothing about the client
-      if ((k === "name" || k === "path") && typeof v === "string" && /\.[a-z0-9]{2,5}$/i.test(v)) out.ext = v.split(".").pop().toLowerCase();
+      if (k === "name" && typeof v === "string") { const e = /\.([a-z0-9]{2,5})$/i.exec(v)?.[1]?.toLowerCase(); if (e && MEDIA_EXT.has(e)) out.ext = e; }
       out[k] = anonymize(v, salt, k);
     }
     return out;
@@ -454,21 +459,27 @@ export async function importNewAutosaves({ home = HOME, root = JR.JOURNAL_ROOT, 
     if (resolve) {
       // Kept out by name: not even journalled, and the next save after it is let
       // back in starts a fresh baseline, so work done while out never becomes a diff.
-      const out = (name) => (loadState(home).excluded || []).includes(projectKey(name));
-      const gap = (k) => updateState((x) => { x.resolveGap = { ...(x.resolveGap || {}), [k]: new Date().toISOString() }; }, home);
+      // setExcluded leaves a mark (resolveGap) on every exclude and include: a save older than the
+      // mark is from before or during the exclusion and is skipped, the first one after it starts a
+      // fresh baseline. Work done while out never becomes a diff, even if no round saw it.
+      const st = loadState(home);
+      const out = (name) => !!name && (st.excluded || []).includes(projectKey(name));
+      const markOf = (...names) => names.filter(Boolean).map((n) => st.resolveGap?.[resolveJournalKey(n)]).filter(Boolean).sort().pop();
       try {
         const live = src.resolve.projects.includes(f);
         const folderName = live ? RS.projectNameFromPath(f) : null;
-        if (folderName && out(folderName)) gap(resolveJournalKey(folderName)); // a library project is named by its folder: no copy of an NDA project at all
-        else {
+        if (!(out(folderName) || (markOf(folderName) && m < Date.parse(markOf(folderName))))) { // a library project is named by its folder: no copy of an NDA project at all
           const snap = RS.snapshotFromResolve(f, { mtime: new Date(m), scratch: join(home, "tmp"), source: live ? "resolve-db" : "resolve-backup" });
-          const k = resolveJournalKey(snap.project);
-          if (out(snap.project)) gap(k);
-          else if (loadState(home).resolveGap?.[k]) {
-            JR.saveSnapshot(join(root, k), snap); // a new starting point, no decisions from across the gap
-            updateState((x) => { if (x.resolveGap) delete x.resolveGap[k]; }, home);
+          const k = resolveJournalKey(snap.project), dir = join(root, k);
+          const mark = markOf(snap.project, folderName);
+          if (out(snap.project) || out(folderName) || (mark && m < Date.parse(mark))) {} // kept out, or saved before it was let back in
+          else if (mark) {
+            JR.saveSnapshot(dir, snap); // a new starting point, no decisions from across the gap
+            updateState((x) => { for (const n of [snap.project, folderName]) if (n && x.resolveGap) delete x.resolveGap[resolveJournalKey(n)]; }, home);
+          } else if (JR.listSnapshots(dir).some((p) => basename(p) > JR.stamp(snap.t))) {
+            JR.saveSnapshot(dir, snap); // read out of order (the live file was busy): kept, but no diff, or a decision would count twice
           } else {
-            const r = JR.record(join(root, k), snap, { source: snap.source, file: f });
+            const r = JR.record(dir, snap, { source: snap.source, file: f });
             events += r.events || 0;
           }
         }

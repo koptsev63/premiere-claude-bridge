@@ -336,23 +336,55 @@ test("resolve: work done while a project was kept out never goes after it is let
   const { backups } = resolvePrefs(home, {});
   await S.setConsent(true, { home });
   S.updateState((x) => { x.sharingSince = "2026-11-15T09:00:00.000Z"; }, home);
-  const save = (name, trim, iso) => { const f = join(backups, name); writeFileSync(f, drp({ trim })); at(f, iso); };
-  save("s1.drp", 0, "2026-11-15T10:00:00Z");
+  const now = Date.now();
+  const save = (name, trim, ms) => { const f = join(backups, name); writeFileSync(f, drp({ trim })); at(f, new Date(ms).toISOString()); };
+  save("s1.drp", 0, now - 3600e3);
   await S.importNewAutosaves({ home, root });
   await S.upload({ home, root, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({}) }) });
   S.setExcluded("Клиент Промо", true, home);
-  save("s2.drp", 6, "2026-11-15T11:00:00Z"); // NDA work: a trim
-  await S.importNewAutosaves({ home, root });
+  save("s2.drp", 6, now - 60e3); // NDA work: a trim, done with Claude closed, so no round saw it while it was out
   S.setExcluded("Клиент Промо", false, home);
-  save("s3.drp", 6, "2026-11-15T12:00:00Z"); // let back in, nothing new done
+  save("s3.drp", 6, now + 60e3); // let back in, nothing new done
   const r = await S.importNewAutosaves({ home, root });
   assert.equal(r.events, 0, "the trim done while out is not a decision");
   assert.ok(!S.preview({ home, root }).sample.some((i) => i.item === "decision"));
-  save("s4.drp", 10, "2026-11-15T13:00:00Z"); // new work after it is back: goes
+  save("s4.drp", 10, now + 120e3); // new work after it is back: goes
   const r4 = await S.importNewAutosaves({ home, root });
   assert.ok(r4.events >= 1);
   assert.ok(S.preview({ home, root }).sample.some((i) => i.item === "decision"));
   process.env.RESOLVE_PREFS_DIR = NO_PREFS;
+});
+
+test("resolve: a save read out of order is kept without a diff, so nothing counts twice", async () => {
+  process.env.PREMIERE_PREFS_DIR = NO_PREFS;
+  const home = mkdtempSync(join(tmpdir(), "share-home-"));
+  const root = mkdtempSync(join(tmpdir(), "share-journal-"));
+  const { backups } = resolvePrefs(home, {});
+  await S.setConsent(true, { home });
+  S.updateState((x) => { x.sharingSince = "2026-11-15T09:00:00.000Z"; }, home);
+  const save = (name, trim, iso) => { const f = join(backups, name); writeFileSync(f, drp({ trim })); at(f, iso); };
+  save("a.drp", 0, "2026-11-15T10:00:00Z");
+  save("c.drp", 10, "2026-11-15T12:00:00Z");
+  const r1 = await S.importNewAutosaves({ home, root });
+  save("b.drp", 6, "2026-11-15T11:00:00Z"); // an older save that turns up late
+  S.updateState((x) => { delete x.autosaveSeen[join(backups, "b.drp")]; }, home);
+  utimesSync(join(backups, "b.drp"), new Date("2026-11-15T12:30:00Z"), new Date("2026-11-15T11:00:00Z"));
+  const r2 = await S.importNewAutosaves({ home, root, resolveDirs: undefined });
+  assert.ok(r1.events >= 1);
+  assert.equal(r2.events, 0);
+  process.env.RESOLVE_PREFS_DIR = NO_PREFS;
+});
+
+test("anonymize: only a real media extension goes, never the tail of a name", () => {
+  assert.equal(S.anonymize({ name: "A001.MOV" }, "s").ext, "mov");
+  assert.equal(S.anonymize({ name: "Mr.Smith" }, "s").ext, undefined);
+  assert.equal(S.anonymize({ name: "Promo v2.final" }, "s").ext, undefined);
+});
+
+test("resolve: a backup with no project name is not read, and a reverse at another speed is a speed change", () => {
+  assert.equal(R.sourceRange(0, 24, { fps: 24, mediaFps: 24, points: [[0, 10], [5, 0]] }).reverse, true);
+  const r = R.sourceRange(0, 24, { fps: 24, mediaFps: 24, points: [[0, 10], [5, 0]] });
+  assert.ok(Math.abs((r.outPoint - r.inPoint) - 2) < 1e-9, "1 s of timeline at -200% covers 2 s of source");
 });
 
 test("resolve: a long project name keeps its journal suffix, and its exclusion holds", async () => {
@@ -390,4 +422,15 @@ test("resolve: backups Resolve has deleted are forgotten", async () => {
   await S.importNewAutosaves({ home, root });
   assert.equal(S.loadState(home).autosaveSeen[f], undefined);
   process.env.RESOLVE_PREFS_DIR = NO_PREFS;
+});
+
+test("resolve: a backup Project.db with no project name is refused, a library one is named by its folder", { skip: !SQL && "this Node has no node:sqlite" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "rdb-"));
+  const backup = join(dir, "Project.db");
+  projectDb(backup, { project: "" });
+  assert.throws(() => R.snapshotFromResolveDb(backup, { source: "resolve-backup", scratch: join(dir, "s") }), /нет имени проекта/);
+  const lib = join(dir, "Projects", "Клиент Промо");
+  mkdirSync(lib, { recursive: true });
+  projectDb(join(lib, "Project.db"), { project: "" });
+  assert.equal(R.snapshotFromResolveDb(join(lib, "Project.db"), { scratch: join(dir, "s") }).project, "Клиент Промо");
 });

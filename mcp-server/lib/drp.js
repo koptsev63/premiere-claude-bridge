@@ -170,7 +170,7 @@ export function sourceRange(inFrames, durFrames, { fps, mediaFps, points } = {})
   const x0 = inFrames / mfps, len = durFrames / fps;
   const identity = !points || points.every(([, y]) => y === 0) || (points.length === 2 && points[0][0] === 0 && points[0][1] === 0 && Math.abs(points[1][1] - points[1][0]) < 1e-6);
   if (identity) return { inPoint: x0, outPoint: x0 + len };
-  if (points.length === 2 && points[0][0] === 0 && points[0][1] > 0 && points[1][1] === 0) {
+  if (points.length === 2 && points[0][0] === 0 && points[0][1] > 0 && points[1][1] === 0 && Math.abs(points[0][1] - points[1][0]) * mfps < 2) {
     // played backwards in full: clip frame k shows source frame n-1-k, n = Xmax * fps (core/drt_audit.py, confirmed by the editor's timecode)
     const n = Math.round(points[1][0] * mfps), head = n - 1 - inFrames, d = Math.round(durFrames * mfps / fps);
     return { inPoint: (head - d + 1) / mfps, outPoint: (head + 1) / mfps, reverse: true };
@@ -189,7 +189,8 @@ export function snapshotFromModel(model, { t, source, file } = {}) {
     const fps = tl.fps > 0 ? tl.fps : 25;
     const offset = Math.round((tl.extStart || 0) * fps);
     const all = tl.tracks.flatMap((tr) => tr.items);
-    const base = all.length && all.every((it) => frames(it.start) >= offset) ? offset : 0; // never push a clip before zero
+    const starts = all.map((it) => frames(it.start)).filter((v) => v != null);
+    const base = starts.length && starts.every((v) => v >= offset) ? offset : 0; // never push a clip before zero
     const seq = { name: tl.name || "", sequenceID: tl.id, width: tl.width, height: tl.height, fps, video: [], audio: [], markers: null, end: 0 };
     for (const tr of tl.tracks) {
       const clips = [];
@@ -307,8 +308,11 @@ export function sqlite() {
 
 function dbModel(db, fallbackName) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
-  let project = fallbackName;
-  try { project = all("SELECT ProjectName FROM SM_Project LIMIT 1")[0]?.ProjectName || fallbackName; } catch {}
+  let project = null;
+  try { project = all("SELECT ProjectName FROM SM_Project LIMIT 1")[0]?.ProjectName || null; } catch {}
+  // a project is kept out by its name: a backup without one is not read at all, never filed under a made-up name
+  if (!project && !fallbackName) throw new Error("в бэкапе Resolve нет имени проекта: не читаю, чтобы не обойти исключение по имени");
+  project = project || fallbackName;
   const timelines = [];
   for (const tl of all("SELECT t.Sm2Timeline_id AS id, t.Name AS name, s.Sm2Sequence_id AS seqId, hex(s.FrameRate) AS fr, hex(s.Resolution) AS res, hex(s.MediaExtents) AS ext FROM Sm2Timeline t JOIN Sm2Sequence s ON s.Sm2Sequence_id = t.Sequence")) {
     const model = { id: tl.id, name: tl.name || "", fps: doubleLE(tl.fr), ...resolution(tl.res), extStart: doubleLE(tl.ext, 0) || 0, tracks: [] };
@@ -351,7 +355,7 @@ function sweep(dir) {
 
 // Copy, then read the copy: Resolve keeps writing its own file and must never
 // wait on us. A rollback journal next to it means a save is half done: try later.
-export function readResolveDbModel(path, { scratch = tmpdir() } = {}) {
+export function readResolveDbModel(path, { scratch = tmpdir(), live = false } = {}) {
   const mod = sqlite();
   if (!mod) throw new Error("эта версия Node не читает базу Resolve (нужен Node 22.5 или новее)");
   const busy = () => Object.assign(new Error("Resolve как раз сохраняет проект, прочитаю в следующий раз"), { retry: true, quiet: true });
@@ -367,12 +371,12 @@ export function readResolveDbModel(path, { scratch = tmpdir() } = {}) {
   try {
     if (statSync(path).mtimeMs !== before) throw busy();
     const db = new mod.DatabaseSync(copy, { readOnly: true });
-    try { return dbModel(db, projectNameFromPath(path)); } finally { db.close(); }
+    try { return dbModel(db, live ? projectNameFromPath(path) : null); } finally { db.close(); }
   } finally { try { unlinkSync(copy); } catch {} }
 }
 
-export function snapshotFromResolveDb(path, { mtime, scratch, source = "resolve-db" } = {}) {
-  return snapshotFromModel(readResolveDbModel(path, { scratch }), { t: mtime, source, file: path });
+export function snapshotFromResolveDb(path, { mtime, scratch, source = "resolve-db", live = source === "resolve-db" } = {}) {
+  return snapshotFromModel(readResolveDbModel(path, { scratch, live }), { t: mtime, source, file: path });
 }
 
 // One entry point for whatever Resolve wrote.

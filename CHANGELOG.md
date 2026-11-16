@@ -30,6 +30,13 @@ Premiere.
   Project backups and Live Save are on, how many Resolve projects and backups
   it sees and how many were saved since the yes; a Resolve-only editor is no
   longer told that Premiere is missing.
+- Excluding or letting back in a project leaves a mark: a Resolve save older
+  than the mark is never read, the first one after it starts a fresh baseline,
+  so work done while a project was out never becomes a decision, even when the
+  bridge was not running during the exclusion. A backup without a project name
+  is not read at all.
+- A file extension goes out only when it is a known media type, never the tail
+  of a free-text name such as «Mr.Smith».
 - `RESOLVE_PREFS_DIR` points the bridge at another Resolve preferences folder
   and switches the default folders off (tests use temporary folders).
 

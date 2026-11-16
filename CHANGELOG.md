@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased] - editor taste rules
+## [0.8.8] - 2026-11-16 - assembly cuts like a live editor
 
-Draft. Denis cut a 63 s promo by hand (16.11.2026) and named five rules he
+Denis cut a 63 s promo by hand (16.11.2026) and named five rules he
 cuts by; the engine now knows them. `core/` only, no new required
 dependency: numpy (already optional in core) for the audio and colour
 parts; scipy speeds up the median filter when present, with a numpy

@@ -13,6 +13,9 @@
   `python -m core.motion VIDEO [--cuts 5.24,9.36] [--json] [--sheet out.jpg]`.
   Needs numpy + opencv (imported lazily). Thresholds are engineering
   defaults, not calibrated on a corpus.
+  Textureless points (sky, walls) are masked out of the camera fit and the
+  subject; two moving sides are compared by the angle of their travel
+  vectors (`action continues` / `direction turns` / `direction flip`).
 
 ## [0.8.8] - 2026-11-16 - assembly cuts like a live editor
 

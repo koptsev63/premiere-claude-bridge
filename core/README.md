@@ -199,7 +199,7 @@ python -m core.motion VIDEO.mp4 --sheet sheet.jpg   # report + contact sheet
 python -m core.motion VIDEO.mp4 --cuts 5.24,9.36 --json
 ```
 
-Per cut: `action continues`, `direction flip` (warning), `cut on stop`,
+Per cut: `action continues`, `direction turns` (travel vectors 60-120 degrees apart), `direction flip` (warning), `cut on stop`,
 `cut into motion`, `still to still`, `speed jump`, `flat` (black or textureless
 side, not judged), plus `eye stays / moves / jumps` from the distance between
 the subject centroids. `pan_x > 0` means the image moves right; the label

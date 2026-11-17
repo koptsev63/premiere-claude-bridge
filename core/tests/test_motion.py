@@ -18,6 +18,7 @@ from core.motion import (
     format_report,
     judge,
     measure_side,
+    travel_glyph,
 )
 
 _p = _f = 0
@@ -72,6 +73,36 @@ def subject_frames(px_per_frame: int, x0: int = 120, seed: int = 2) -> list:
 def still_frames(seed: int = 3) -> list:
     bg = _texture(W, H, seed)
     return [bg.copy() for _ in range(N)]
+
+
+def tilt_frames(px_per_frame: int, seed: int = 4) -> list:
+    """Content moves down `px_per_frame` each frame (camera tilts up)."""
+    big = _texture(W, H + 100, seed)
+    return [np.ascontiguousarray(big[50 - i * px_per_frame + 0:50 - i * px_per_frame + H, :]) for i in range(N)]
+
+
+def tracking_frames(px_per_frame: int, seed: int = 6) -> list:
+    """Background content moves LEFT (camera pans right) while a square stays fixed on screen."""
+    bgs = pan_frames(-px_per_frame, seed)
+    sq = np.clip(_texture(40, 40, 8).astype(int) + 60, 0, 255).astype(np.uint8)
+    out = []
+    for f in bgs:
+        f = f.copy()
+        f[70:110, 140:180] = sq
+        out.append(f)
+    return out
+
+
+def flat_noise_frames(seed: int = 9) -> list:
+    """Left half textured and still, right half flat grey with fresh noise each frame."""
+    rng = np.random.default_rng(seed)
+    base = _texture(W, H, 11)
+    out = []
+    for _ in range(N):
+        f = base.copy()
+        f[:, 160:] = np.clip(128 + rng.normal(0, 1.5, (H, 160)), 0, 255).astype(np.uint8)
+        out.append(f)
+    return out
 
 
 def side(frames: list) -> SideMotion:
@@ -130,6 +161,33 @@ def test_verdicts() -> None:
     check("pan flip", judge(side(pan_frames(3)), side(pan_frames(-3, seed=5))) == "direction flip")
 
 
+def test_travel() -> None:
+    check("pan right vs tilt up: direction turns",
+          judge(side(pan_frames(-3)), side(tilt_frames(3))) == "direction turns",
+          judge(side(pan_frames(-3)), side(tilt_frames(3))))
+    t = side(tilt_frames(3))
+    check("tilt up: travel points up", t.travel_y < -0.05 and abs(t.travel_x) < 0.05,
+          f"({t.travel_x:.2f},{t.travel_y:.2f})")
+    k = side(tracking_frames(3))
+    check("tracking pan: camera labelled pan right", k.camera_label == "pan right", k.camera_label)
+    check("tracking pan: subject fixed on screen is found", k.cx is not None and abs(k.cx - 0.5) < 0.15,
+          f"cx={k.cx}")
+    check("tracking pan: travel has the camera direction (right)", k.travel_x > 0.05,
+          f"({k.travel_x:.2f},{k.travel_y:.2f})")
+    check("tracking pan vs pan right continues",
+          judge(k, side(pan_frames(-3, seed=5))) == "action continues")
+    check("glyphs", travel_glyph(0.3, 0) == "→" and travel_glyph(0, -0.3) == "↑"
+          and travel_glyph(-0.2, 0.2) == "↙" and travel_glyph(0, 0) == "still")
+
+
+def test_texture_mask() -> None:
+    s = side(flat_noise_frames())
+    check("noisy flat region does not become the subject",
+          s.cx is None or s.cx < 0.5, f"share={s.share:.3f} cx={s.cx}")
+    check("still shot with a noisy flat half is static", s.camera_label == "static" and not s.moving,
+          f"{s.camera_label} speed={s.pace:.3f}")
+
+
 def test_eye_trace() -> None:
     a = SideMotion(cx=0.5, cy=0.5)
     near, mid, far = SideMotion(cx=0.55, cy=0.5), SideMotion(cx=0.75, cy=0.5), SideMotion(cx=0.05, cy=0.9)
@@ -164,6 +222,9 @@ def main() -> int:
     print("--- verdicts ---")
     test_verdicts()
     test_eye_trace()
+    print("--- travel + texture ---")
+    test_travel()
+    test_texture_mask()
     print("--- report ---")
     test_report_and_sheet()
     print(f"\n{_p} passed, {_f} failed")

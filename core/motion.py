@@ -30,8 +30,21 @@ Conventions (all speeds are in frame widths per second, "fw/s"):
 - Subject direction `vx, vy` is motion relative to the background, that is
   motion in the world, so a runner followed by a panning camera still has
   vx > 0 although he sits still in the frame.
-- Travel direction used for the screen-direction rule: the subject's vx when
-  a subject moves, otherwise the camera's physical direction (-pan_x).
+- TRAVEL vector (`travel_x`, `travel_y`, fw/s, right/down positive) is the
+  direction the viewer perceives things moving. With a subject (share >=
+  0.02 and speed above the dead band) it is the subject's image velocity minus
+  the background's image velocity, i.e. its motion relative to the scene: a
+  tracking pan on a runner gives the runner's direction although he is still
+  on screen. With no subject it is the camera direction, minus the background
+  image velocity (-pan_x, -pan_y); a push or pull has no travel direction.
+- Two moving sides are compared by the ANGLE between their travel vectors:
+  cos >= 0.5 "action continues" (then a speed ratio outside 0.5..2 is a
+  "speed jump"), cos <= -0.5 "direction flip", otherwise "direction turns"
+  (e.g. a pan right cut to a tilt up).
+- Textureless regions (sky, walls, fog) give noisy flow. A texture mask
+  (cornerMinEigenVal, block 7) drops grid points that are below the frame's
+  30th percentile AND below an absolute floor, both from the camera fit and
+  from the subject residual.
 
 Honest boundaries - the numbers are engineering defaults, not calibrated on a
 corpus:
@@ -81,10 +94,16 @@ SUBJECT_MIN_PX = 0.5          # residual floor, px at analysis width
 SUBJECT_MEDIAN_K = 3.0        # ... or this many times the median residual
 SUBJECT_MIN_SHARE = 0.02      # below this share no centroid is reported
 
+TEXTURE_BLOCK = 7             # cornerMinEigenVal block size
+TEXTURE_PCT = 30.0            # drop points below this frame percentile ...
+TEXTURE_FLOOR = 1e-4          # ... AND below this (gray/255 scale; sky ~6e-6, textured ~5e-4)
+MIN_GRID_POINTS = 60          # fewer textured points than this: pair not measured
+COS_SAME = 0.5                # travel vectors: cos >= this same direction
+COS_OPPOSITE = -0.5           # ... <= this opposite; between = "direction turns"
+
 STATIC_PAN = 0.03             # fw/s: below this a pan / tilt is "static"
 STATIC_ZOOM = 0.08            # 1/s: below this a push / pull is "static"
 MOVING_SPEED = 0.04           # fw/s: a side whose motion is below is "still"
-H_DEADBAND = 0.02             # fw/s: horizontal travel below this has no sign
 SPEED_RATIO = (0.5, 2.0)      # speed B / speed A inside = same pace
 
 EYE_STAYS = 0.15              # frame-diagonal units
@@ -106,6 +125,8 @@ class SideMotion:
     pan_y: float = 0.0
     zoom_per_s: float = 0.0
     camera_label: str = "static"
+    travel_x: float = 0.0
+    travel_y: float = 0.0
     share: float = 0.0
     cx: Optional[float] = None
     cy: Optional[float] = None
@@ -131,13 +152,16 @@ class SideMotion:
         return self.subject_moving or self.camera_speed >= STATIC_PAN
 
     @property
-    def travel_x(self) -> float:
-        """Signed horizontal travel (right positive); see module docstring."""
+    def travel(self) -> float:
+        return math.hypot(self.travel_x, self.travel_y)
+
+    def set_travel(self) -> None:
         if self.subject_moving:
-            return self.vx
-        if self.camera_label in ("pan left", "pan right"):
-            return -self.pan_x
-        return 0.0
+            self.travel_x, self.travel_y = self.vx, self.vy
+        elif self.camera_label.startswith(("pan", "tilt")) and self.camera_speed >= STATIC_PAN:
+            self.travel_x, self.travel_y = -self.pan_x, -self.pan_y
+        else:
+            self.travel_x = self.travel_y = 0.0
 
     @property
     def pace(self) -> float:
@@ -234,6 +258,12 @@ def _pair_motion(g0, g1) -> Optional[dict]:
     ys, xs = np.mgrid[GRID_STEP:h - GRID_STEP + 1:GRID_STEP, GRID_STEP:w - GRID_STEP + 1:GRID_STEP]
     xs = xs.ravel().astype(np.float32)
     ys = ys.ravel().astype(np.float32)
+    eig = cv2.cornerMinEigenVal(g0.astype(np.float32) / 255.0, TEXTURE_BLOCK)
+    e = eig[ys.astype(int), xs.astype(int)]
+    keep = ~((e < np.percentile(eig, TEXTURE_PCT)) & (e < TEXTURE_FLOOR))
+    if int(keep.sum()) < MIN_GRID_POINTS:
+        return None
+    xs, ys = xs[keep], ys[keep]
     f = flow[ys.astype(int), xs.astype(int)]                       # (N, 2)
     p = np.stack([xs - w / 2.0, ys - h / 2.0], axis=1).astype(np.float32)  # centred: translation = centre shift
     q = p + f
@@ -295,16 +325,13 @@ def measure_side(frames: list, fps: float) -> SideMotion:
         side.vx = sum(p["vx"] * p["n_sel"] for p in sub) / wsum * k
         side.vy = sum(p["vy"] * p["n_sel"] for p in sub) / wsum * k
         side.speed = math.hypot(side.vx, side.vy)
+    side.set_travel()
     return side
 
 
 # --------------------------------------------------------------------------- #
 # Verdict
 # --------------------------------------------------------------------------- #
-
-
-def _sign(v: float) -> int:
-    return 0 if abs(v) < H_DEADBAND else (1 if v > 0 else -1)
 
 
 def judge(a: SideMotion, b: SideMotion) -> str:
@@ -317,9 +344,12 @@ def judge(a: SideMotion, b: SideMotion) -> str:
         return "cut on stop"
     if bm and not am:
         return "cut into motion"
-    sa, sb = _sign(a.travel_x), _sign(b.travel_x)
-    if sa and sb and sa != sb:
-        return "direction flip"
+    if a.travel > 0 and b.travel > 0:
+        cos = (a.travel_x * b.travel_x + a.travel_y * b.travel_y) / (a.travel * b.travel)
+        if cos <= COS_OPPOSITE:
+            return "direction flip"
+        if cos < COS_SAME:
+            return "direction turns"
     ratio = b.pace / a.pace if a.pace > 0 else float("inf")
     if not (SPEED_RATIO[0] <= ratio <= SPEED_RATIO[1]):
         return "speed jump"
@@ -375,6 +405,14 @@ def analyze(path: str, cuts: Optional[list[float]] = None, win: float = DEF_WIN,
 # --------------------------------------------------------------------------- #
 
 
+def travel_glyph(tx: float, ty: float) -> str:
+    """8-sector arrow for a travel vector (image coordinates, y down), or "still"."""
+    if math.hypot(tx, ty) < MOVING_SPEED * 0.5:
+        return "still"
+    ang = math.degrees(math.atan2(-ty, tx)) % 360
+    return "→↗↑↖←↙↓↘"[int((ang + 22.5) // 45) % 8]
+
+
 def _side_text(s: SideMotion) -> str:
     if s.flat:
         return "flat"
@@ -385,8 +423,8 @@ def _side_text(s: SideMotion) -> str:
         else:
             mag = abs(s.pan_x) if cam.startswith("pan") else abs(s.pan_y)
             cam = f"{cam} {mag:.2f} fw/s"
-    subj = f"({s.cx:.2f},{s.cy:.2f})" if s.cx is not None else "none"
-    return f"{cam}, subject {subj}"
+    subj = f"subj {s.speed:.2f} fw/s ({s.cx:.2f},{s.cy:.2f})" if s.cx is not None else "no subj"
+    return f"cam {cam}, {subj}, travel {travel_glyph(s.travel_x, s.travel_y)}"
 
 
 def format_report(cuts: list[CutMotion]) -> str:
@@ -416,17 +454,12 @@ def _draw_side(img, s: SideMotion) -> None:
         cv2.putText(img, "flat", (6, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1, cv2.LINE_AA)
         return
     cv2.putText(img, s.camera_label, (6, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 160, 0), 1, cv2.LINE_AA)
-    if s.camera_label.startswith(("pan", "tilt")):
-        # camera arrow: the camera's physical direction (opposite to the content)
-        ax, ay = -s.pan_x * w * ARROW_PX_PER_FW, -s.pan_y * w * ARROW_PX_PER_FW
-        c = (w // 2, h // 2)
-        cv2.arrowedLine(img, c, (int(c[0] + ax), int(c[1] + ay)), (255, 160, 0), 2, tipLength=0.3)
+    start = (int(s.cx * w), int(s.cy * h)) if s.cx is not None else (w // 2, h // 2)
     if s.cx is not None:
-        p = (int(s.cx * w), int(s.cy * h))
-        cv2.circle(img, p, 10, (0, 0, 255), 2)
-        sx, sy = s.vx * w * ARROW_PX_PER_FW, s.vy * w * ARROW_PX_PER_FW
-        if math.hypot(sx, sy) > 2:
-            cv2.arrowedLine(img, p, (int(p[0] + sx), int(p[1] + sy)), (0, 0, 255), 2, tipLength=0.3)
+        cv2.circle(img, start, 10, (0, 0, 255), 2)
+    ax, ay = s.travel_x * w * ARROW_PX_PER_FW, s.travel_y * w * ARROW_PX_PER_FW
+    if math.hypot(ax, ay) > 2:
+        cv2.arrowedLine(img, start, (int(start[0] + ax), int(start[1] + ay)), (0, 0, 255), 2, tipLength=0.3)
 
 
 def contact_sheet(cuts: list[CutMotion], frames: list, out_path: str) -> str:

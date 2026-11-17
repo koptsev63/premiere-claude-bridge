@@ -186,6 +186,29 @@ python -m core.screen_comp PLATE.mp4 CONTENT.mp4 OUT.mp4 --config screen.json
 The Premiere-side counterpart of `resolve_run exec` lives next to the MCP
 server: `node mcp-server/pk.js` (see the main README, "Direct path").
 
+## Motion at cuts
+
+Editors cut on motion: the action continues across the cut, screen direction
+is kept, the eye lands where it was looking. Stills cannot show it, optical
+flow can. `core/motion.py` takes the 0.4 s each side of every cut (scene
+detected, or `--cuts`), fits the camera with RANSAC on a Farneback flow grid
+and calls what is left over the subject.
+
+```bash
+python -m core.motion VIDEO.mp4 --sheet sheet.jpg   # report + contact sheet
+python -m core.motion VIDEO.mp4 --cuts 5.24,9.36 --json
+```
+
+Per cut: `action continues`, `direction flip` (warning), `cut on stop`,
+`cut into motion`, `still to still`, `speed jump`, `flat` (black or textureless
+side, not judged), plus `eye stays / moves / jumps` from the distance between
+the subject centroids. `pan_x > 0` means the image moves right; the label
+("pan right") is about the camera, so it is the opposite sign. Speeds are in
+frame widths per second. Every threshold is a constant at the top of the
+module. Boundaries: flow needs texture, a subject that fills the frame is
+read as the camera, the subject is a motion blob and not a person, thresholds
+are not field-calibrated. Tests: `python -m core.tests.test_motion` (synthetic).
+
 ## Editor rules from a live cut (Denis, 16.11.2026)
 
 Denis cut a 63 s promo by hand and named five rules he cuts by. Each one is

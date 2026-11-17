@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `core.motion` (new): motion at cuts, measured with optical flow, numbers
+  only. For every cut the 0.4 s before and after is run through Farneback
+  flow at 320 px; a RANSAC similarity fit gives the camera (pan, tilt, zoom),
+  the residual gives the subject (share, centroid, direction, speed). Each cut
+  gets a verdict (action continues, direction flip, cut on stop, cut into
+  motion, still to still, speed jump, flat) and an eye-trace distance between
+  the two subject centroids (eye stays / moves / jumps). CLI:
+  `python -m core.motion VIDEO [--cuts 5.24,9.36] [--json] [--sheet out.jpg]`.
+  Needs numpy + opencv (imported lazily). Thresholds are engineering
+  defaults, not calibrated on a corpus.
+
 ## [0.8.8] - 2026-11-16 - assembly cuts like a live editor
 
 Denis cut a 63 s promo by hand (16.11.2026) and named five rules he

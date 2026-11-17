@@ -13,7 +13,7 @@ Claude Code  ──stdio JSON-RPC──▶  MCP server  ──WebSocket──▶
 
 ## The three components
 
-### 1. `mcp-server/` — Node, stdio + WebSocket
+### 1. `mcp-server/` - Node, stdio + WebSocket
 
 Spoken to by Claude Code over stdio (JSON-RPC). Spawns a WebSocket server on `127.0.0.1:9876` that the CEP panel connects to. Translates each MCP tool call into a JSX expression, sends it over WS, awaits the response, translates back to MCP-format result.
 
@@ -21,7 +21,7 @@ Spoken to by Claude Code over stdio (JSON-RPC). Spawns a WebSocket server on `12
 - `server.js` - tools and the panel round-trip
 - `lib/` - port hand-over (`port.js`), `pr_eval_jsx` preparation (`evalcode.js`), effect names (`effects.js`), ExtendScript for the newer tools (`jsx.js`), export preset check (`presets.js`)
 - `test/` - `npm test` (node:test), including two real servers fighting over a port with a fake panel
-- `package.json` — three deps: `@modelcontextprotocol/sdk`, `ws`, `zod`
+- `package.json` - three deps: `@modelcontextprotocol/sdk`, `ws`, `zod`
 
 **Notable bits:**
 - Port hand-over: a server binds 9876 at start only if it is free and never polls. The server that receives a tool call takes the port: `POST /release` to the holder (same port, plain HTTP, custom header so a web page cannot trigger it), bind, wait up to 8 s for the panel's reconnect. A holder running a request answers 409 and keeps the port until done. A server exits when its client closes stdin, so dead sessions do not sit on the port.
@@ -29,25 +29,25 @@ Spoken to by Claude Code over stdio (JSON-RPC). Spawns a WebSocket server on `12
 - Self-healing socket lookup: if `panelSocket` goes stale after CEP reload, `getActiveSocket()` adopts whatever live `wss.clients[0]` is available
 - Per-call timeout: 60s default, configurable via `REQUEST_TIMEOUT_MS`
 
-### 2. `cep-extension/` — HTML panel inside Premiere
+### 2. `cep-extension/` - HTML panel inside Premiere
 
 Adobe's CEP (Common Extensibility Platform) lets you ship an HTML+JS panel that runs as part of Premiere's UI. Ours is minimal: a single panel with a status indicator + log view.
 
 **Key files:**
-- `CSXS/manifest.xml` — declares panel ID, supported Premiere versions (CEP 12, host PPRO 25-99)
-- `index.html` — panel UI
-- `js/main.js` — WebSocket client; on every message from the MCP server, `cs.evalScript(jsx)` → returns the result back over WS
-- `js/CSInterface.js` — Adobe's stock SDK for CEP↔ExtendScript bridge
-- `jsx/host.jsx` — ExtendScript functions exposed to the bridge (the actual Premiere automation)
+- `CSXS/manifest.xml` - declares panel ID, supported Premiere versions (CEP 12, host PPRO 25-99)
+- `index.html` - panel UI
+- `js/main.js` - WebSocket client; on every message from the MCP server, `cs.evalScript(jsx)` → returns the result back over WS
+- `js/CSInterface.js` - Adobe's stock SDK for CEP↔ExtendScript bridge
+- `jsx/host.jsx` - ExtendScript functions exposed to the bridge (the actual Premiere automation)
 
 **Notable bits:**
 - The panel auto-reloads `host.jsx` from disk on every reconnect → no Premiere restart required for JSX changes (just hit "Reconnect" in the panel)
 - Manual JSON polyfill prepended to `host.jsx` because Adobe's ES3 engine has no native `JSON`
-- Panel exposes Chrome DevTools at `http://localhost:8088` (configured in `.debug`) — invaluable when debugging WS issues
+- Panel exposes Chrome DevTools at `http://localhost:8088` (configured in `.debug`) - invaluable when debugging WS issues
 
-### 3. `skills/` — markdown + Python tooling
+### 3. `skills/` - markdown + Python tooling
 
-These are the "brains" Claude uses on top of the bridge. They're not consumed by the MCP server directly — they're consumed by Claude when it's deciding *what* to do.
+These are the "brains" Claude uses on top of the bridge. They're not consumed by the MCP server directly - they're consumed by Claude when it's deciding *what* to do.
 
 | Skill | What it gives Claude |
 |---|---|
@@ -102,27 +102,27 @@ Total round-trip on a healthy bridge: **~50-150ms** for typed tools, **~200-500m
 ## Why this stack?
 
 **Why MCP and not a Premiere-native plugin?**
-- Universal client surface — works with Claude Code, Cursor, Cline, Continue, anything MCP-compatible
+- Universal client surface - works with Claude Code, Cursor, Cline, Continue, anything MCP-compatible
 - No Adobe Creative Cloud account / signing certificate required (CEP "PlayerDebugMode" trick is enough for development and personal use)
 - Single skill format means non-coders can write rules
 
 **Why ExtendScript and not UXP?**
 - ExtendScript still has full access to the project model, sequence model, and AME export queue
-- UXP for Premiere is incomplete as of Premiere 2026 — many critical APIs (sequence creation from preset, marker management, AME export) only exist in ExtendScript
+- UXP for Premiere is incomplete as of Premiere 2026 - many critical APIs (sequence creation from preset, marker management, AME export) only exist in ExtendScript
 - ExtendScript is being deprecated by Adobe long-term but works today and will keep working in Premiere 2026
 
 **Why a separate WebSocket server instead of CEP-direct?**
-- Decouples Claude from Premiere's runtime — bridge can survive Premiere restarts without losing the MCP connection
+- Decouples Claude from Premiere's runtime - bridge can survive Premiere restarts without losing the MCP connection
 - Allows future remote access (run Claude on one machine, Premiere on another)
 
 ---
 
 ## Known design constraints
 
-- **Single Premiere instance per machine** — port 9876 is hardcoded. If you run multiple Premiere instances, only the panel that connects first wins. Override via `PREMIERE_BRIDGE_PORT` env var if needed.
+- **Single Premiere instance per machine** - port 9876 is hardcoded. If you run multiple Premiere instances, only the panel that connects first wins. Override via `PREMIERE_BRIDGE_PORT` env var if needed.
 - **One MCP server holds the panel at a time** - since 0.5.0 it is the one whose session called a tool last. Two sessions working at once hand the port back and forth (a couple of seconds per switch). A bridge older than 0.5.0 does not hand over; restart its session. `mcp-server/pk.js` needs no port at all: it speaks Chrome DevTools Protocol to the panel's CEF debug port (8088, from `cep-extension/.debug`), sends one `Runtime.evaluate` that wraps `window.__adobe_cep__.evalScript` in a promise, and prints the result. No WebSocket server, no shared state, so sessions do not collide.
 - **CEP panel must be open** - if you close the Claude Bridge panel, the bridge dies (and so does the direct path: it attaches to that panel). Make it part of your default workspace.
-- **Long ExtendScript calls block other calls** — host.jsx is single-threaded. A `pr_export_ame` call returns immediately because AME is launched asynchronously, but a `pr_eval_jsx` doing 500-clip iteration will hold the lock.
+- **Long ExtendScript calls block other calls** - host.jsx is single-threaded. A `pr_export_ame` call returns immediately because AME is launched asynchronously, but a `pr_eval_jsx` doing 500-clip iteration will hold the lock.
 
 ---
 
@@ -167,4 +167,4 @@ skills/my-skill/
 └── tools/         # optional Python helpers
 ```
 
-Claude auto-discovers `SKILL.md` files at session start. The frontmatter `description` field is what triggers the skill — write a good one.
+Claude auto-discovers `SKILL.md` files at session start. The frontmatter `description` field is what triggers the skill - write a good one.

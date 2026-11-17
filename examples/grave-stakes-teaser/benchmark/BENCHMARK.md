@@ -1,18 +1,18 @@
-# Progress benchmark — same footage, measured every iteration
+# Progress benchmark - same footage, measured every iteration
 
 One fixed input (the 108 Grave Stakes `.MTS` clips), re-cut over time. Each
 version is scored by the **deterministic** Murch checks in
 `core.review_loop.analyze_cutlist` so "is this edit getting better?" has an
 objective answer instead of a vibe.
 
-What the score measures (objective only — taste/emotion stays human, see
+What the score measures (objective only - taste/emotion stays human, see
 `skills/film-editing/SKILL.md` §I):
 
-- `ratio` — longest / shortest shot. §VII wants **2–4×** (`ratio_ok`).
-- `monotony_runs` — runs of 4+ same-length shots (§X). Want none.
-- `beat_pacing_flags` — shots whose duration violates the §VII beat table
-  for their labelled beat type (HOOK 4–6 s, PIT 6–8 s, PAYOFF 6–10 s, …).
-- `is_clean` — all of the above pass.
+- `ratio` - longest / shortest shot. §VII wants **2-4×** (`ratio_ok`).
+- `monotony_runs` - runs of 4+ same-length shots (§X). Want none.
+- `beat_pacing_flags` - shots whose duration violates the §VII beat table
+  for their labelled beat type (HOOK 4-6 s, PIT 6-8 s, PAYOFF 6-10 s, …).
+- `is_clean` - all of the above pass.
 
 | Version | Cuts | Total | Ratio | ratio_ok | Monotony | Beat flags | is_clean |
 |---|---|---|---|---|---|---|---|
@@ -21,24 +21,24 @@ What the score measures (objective only — taste/emotion stays human, see
 | v5 DRIVE (auto, 2-variant)| 8  | 30.5 s | 3.00 | yes | none | **0** | **yes** |
 | v5 BREATH (auto, 2-variant)| 8 | 38.5 s | 4.00 | yes | none | **0** | **yes** |
 
-v4's first draft was *also* flagged (ratio 1.75, monotone, 6 beat flags) —
+v4's first draft was *also* flagged (ratio 1.75, monotone, 6 beat flags) -
 the analyzer rejected it, the cut was revised against that critique, and the
 second draft passed. That loop is the point: the machine does the
 arithmetic, a person still decides if it *feels* right.
 
 **v5 is the first fully-automated generation.** From the 108-clip analysis
-the pipeline now: scores clip *value* (`core.value` — the "meat", with an
+the pipeline now: scores clip *value* (`core.value` - the "meat", with an
 optional human/LLM tag), builds **two contrasting Murch-clean variants**
-(`core.variants` — DRIVE tight/aggressive vs BREATH atmospheric, both
+(`core.variants` - DRIVE tight/aggressive vs BREATH atmospheric, both
 `is_clean` by construction), `core.conform`s clip refs to real media, and
 `core.cleanup` applies per-clip technical fixes: horizon leveling whenever
 the analyzer flagged a tilt, and stabilization for *relative outliers only*
-(median + k·MAD — handheld doc energy is intentional, not blanket-smoothed).
+(median + k·MAD - handheld doc energy is intentional, not blanket-smoothed).
 On this footage v5 corrected exactly 1 tilted clip (00171, −1.9°) and
 stabilized 2 genuine shake outliers (00215, 00149) of 8, leaving 5 clean.
 Both variants render with their own Suno instrumental and push live to
 Resolve (horizon rotation applied via the scripting API). The human picks
-which *feels* right — the cut quality is no longer the bottleneck; taste is.
+which *feels* right - the cut quality is no longer the bottleneck; taste is.
 
 ## Reproduce / re-score
 
@@ -69,8 +69,8 @@ v4 lives at `~/Desktop/Grave stakes/GRAVE_STAKES_teaser_v4.mp4` and as the
 
 ## Files
 
-- `v4_cutlist.json` — portable (bare clip names; `core.conform` resolves them)
-- `v4_murch_score.json` / `v3_murch_score.json` — the objective scores above
+- `v4_cutlist.json` - portable (bare clip names; `core.conform` resolves them)
+- `v4_murch_score.json` / `v3_murch_score.json` - the objective scores above
 
 Next iteration (v5) should beat v4 on *feel* with the same or better score,
 informed by the full 108-clip motion/audio analysis.

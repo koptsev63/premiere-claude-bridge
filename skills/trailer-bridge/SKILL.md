@@ -1,11 +1,11 @@
 ---
 name: trailer-bridge
-description: Genre-specific trailer/teaser editing recipes for Premiere via the Claude Bridge. Encodes pacing, structure, and emotional beat patterns for action, drama, comedy, horror, documentary, thriller, and romance trailers. Each recipe is a parameterized cutlist generator that takes selects + length and outputs a Premiere-ready sequence with markers. Pair with `mcp__premiere__*` tools and the base `film-editing` skill. PAID PACK ($19) — see MONETIZATION.md.
+description: Genre-specific trailer/teaser editing recipes for Premiere via the Claude Bridge. Encodes pacing, structure, and emotional beat patterns for action, drama, comedy, horror, documentary, thriller, and romance trailers. Each recipe is a parameterized cutlist generator that takes selects + length and outputs a Premiere-ready sequence with markers. Pair with `mcp__premiere__*` tools and the base `film-editing` skill. PAID PACK ($19) - see MONETIZATION.md.
 ---
 
-# trailer-bridge — paid skill pack
+# trailer-bridge - paid skill pack
 
-> **Status:** scaffold — first 2 recipes shipping with v0.2.
+> **Status:** scaffold - first 2 recipes shipping with v0.2.
 
 This pack extends the free `film-editing` skill with **genre-specific trailer recipes**. Each recipe knows the pacing, structural beats, and emotional arc that audiences expect from a particular genre, and emits a parameterized cutlist Claude can drop straight into Premiere.
 
@@ -31,21 +31,21 @@ The free skill encodes universal principles (Murch's Rule of Six). This pack enc
 
 ## Tools
 
-- `tools/trailer_assembly.py` — input: folder of selects + recipe name + target length → output: ready Premiere sequence cutlist (JSON) + JSX commands to apply.
-- `tools/beat_detector.py` — analyzes audio for "trailer beats" (drops, swells, stings) — auto-aligns cuts to musical beats.
+- `tools/trailer_assembly.py` - input: folder of selects + recipe name + target length → output: ready Premiere sequence cutlist (JSON) + JSX commands to apply.
+- `tools/beat_detector.py` - analyzes audio for "trailer beats" (drops, swells, stings) - auto-aligns cuts to musical beats.
 
 ## Color presets (LUTs)
 
 Three classic festival/streamer trailer looks:
-- `teal_orange.cube` — modern blockbuster
-- `desaturated_high_contrast.cube` — A24-style indie
-- `golden_warm.cube` — character drama / romance
+- `teal_orange.cube` - modern blockbuster
+- `desaturated_high_contrast.cube` - A24-style indie
+- `golden_warm.cube` - character drama / romance
 
 ## How a user uses it
 
 ```
 You:    "Use trailer-bridge for a 75-sec action trailer from these 24 selects.
-        Apply teal_orange LUT. Skip the false-resolution beat — too short."
+        Apply teal_orange LUT. Skip the false-resolution beat - too short."
 
 Claude: ✓ Loaded action-trailer recipe (Hook→Stakes→Build→Climax→Title, 75s mode)
         ✓ Mapped selects to beats by motion + audio peak rankings
@@ -80,4 +80,4 @@ unzip trailer-bridge-v0.2.zip -d ~/Dev/premiere-claude-bridge/skills/
 
 ---
 
-**This is a SCAFFOLD.** Full recipes shipping with v0.2 release (week 2 of monetization roadmap — see MONETIZATION.md).
+**This is a SCAFFOLD.** Full recipes shipping with v0.2 release (week 2 of monetization roadmap - see MONETIZATION.md).

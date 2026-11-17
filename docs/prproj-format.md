@@ -1,123 +1,123 @@
-# Структура `.prproj` (разбор реального монтажного проекта, Premiere 14.0.1, Project Version 38)
+# `.prproj` structure (analysis of a real editing project, Premiere 14.0.1, Project Version 38)
 
-Файл — gzip с XML. Объекты лежат плоским списком на верхнем уровне (`<Тип ObjectID="N" ...>` или
-`ObjectUID="uuid"`), ссылки между ними — `ObjectRef` (N) и `ObjectURef` (uuid). Время — тики,
-254 016 000 000 в секунде. Кадр 25 fps = 10 160 640 000 тиков, сэмпл 48 кГц = 5 292 000 тиков на сэмпл-тик
+The file is gzip with XML. Objects lie in a flat list at the top level (`<Type ObjectID="N" ...>` or
+`ObjectUID="uuid"`), references between them are `ObjectRef` (N) and `ObjectURef` (uuid). Time is in ticks,
+254,016,000,000 per second. One frame at 25 fps = 10,160,640,000 ticks, one 48 kHz sample = 5,292,000 ticks per sample tick
 (`AudioStream/FrameRate`).
 
-Правило для сборщика: шаблон делать из файла **старой** версии. Новую версию проекта старый Premiere
-не откроет, старую новый откроет и сам обновит.
+Rule for the builder: make the template from a file of an **old** version. An old Premiere
+will not open a new project version, while a new one opens an old one and upgrades it itself.
 
-## Дерево проекта
+## Project tree
 
     Project
-    └─ RootProjectItem  (Items: BinProjectItem | ClipProjectItem по ObjectURef)
-       ├─ BinProjectItem  (ProjectItemContainer → Items)  — корзины, вложенные сколько угодно
+    └─ RootProjectItem  (Items: BinProjectItem | ClipProjectItem by ObjectURef)
+       ├─ BinProjectItem  (ProjectItemContainer → Items)  - bins, nested to any depth
        └─ ClipProjectItem → MasterClip
 
-Порядок в корзинах задаёт `project.icon.view.grid.order`; цвет метки — `Column.PropertyText.Label`
+Order inside bins is set by `project.icon.view.grid.order`; the label color is `Column.PropertyText.Label`
 (`BE.Prefs.LabelColors.N`).
 
-## Медиа (мастер-клип), 18 объектов на файл с видео и звуком
+## Media (master clip), 18 objects per file with video and audio
 
-    ClipProjectItem ─ MasterClip ─┬ ClipLoggingInfo      (имя, MediaIn/OutPoint = TC файла, MediaFrameRate)
-                                  ├ AudioComponentChain  (громкость мастер-клипа)
+    ClipProjectItem ─ MasterClip ─┬ ClipLoggingInfo      (name, MediaIn/OutPoint = file TC, MediaFrameRate)
+                                  ├ AudioComponentChain  (master clip volume)
                                   ├ Clips: VideoClip, AudioClip   (Clip.Source → *MediaSource, Markers)
                                   ├ AudioClipChannelGroups → ClipChannelGroupVectorSerializer
-                                  │     → ClipChannelVectorSerializer → ClipChannelSerializer × число каналов
+                                  │     → ClipChannelVectorSerializer → ClipChannelSerializer × number of channels
                                   └ Markers
-    VideoMediaSource / AudioMediaSource → Media (общий)
-    AudioClip.SecondaryContents → SecondaryContent × канал (ChannelIndex → AudioMediaSource)
-    Media: FilePath (абсолют), RelativePath, ActualMediaFilePath, Title, FileKey, Start (TC старта, тики),
-           ConformedAudioRate; потоки VideoStream (FrameRate, FrameRect, Duration, CodecType) и
+    VideoMediaSource / AudioMediaSource → Media (shared)
+    AudioClip.SecondaryContents → SecondaryContent × channel (ChannelIndex → AudioMediaSource)
+    Media: FilePath (absolute), RelativePath, ActualMediaFilePath, Title, FileKey, Start (start TC, ticks),
+           ConformedAudioRate; streams VideoStream (FrameRate, FrameRect, Duration, CodecType) and
            AudioStream (FrameRate=5292000, Duration, AudioChannelLayout, PeakFilePath)
 
-Синтетические клипы (Black Video, Adjustment Layer, Title): тот же MasterClip, но Media без файла:
-`FilePath` = число, `<Infinite>true`, свой `ImplementationID`; у титра `IsStill` и `CodecType`
-`1416197228`, внутри `ImporterPrefs`.
+Synthetic clips (Black Video, Adjustment Layer, Title): the same MasterClip, but Media has no file:
+`FilePath` = a number, `<Infinite>true`, its own `ImplementationID`; a title has `IsStill` and `CodecType`
+`1416197228`, with `ImporterPrefs` inside.
 
-## Секвенция
+## Sequence
 
     Sequence ─ TrackGroups ─┬ VideoTrackGroup (FrameRect, FrameRate, Tracks→VideoClipTrack)
                             └ AudioTrackGroup (Tracks→AudioClipTrack, FrameRate=5292000)
-              + AudioMixTrack / AudioTrackInlet / AudioFader / AudioMeter / панорамные процессоры на каждую
-                аудиодорожку; PersistentGroupContainer (Link-и видео↔звук)
-    ClipTrack: ClipItems→TrackItems (по порядку слева направо), TransitionItems
+              + AudioMixTrack / AudioTrackInlet / AudioFader / AudioMeter / pan processors for each
+                audio track; PersistentGroupContainer (video↔audio Links)
+    ClipTrack: ClipItems→TrackItems (in order, left to right), TransitionItems
 
-Каждая секвенция в проекте ещё и клип: свой ClipProjectItem → MasterClip → Video/AudioSequenceSource
-(`Sequence ObjectURef`). Вложенных секвенций внутри дорожек в этом проекте нет.
+Every sequence in the project is also a clip: its own ClipProjectItem → MasterClip → Video/AudioSequenceSource
+(`Sequence ObjectURef`). There are no nested sequences inside tracks in this project.
 
-## Клип на дорожке
+## Clip on a track
 
-- `VideoClipTrackItem` / `AudioClipTrackItem`: `Start`/`End` на таймлайне (тики), `SubClip`,
-  `ComponentOwner → Components` (цепочка эффектов).
-- `SubClip` → `Clip` (`VideoClip`/`AudioClip` с `InPoint`/`OutPoint` в исходнике и `PlaybackSpeed`, если не 1)
-  и `MasterClip`.
-- Скорость: `OutPoint − InPoint = длина на таймлайне × PlaybackSpeed` (видео в тиках, звук так же).
-- Видео и звук одного исходника связаны объектом `Link` (`TrackItemGroup`).
-- Аудио-клип несёт `SecondaryContent` на каждый канал и `AudioChannelLayout`.
-- Метка цвета клипа — `asl.clip.label.color` + `asl.clip.label.name` в `Clip`.
+- `VideoClipTrackItem` / `AudioClipTrackItem`: `Start`/`End` on the timeline (ticks), `SubClip`,
+  `ComponentOwner → Components` (effect chain).
+- `SubClip` → `Clip` (`VideoClip`/`AudioClip` with `InPoint`/`OutPoint` in the source and `PlaybackSpeed`, if not 1)
+  and `MasterClip`.
+- Speed: `OutPoint − InPoint = timeline length × PlaybackSpeed` (video in ticks, audio the same).
+- Video and audio of one source are linked by a `Link` object (`TrackItemGroup`).
+- An audio clip carries a `SecondaryContent` for each channel and an `AudioChannelLayout`.
+- The clip color label is `asl.clip.label.color` + `asl.clip.label.name` in `Clip`.
 
-## Эффекты, встреченные в проекте
+## Effects found in the project
 
-| MatchName | что |
+| MatchName | what |
 |---|---|
-| AE.ADBE Motion | Position/Scale/Rotation/Anchor; в 139 клипах не по умолчанию (прокси ≠ размеру секвенции, Scale 179 и т.п.) |
-| Volume / Channel Volume (аудио) | Level, Bypass; ключевые кадры в 97 параметрах |
-| Lowpass | аудиофильтр |
+| AE.ADBE Motion | Position/Scale/Rotation/Anchor; non-default in 139 clips (proxy ≠ sequence size, Scale 179, etc.) |
+| Volume / Channel Volume (audio) | Level, Bypass; keyframes in 97 parameters |
+| Lowpass | audio filter |
 | AE.ADBE Opacity | Opacity, Blend Mode |
-| AE.ADBE SubspaceStabilizer | Warp Stabilizer, ~30 параметров |
-| AE.ADBE AEMask | маска с `ArbVideoComponentParam` |
-| Constant Gain | аудио-переход (`AudioTransitionTrackItem`) |
+| AE.ADBE SubspaceStabilizer | Warp Stabilizer, ~30 parameters |
+| AE.ADBE AEMask | mask with `ArbVideoComponentParam` |
+| Constant Gain | audio transition (`AudioTransitionTrackItem`) |
 
-Параметр = `VideoComponentParam`/`AudioComponentParam`/`PointComponentParam`; значение лежит в
-`StartKeyframe` (`время,значение,...`), анимация — список ключей, `IsTimeVarying`.
-Видеопереходов, Lumetri и вложенных секвенций в проекте нет.
+A parameter = `VideoComponentParam`/`AudioComponentParam`/`PointComponentParam`; the value lives in
+`StartKeyframe` (`time,value,...`), animation is a list of keys, `IsTimeVarying`.
+There are no video transitions, Lumetri or nested sequences in the project.
 
-## Маркеры
+## Markers
 
-`Markers` объект есть у каждого клипа; сами маркеры — `Marker` с JSON в `DVAMarker`
-(`mStartTime.ticks`, `mType`: Comment и т.д.).
+Every clip has a `Markers` object; the markers themselves are `Marker` with JSON in `DVAMarker`
+(`mStartTime.ticks`, `mType`: Comment, etc.).
 
-## Что значит для сборщика из Resolve
+## What this means for a builder from Resolve
 
-Минимум для рабочей секвенции: мастер-клип на каждый файл, `Sequence` с дорожками, на каждый клип
-`TrackItem` + `SubClip` + `VideoClip`/`AudioClip` + цепочка (пустая допустима), `Link` для пар, в корзинах
-`ClipProjectItem` на мастер-клипы и на секвенции. Дальше по приоритету: скорость, громкость и ключи,
-Motion (Scale/Position), метки, цвета, аудио-переходы.
+The minimum for a working sequence: a master clip for each file, a `Sequence` with tracks, for each clip a
+`TrackItem` + `SubClip` + `VideoClip`/`AudioClip` + a chain (empty is allowed), a `Link` for pairs, in bins
+a `ClipProjectItem` for master clips and for sequences. Then by priority: speed, volume and keys,
+Motion (Scale/Position), labels, colors, audio transitions.
 
-## Сборщик: `core/prproj_build.py`
+## Builder: `core/prproj_build.py`
 
-Resolve -> `core/adapters/resolve_spec.py` (только чтение) -> spec -> `core.prproj_build.build()`.
+Resolve -> `core/adapters/resolve_spec.py` (read only) -> spec -> `core.prproj_build.build()`.
 
-    PRPROJ_OUT=out.prproj PRPROJ_TEMPLATE=шаблон.prproj [PRPROJ_TIMELINES="Edit A|Edit B"] \
+    PRPROJ_OUT=out.prproj PRPROJ_TEMPLATE=template.prproj [PRPROJ_TIMELINES="Edit A|Edit B"] \
       python -m core.adapters.resolve_run exec core/adapters/resolve_prproj_job.py
 
-Объекты клонируются из шаблонного проекта с новыми id; шаблон даёт настройки проекта, его содержимое
-отбрасывается. Шаблон должен быть сохранён самым старым Premiere, в котором результат надо открыть.
-Переносится: корзины по папкам медиапула, медиа (видео, звук, видео+звук, моно/стерео, стоп-кадры),
-секвенции с дорожками, клипы (позиция, in/out, скорость), Motion (позиция, масштаб, поворот),
-связь видео-звук, скрытые видеодорожки и выключенные звуковые. Цвет и эффекты не создаются: клип
-получает цветовую метку, причина попадает в отчёт.
+Objects are cloned from the template project with new ids; the template supplies the project settings, its content
+is discarded. The template must be saved by the oldest Premiere the result has to open in.
+What is carried over: bins by media pool folders, media (video, audio, video+audio, mono/stereo, stills),
+sequences with tracks, clips (position, in/out, speed), Motion (position, scale, rotation),
+video-audio link, hidden video tracks and muted audio tracks. Color and effects are not created: a clip
+gets a color label, and the reason goes into the report.
 
-Проверено на живом проекте (таймлайн из 638 видео- и 1121 звуковых клипов, 359 файлов): граф ссылок
-замкнут, id уникальны, позиции, in/out и скорость всех 1759 клипов совпали со spec. В Premiere
-файл не открывался (на этом Mac его нет).
+Checked on a live project (a timeline of 638 video and 1121 audio clips, 359 files): the reference graph
+is closed, ids are unique, positions, in/out and speed of all 1759 clips matched the spec. The file
+was not opened in Premiere (it is not on this Mac).
 
-Не переносится и попадает в отчёт: автоматизация громкости (ключи), затухания и кроссфейды, переходы, маркеры (таймлайна и клипов),
-прозрачность, отражение, кроп, режим наложения, составные клипы, титры и заливки без файла,
-одиночные выключенные клипы. Цвет метки клипа из Resolve тоже пока не переносится.
+Not carried over, and goes into the report: volume automation (keys), fades and crossfades, transitions, markers (timeline and clip),
+opacity, flip, crop, blend mode, compound clips, titles and fills without a file,
+single disabled clips. The clip label color from Resolve is also not carried over yet.
 
-### Громкость клипа
+### Clip volume
 
-API Resolve громкость не отдаёт (`GetProperty()` у аудиоклипа пуст), поэтому уровень читается из FCP7 XML,
-который Resolve выгружает для того же таймлайна в том же запуске. Там `Audio Levels` лежит линейным
-множителем (1.122 = +1 дБ). Клипы рядом с переходами имеют `start/end = -1`, поэтому XML и API
-сопоставляются по порядку имён на дорожке, а результат принимается только если явные старты в XML
-совпали с API не меньше чем в 90 % случаев (883 из 883).
+The Resolve API does not give volume (`GetProperty()` on an audio clip is empty), so the level is read from the FCP7 XML
+that Resolve exports for the same timeline in the same run. There `Audio Levels` is a linear
+multiplier (1.122 = +1 dB). Clips next to transitions have `start/end = -1`, so the XML and the API
+are matched by the order of names on the track, and the result is accepted only if the explicit starts in the XML
+matched the API in at least 90 % of cases (883 of 883).
 
-В Premiere уровень лежит в компоненте `Volume` (`Internal Volume Stereo/Mono`), параметр `Level`:
-`значение = 10^((дБ - 15) / 20)`. Это 0.1778 для 0 дБ и 1.0 для +15 дБ, верхнего края шкалы;
-подтверждено двумя проектами (Channel Volume по умолчанию в одном, моно-Volume по умолчанию в другом).
-Выше +15 дБ значение обрезается, в отчёт идёт строка. Ключевых кадров громкости пока нет: формата
-нет ни в одном образце. На том же таймлайне записано 987 уровней, все совпали с XML.
+In Premiere the level lives in the `Volume` component (`Internal Volume Stereo/Mono`), parameter `Level`:
+`value = 10^((dB - 15) / 20)`. That is 0.1778 for 0 dB and 1.0 for +15 dB, the top of the scale;
+confirmed by two projects (default Channel Volume in one, default mono Volume in the other).
+Above +15 dB the value is clipped, and a line goes into the report. There are no volume keyframes yet: the format
+is not in any sample. On the same timeline 987 levels were recorded, all matched the XML.

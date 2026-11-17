@@ -1,34 +1,34 @@
-# dailies-prep: подготовка съёмочного дня к монтажу
+# dailies-prep: preparing a shooting day for editing
 
-## Что это в двух словах
-Помощник, который берёт сырой материал дня (камеры отдельно, звук рекордера отдельно) и подготавливает его к монтажу в DaVinci Resolve: выравнивает звук по картинке, возвращает каждому клипу его звук и подсказывает, где стоит посмотреть картинку глазами.
+## What it is in a nutshell
+A helper that takes the raw material of the day (cameras separately, recorder sound separately) and prepares it for editing in DaVinci Resolve: it aligns the sound to the picture, returns each clip its own sound, and points out where the picture is worth checking by eye.
 
-## Как это работает, по частям
+## How it works, in parts
 
-**1. Синхронизация звука.**
-На площадке звук пишется на отдельный рекордер, а камера пишет свою картинку и тихий «черновой» звук. Чтобы звук рекордера лёг точно под картинку, нужно знать сдвиг. Помощник делает это так: читает из файлов, какая это сцена и какой дубль, находит, какие камеры снимали в то же время (по таймкоду), а потом сравнивает черновой звук камеры со звуком рекордера и находит, на сколько кадров надо подвинуть. Для каждой связи он пишет, насколько в ней уверен. Неуверенные помечает, чтобы вы их проверили сами. Результат - файл `takes.json`, на нём держатся остальные части.
+**1. Sound sync.**
+On set, sound is recorded on a separate recorder, while the camera records its own picture and a quiet "scratch" sound. For the recorder's sound to land exactly under the picture, the offset has to be known. The helper does it like this: it reads from the files which scene and which take it is, finds which cameras were shooting at the same time (by timecode), then compares the camera's scratch sound with the recorder's sound and works out how many frames to shift. For every link it writes how confident it is. Uncertain ones are flagged so you can check them yourself. The result is the `takes.json` file, and the other parts rely on it.
 
-**2. Возврат звука в таймлайн.**
-Если в смонтированном таймлайне Resolve у клипов звук пропал или стоит не тот, помощник делает копию таймлайна и под каждый клип кладёт звук его дубля, уже со сдвигом. Каждый канал рекордера идёт на свою дорожку (первыми - Boom1 и Boom2). Видео и звук связаны. Звук самой камеры можно положить включённым, положить выключенным или не класть совсем - это ваш выбор при запуске. Камера и рекордер расходятся на миллисекунды, поэтому вместе они могут звучать как флэнджер.
+**2. Restoring sound in the timeline.**
+If the clips in an edited Resolve timeline have lost their sound or have the wrong one, the helper makes a copy of the timeline and puts under each clip the sound of its take, already shifted. Each recorder channel goes to its own track (Boom1 and Boom2 first). Video and sound are linked. The camera's own sound can be laid enabled, laid disabled, or not laid at all - that is your choice at launch. The camera and the recorder drift apart by milliseconds, so together they can sound like a flanger.
 
-**3. Ступенчатая проверка кадров.**
-Смотреть всё подряд густо слишком дорого, поэтому проверка идёт ступенями от дешёвой к дорогой: сначала числа без просмотра (где картинка меняется), потом по 8 кадров на каждый дубль каждой камеры, потом края планов. Подробные кадры вокруг склеек (секунда до и секунда после, три кадра в секунду) строятся только если монтаж бесшовный. Если монтаж дробный (нарезка, перебивки), такие кадры ничего не скажут, и помощник их не делает.
+**3. Stepwise frame checking.**
+Looking at everything densely is too expensive, so the check goes in steps from cheap to expensive: first numbers without viewing (where the picture changes), then 8 frames for each take of each camera, then the edges of shots. Detailed frames around cuts (one second before and one second after, three frames per second) are built only if the edit is seamless. If the edit is choppy (cutting, cutaways), such frames tell you nothing, and the helper does not make them.
 
-## Когда он включается
-Когда вы просите: синхронизировать звук, собрать дубли, вернуть звук в таймлайн, проверить картинку монтажа, или называете `takes.json`, дейлиз, MXF рекордера.
+## When it turns on
+When you ask to: sync sound, assemble takes, restore sound in the timeline, check the picture of an edit, or when you mention `takes.json`, dailies, or the recorder's MXF.
 
-## Что он читает и что пишет
-- Читает: файлы MXF камер и рекордера (только чтение, ничего в них не меняет).
-- Пишет: `meta.json`, `takes.json` и картинки-листы в папку, которую вы укажете.
-- В Resolve создаёт НОВЫЙ таймлайн-копию. Исходный таймлайн не трогает, ничего не удаляет.
+## What it reads and what it writes
+- Reads: the MXF files of the cameras and the recorder (read-only, it changes nothing in them).
+- Writes: `meta.json`, `takes.json` and picture sheets into a folder you specify.
+- In Resolve it creates a NEW timeline copy. It does not touch the original timeline and deletes nothing.
 
-## Что нужно, чтобы работало
-Python 3.13 с пакетами `numpy`, `av`, `Pillow`; для части про Resolve - Resolve Studio с включёнными внешними скриптами (режим Local); звук и камеры в формате MXF с сценой и дублем в заголовках.
+## What is needed for it to work
+Python 3.13 with the packages `numpy`, `av`, `Pillow`; for the Resolve part - Resolve Studio with external scripts enabled (Local mode); sound and cameras in MXF format with the scene and take in the headers.
 
-## Чего он не умеет и где может ошибиться
-- Сдвиг подбирается по звуку. Если связь помечена ненадёжной, ей нельзя верить без проверки на слух.
-- Работает с MXF рекордера в формате Avid OP-Atom (по файлу на канал). С другими форматами не проверялся.
-- Часть про Resolve перенесена из рабочего скрипта и после переноса в Resolve не запускалась. Первый запуск проведите на копии проекта.
+## What it cannot do and where it can go wrong
+- The offset is found from the sound. If a link is flagged as unreliable, it must not be trusted without checking by ear.
+- It works with recorder MXF in the Avid OP-Atom format (one file per channel). It has not been tested with other formats.
+- The Resolve part was carried over from a working script and has not been run in Resolve since the transfer. Do the first run on a copy of the project.
 
-## Как убрать
-Удалить папку `dailies-prep` из `~/.claude/skills/`. Файлы с результатами остаются там, куда вы их сохранили.
+## How to remove it
+Delete the `dailies-prep` folder from `~/.claude/skills/`. The result files stay wherever you saved them.

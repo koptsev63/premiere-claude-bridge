@@ -1,90 +1,95 @@
-# Монетизация — живой документ стратегии
+# Monetization - a living strategy document
 
-> Главный принцип: **открытый код (MIT) — это воронка и доверие, а не доход.**
-> Деньги сидят вокруг кода: услуга, обучение, удобство (хостинг), платные
-> допы, B2B, спонсорство. Сам код бесплатен — и это нормально.
-
----
-
-## Где мы сейчас (статус)
-
-- Построен полный автоматический конвейер: разметка материала в таблицу,
-  модель ценности кадров, два варианта черновой сборки, конформ, тех-чистка
-  (горизонт + стабилизация родным движком Resolve), субтитры (SRT + вшитые),
-  оверлеи, обязательная самопроверка вывода.
-- Работает в DaVinci Resolve (Studio) и Premiere. Управляется через
-  Claude Code или Codex.
-- **Ключевая правда про интерфейс:** пользователь общается с агентом
-  словами, терминал не нужен. Это резко снижает порог входа — можно
-  продавать неподготовленным людям.
-- Первый тестер — Денис (практикующий монтажёр, DUALITY / Wild Brigade).
-  Набираем ещё через лёгкий путь «пришли сцену».
-- Пока нет: цветокоррекции (следующая), хостинг-версии.
+> Core principle: **open code (MIT) is a funnel and a source of trust, not
+> income.** The money sits around the code: service, training, convenience
+> (hosting), paid add-ons, B2B, sponsorship. The code itself is free, and
+> that is fine.
 
 ---
 
-## Воронка
+## Where we are now (status)
+
+- A full automatic pipeline is built: footage logging into a table, a frame
+  value model, two variants of a rough assembly, conform, technical cleanup
+  (horizon + stabilization with Resolve's native engine), subtitles (SRT +
+  burned-in), overlays, mandatory self-check of the output.
+- Works in DaVinci Resolve (Studio) and Premiere. Driven through Claude Code
+  or Codex.
+- **Key fact about the interface:** the user talks to the agent in plain
+  words, no terminal needed. This lowers the entry barrier a lot, so it can
+  be sold to non-technical people.
+- First tester: Denis (a working editor, DUALITY / Wild Brigade). We are
+  recruiting more through the light path "send us a scene".
+- Not there yet: color grading (next), a hosted version.
+
+---
+
+## Funnel
 
 ```
-Бесплатное ядро (звёзды, доверие)
+Free core (stars, trust)
    ↓
-Лёгкий путь «пришли сцену» — материал + вердикты профи + спрос (дёшево)
+Light path "send us a scene" - footage + pro verdicts + demand (cheap)
    ↓
-Кто зацепился — ставит себе (настоящая проверка продукта, как Денис)
+Those who get hooked install it themselves (a real product test, like Denis)
    ↓
-Деньги: услуга / курс / хостинг / платные допы
+Money: service / course / hosting / paid add-ons
 ```
 
 ---
 
-## Пути дохода, по порядку под Владимира (что ближе и быстрее)
+## Income paths, in order for Vladimir (what is closer and faster)
 
-1. **Услуга «под ключ» (быстрее всего).** Студии, блогеры, агентства платят
-   за саму работу — разбор материала, черновая сборка, субтитры — а ты
-   делаешь это инструментом в разы быстрее ассистента. Лёгкий путь и есть
-   начало услуги. Деньги с первого клиента, без инфраструктуры.
-2. **Обучение / курс.** Твоя модель («ИИ для тех, кто пишет»). Курс или
-   воркшоп «ИИ для монтажёров и постпродакшена», открытый инструмент —
-   приманка. Высокая маржа, твоя аудитория. Gumroad, ~$39.
-3. **Open-core / хостинг (SaaS).** Тот самый лёгкий путь, но как веб-сервис:
-   загрузил материал — получил черновик + субтитры. Подписка или за рендер.
-   Большая длинная игра, нужна инфраструктура. «Без терминала» делает это
-   реальным для неподготовленных.
-4. **Платные допы и пакеты.** Цветокоррекция (когда сделаю), жанровые
-   пакеты, пакеты оверлеев/титров, LUT-ы, шаблоны. Продаются поверх ядра.
-5. **B2B / коммерческая лицензия + внедрение.** Постпродакшены платят за
-   частный деплой, кастомный пакет под их пайплайн, тренинг, поддержку.
-   (Ядро MIT — значит продаём не код, а внедрение/поддержку или отдельный
-   про-слой.)
-6. **Спонсорство и гранты.** GitHub Sponsors, спонсорство ИИ/тех-компаний,
-   кинотех-гранты — когда появится тяга по звёздам.
-7. **Маркетплейс.** Пресеты, пакеты оверлеев/LUT/скилов (как Screenwriter OS).
-
----
-
-## Честная очерёдность
-
-- **Сейчас:** проверяем на тестерах (Денис + лёгкий путь). Не продаём —
-  собираем доказательства и чужой материал.
-- **Дальше (быстрые деньги):** услуга + короткий курс — у тебя есть
-  аудитория и навык.
-- **Потом:** хостинг + цвет (больший продукт), B2B, спонсорство.
-- MIT означает: код бесплатен всегда. Доход — в удобстве (хостинг), услуге,
-  обучении, платном контенте и поддержке. Не в самом коде.
+1. **"Turnkey" service (fastest).** Studios, bloggers and agencies pay for
+   the work itself - footage review, rough assembly, subtitles - and you do
+   it with the tool many times faster than an assistant would. The light path
+   is the start of the service. Money from the first client, no
+   infrastructure.
+2. **Training / course.** Your model ("AI for those who write"). A course or
+   workshop "AI for editors and post-production", with the open tool as bait.
+   High margin, your audience. Gumroad, ~$39.
+3. **Open-core / hosting (SaaS).** The same light path, but as a web service:
+   upload footage, get a rough cut + subtitles. Subscription or per render.
+   A big long game, needs infrastructure. "No terminal" makes it realistic
+   for non-technical people.
+4. **Paid add-ons and packs.** Color grading (when it is built), genre packs,
+   overlay/title packs, LUTs, templates. Sold on top of the core.
+5. **B2B / commercial license + implementation.** Post-production houses pay
+   for a private deployment, a custom package for their pipeline, training,
+   support. (The core is MIT, so we sell not the code but implementation and
+   support, or a separate pro layer.)
+6. **Sponsorship and grants.** GitHub Sponsors, sponsorship from AI/tech
+   companies, film-tech grants - once stars bring traction.
+7. **Marketplace.** Presets, packs of overlays/LUTs/skills (like Screenwriter
+   OS).
 
 ---
 
-## Кто что делает
+## Honest order
 
-- **Я:** строю (цвет — следующее), держу рабочим, прогоняю тесты «пришли
-  сцену», веду лог фидбека, могу набросать курс/лендинг/оффер услуги.
-- **Ты:** решаешь, какая денежная дорожка первой, и делаешь человеческое —
-  запись курса, звонки с клиентами, ОК на посты, переговоры.
+- **Now:** testing with testers (Denis + the light path). We do not sell yet;
+  we collect proof and other people's footage.
+- **Next (quick money):** service + a short course - you have the audience
+  and the skill.
+- **Later:** hosting + color (a bigger product), B2B, sponsorship.
+- MIT means the code is free forever. Income comes from convenience
+  (hosting), service, training, paid content and support. Not from the code
+  itself.
 
 ---
 
-## Цель ближайшего шага
+## Who does what
 
-Не выручка, а **5-10 живых вердиктов от профи** и разнообразный чужой
-материал. Когда подтвердят, что инструмент реально экономит время —
-включаем услугу + курс. Продавать раньше доказательств смысла нет.
+- **Me:** build (color is next), keep it working, run the "send us a scene"
+  tests, keep the feedback log, can draft a course/landing page/service offer.
+- **You:** decide which money track goes first, and do the human parts -
+  recording the course, calls with clients, approving posts, negotiations.
+
+---
+
+## Goal of the next step
+
+Not revenue, but **5-10 live verdicts from pros** and a variety of other
+people's footage. Once they confirm the tool really saves time, we switch on
+the service + course. There is no point selling before there is proof it
+makes sense.

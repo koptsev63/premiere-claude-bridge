@@ -1,45 +1,45 @@
 ---
 name: nle-handoff
-description: Передача монтажа из DaVinci Resolve в Premiere Pro и Avid Media Composer - сборка проекта Premiere (.prproj) из открытого проекта Resolve, сборка бина Avid (.avb) с мастерами, sync- и group-клипами и отдельного файла настроек проекта (.avp), проверка AAF и XML с вписыванием имён тейпов. Запускай на задачи экспорта для монтажёра, бин для Авида, проект для Премьера, AAF не открывается, проверить XML.
+description: Hand off an edit from DaVinci Resolve to Premiere Pro and Avid Media Composer - build a Premiere project (.prproj) from the open Resolve project, build an Avid bin (.avb) with masters, sync and group clips plus a separate project settings file (.avp), and check AAF and XML files, filling in tape names. Use for editor handoff exports, an Avid bin, a Premiere project, an AAF that will not open, or checking an XML. Triggers - nle handoff, prproj, avb, AAF, XML check, hand off to editor.
 ---
 
-# Передача монтажа: Premiere, Avid, AAF/XML
+# Edit handoff: Premiere, Avid, AAF/XML
 
-Ни один из выходных файлов не открывался в целевой программе при написании: проверялись структура, ссылки и сверка с исходником. Скажи об этом получателю.
+None of the output files was opened in its target application when this was written: only structure, references and a comparison against the source were checked. Tell the recipient this.
 
-## Проект Premiere
+## Premiere project
 
 ```bash
-PRPROJ_OUT=out.prproj PRPROJ_TEMPLATE=свой_проект.prproj [PRPROJ_TIMELINES="Монтаж A|Монтаж B"] \
+PRPROJ_OUT=out.prproj PRPROJ_TEMPLATE=your_project.prproj [PRPROJ_TIMELINES="Edit A|Edit B"] \
   python -m core.adapters.resolve_run exec core/adapters/resolve_prproj_job.py
 ```
 
-- Resolve читается только на чтение. Шаблон - любой реальный `.prproj`, сохранённый самым СТАРЫМ Premiere, в котором результат должен открыться (новый проект старый Premiere не откроет, старый новый откроет). Из шаблона берутся настройки проекта; содержимое отбрасывается.
-- Переносится: корзины по папкам медиапула, медиа (видео, звук, видео+звук, моно/стерео, стоп-кадры), секвенции с дорожками, клипы (позиция, in/out, скорость), Motion (позиция, масштаб, поворот), связь видео и звука, скрытые видеодорожки и заглушённые звуковые, громкость клипа (читается из XML Resolve, пишется как Volume Level `10^((дБ-15)/20)`, выше +15 дБ обрезается).
-- НЕ переносится и попадает в отчёт: грейд и эффекты Resolve (клип получает цветовую метку), ключи громкости, затухания, кроссфейды, переходы, маркеры, прозрачность, отражение, кроп, режимы наложения, составные клипы, титры без файла, одиночные выключенные клипы. Цвет метки клипа из Resolve не переносится.
-- Статус дорожек (скрыта/заглушена) Resolve отдаёт только для открытого таймлайна. Для остальных все дорожки остаются включёнными, в отчёте предупреждение.
-- Описание формата: `docs/prproj-format.md`.
+- Resolve is opened read-only. The template is any real `.prproj` saved by the OLDEST Premiere in which the result must open (an old Premiere will not open a new project, a new one will open an old project). Project settings are taken from the template; its content is discarded.
+- Carried over: bins following the media pool folders, media (video, audio, video+audio, mono/stereo, freeze frames), sequences with tracks, clips (position, in/out, speed), Motion (position, scale, rotation), the link between video and audio, hidden video tracks and muted audio tracks, clip volume (read from the Resolve XML, written as Volume Level `10^((dB-15)/20)`, clipped above +15 dB).
+- NOT carried over, and listed in the report: Resolve grade and effects (the clip gets a color label), volume keyframes, fades, crossfades, transitions, markers, opacity, flip, crop, blend modes, compound clips, titles without a file, individual disabled clips. The clip label color from Resolve is not carried over.
+- Resolve reports track status (hidden/muted) only for the open timeline. For the others all tracks stay enabled, with a warning in the report.
+- Format description: `docs/prproj-format.md`.
 
-## Бин Avid и настройки проекта
+## Avid bin and project settings
 
 ```bash
 python -m core.avb_build takes.json day.avb --hdr headers.json \
-  --project "Имя проекта" --avp-template их_проект.avp --settings-template их_проект_Settings.xml --preset hd-1080p24
+  --project "Project name" --avp-template their_project.avp --settings-template their_project_Settings.xml --preset hd-1080p24
 ```
 
-- Нужно: `pip install pyavb`, PyAV, `takes.json` из `dailies-prep`, диск с MXF (заголовки читаются с него и кэшируются в `--hdr`). Дубли, чьих заголовков нет, пропускаются и перечислены в отчёте.
-- В бине: звуковой мастер на дубль с колонками из заголовка MXF (Scene, Take, TapeID, TRKn...), камерные мастера, `...a.sync.01` (картинка камеры и все дорожки звука со сдвигом; если камера началась раньше звука, лишняя голова картинки обрезается), `...Grp.01` (селекторы по камерам и скрытая композиция).
-- Бин - сам проект, `.avp` - его настройки, они отдельные файлы. `.avp` пишется правками на месте без смещения байтов: новый GUID, штамп времени и целочисленные параметры формата. Список бинов внутри `.avp` остаётся как в шаблоне (Avid покажет их как отсутствующие). Известен один пресет формата, `hd-1080p24`; другие частоты и размеры требуют образца такого проекта.
-- Не сделано: вид бина (колонки, сортировка, шрифты), `_ORG_BIN`.
-- Файл `.avp` для проверки разбирается `core.avp_build.read_attrs`.
+- Needed: `pip install pyavb`, PyAV, `takes.json` from `dailies-prep`, and the disk with the MXF files (headers are read from it and cached in `--hdr`). Takes whose headers are missing are skipped and listed in the report.
+- In the bin: a sound master per take with columns from the MXF header (Scene, Take, TapeID, TRKn...), camera masters, `...a.sync.01` (camera picture and all sound tracks with an offset; if the camera started before the sound, the extra picture head is trimmed), `...Grp.01` (selectors per camera and a hidden composition).
+- The bin is the project itself, `.avp` holds its settings, and they are separate files. `.avp` is written by in-place edits with no byte shifts: a new GUID, a timestamp and the integer format parameters. The list of bins inside `.avp` stays as in the template (Avid will show them as missing). One format preset is known, `hd-1080p24`; other frame rates and sizes need a sample of such a project.
+- Not done: bin view (columns, sorting, fonts), `_ORG_BIN`.
+- An `.avp` file is inspected with `core.avp_build.read_attrs`.
 
-## Проверка AAF и XML
+## Checking AAF and XML
 
 ```bash
-python -m core.handoff_check aaf файл.aaf
-python -m core.handoff_check name-tapes файл.aaf исправленный.aaf --hdr headers.json
-python -m core.handoff_check xml файл.xml
+python -m core.handoff_check aaf file.aaf
+python -m core.handoff_check name-tapes file.aaf fixed.aaf --hdr headers.json
+python -m core.handoff_check xml file.xml
 ```
 
-- AAF: счёт объектов, частоты, дескрипторы, тейпы без имени, висячие ссылки, медиа на диске. Resolve пишет все тейпы с пустым именем; `name-tapes` вписывает имя ролика из заголовка MXF (или имя файла). Что именно пустые имена тейпов не пускают AAF в конкретный Avid, НЕ подтверждено: это проверка и лучшее исправление, а не гарантия. Если не открывается и после, нужен текст ошибки Avid и частота проекта Avid (AAF здесь целиком в 24 кадрах).
-- XML: клипы, выключенные клипы (Resolve при импорте их пропускает), клипы с позицией `-1` у переходов, пути к файлам, повторные id.
+- AAF: object count, frame rates, descriptors, tapes without a name, dangling references, media on disk. Resolve writes all tapes with an empty name; `name-tapes` fills in the reel name from the MXF header (or the file name). That empty tape names are exactly what keeps the AAF from opening in a particular Avid is NOT confirmed: this is a check and a best-effort fix, not a guarantee. If it still does not open afterwards, you need the Avid error text and the Avid project frame rate (the AAF here is entirely at 24 fps).
+- XML: clips, disabled clips (Resolve skips them on import), clips with position `-1` at transitions, file paths, duplicate ids.

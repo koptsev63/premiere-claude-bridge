@@ -112,7 +112,7 @@
     },
     {
       "name": "pr_make_sequence",
-      "description": "Create a sequence from one clip range WITHOUT any dialog (createNewSequence with a preset id opens 'Создать эпизод' and "
+      "description": "Create a sequence from one clip range WITHOUT any dialog (createNewSequence with a preset id opens 'New Sequence' and "
     },
     {
       "name": "pr_set_motion",

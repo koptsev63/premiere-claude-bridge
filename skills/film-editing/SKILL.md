@@ -1,11 +1,11 @@
 ---
 name: film-editing
-description: Editing principles for Premiere Pro work via the Claude Bridge. Encodes Walter Murch's "In the Blink of an Eye" — the Rule of Six, the blink theory, misdirection, eye trace, dreaming in pairs — as concrete decision rules Claude must apply when cutting a sequence. Trigger this skill whenever editing video — whether building a teaser, a trailer, a documentary cut, a reel, a short, or a feature assembly — and when reviewing or critiquing an existing edit. Pair with `mcp__premiere__*` tools.
+description: Editing principles for Premiere Pro work via the Claude Bridge. Encodes Walter Murch's "In the Blink of an Eye" - the Rule of Six, the blink theory, misdirection, eye trace, dreaming in pairs - as concrete decision rules Claude must apply when cutting a sequence. Trigger this skill whenever editing video - whether building a teaser, a trailer, a documentary cut, a reel, a short, or a feature assembly - and when reviewing or critiquing an existing edit. Pair with `mcp__premiere__*` tools.
 ---
 
-# Film Editing — Murch's Operating System
+# Film Editing - Murch's Operating System
 
-Encodes the canonical principles of film editing as a hierarchy Claude follows when making cut decisions inside Premiere via the bridge. Source: Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing* (1995, expanded 2001) — the most-cited text in editing pedagogy. Murch edited *Apocalypse Now*, *The Conversation*, *The English Patient* (Oscars for both editing and sound).
+Encodes the canonical principles of film editing as a hierarchy Claude follows when making cut decisions inside Premiere via the bridge. Source: Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing* (1995, expanded 2001) - the most-cited text in editing pedagogy. Murch edited *Apocalypse Now*, *The Conversation*, *The English Patient* (Oscars for both editing and sound).
 
 ## When to invoke
 
@@ -13,13 +13,13 @@ Encodes the canonical principles of film editing as a hierarchy Claude follows w
 - Choosing in/out points or clip durations
 - Deciding cut order
 - Reviewing an existing cut and proposing changes
-- Anytime Vladimir says: смонтируй, перемонтируй, нарежь, склей, тизер, трейлер, монтаж, сцена, ритм, темп, edit, recut, cut, pacing
+- Anytime Vladimir says: edit this, re-edit, cut it up, stitch it together, teaser, trailer, editing, scene, rhythm, tempo, edit, recut, cut, pacing
 
 Always paired with the `mcp__premiere__*` tools (pr_eval_jsx, pr_get_active_sequence, pr_list_timeline, pr_set_playhead, pr_add_marker, pr_export_ame).
 
 ---
 
-## I. The Rule of Six — the priority stack
+## I. The Rule of Six - the priority stack
 
 Murch's hierarchy for evaluating any cut. **Read top-down: an upper rule outranks every rule below it.** Allocations are Murch's own (lecture, Sydney 1988):
 
@@ -28,39 +28,39 @@ Murch's hierarchy for evaluating any cut. **Read top-down: an upper rule outrank
 | 1 | **Emotion** | 51% | Does the cut feel right for the audience's emotional state at that beat? "If you're true to the emotion of the moment, the audience will forgive technical problems." |
 | 2 | **Story** | 23% | Does the cut advance the story? Is information delivered when the audience needs it? |
 | 3 | **Rhythm** | 10% | Does the cut land at the right musical/breathing moment? Editing is "visual music." |
-| 4 | **Eye trace** | 7% | Where is the viewer's eye at the cut point — and where does the new shot place the next focus? |
+| 4 | **Eye trace** | 7% | Where is the viewer's eye at the cut point - and where does the new shot place the next focus? |
 | 5 | **2D plane (planarity)** | 5% | Compositional continuity within the frame: does the new shot's composition flow from the old? |
 | 6 | **3D space (continuity)** | 4% | The 180° rule, screen direction, spatial geometry. |
 
-**Operational consequence — when criteria conflict, sacrifice from the bottom:**
+**Operational consequence - when criteria conflict, sacrifice from the bottom:**
 - Sacrifice 3D continuity to preserve eye trace.
 - Sacrifice eye trace to preserve rhythm.
 - Sacrifice rhythm to preserve story.
 - Sacrifice story to preserve emotion.
 - **Never sacrifice emotion.**
 
-Murch's exact line: "An ideal cut satisfies all six criteria at once. If you can't have all six, get the top four. If you can't have the top four, get the top three. The top three is most important — preferably the top two, and most of all the top one."
+Murch's exact line: "An ideal cut satisfies all six criteria at once. If you can't have all six, get the top four. If you can't have the top four, get the top three. The top three is most important - preferably the top two, and most of all the top one."
 
 ---
 
 ## II. The Blink Theory
 
-Murch's central insight: humans blink at moments of mental punctuation — when one thought completes and another begins. Cuts work because the audience already does this internally; a good cut aligns with where the audience would naturally blink.
+Murch's central insight: humans blink at moments of mental punctuation - when one thought completes and another begins. Cuts work because the audience already does this internally; a good cut aligns with where the audience would naturally blink.
 
 **Rules:**
 1. **Cut at the end of a thought, not in the middle of one.** Every shot should end at a moment of completion (the end of a gesture, the end of a sentence, the end of a beat).
-2. **The cut is the visual equivalent of the audience's blink** — make it land where the audience is mentally ready to receive a new image.
-3. **Watch the actor's eyes** — performers blink at the same moments the audience does. If your subject blinks at frame X, X is a candidate cut point.
+2. **The cut is the visual equivalent of the audience's blink** - make it land where the audience is mentally ready to receive a new image.
+3. **Watch the actor's eyes** - performers blink at the same moments the audience does. If your subject blinks at frame X, X is a candidate cut point.
 
 ---
 
 ## III. The Idea Cut vs the Continuity Cut
 
 Murch distinguishes two paradigms:
-- **Continuity editing** — the invisible cut, hides the join (Hollywood classical).
-- **Idea editing** — uses the discontinuity itself as a meaning-maker (Eisenstein, Resnais, Godard).
+- **Continuity editing** - the invisible cut, hides the join (Hollywood classical).
+- **Idea editing** - uses the discontinuity itself as a meaning-maker (Eisenstein, Resnais, Godard).
 
-**For documentaries, teasers, and montage sequences (like Grave Stakes):** lean toward idea cuts. The juxtaposition between two shots produces a third meaning that exists in neither shot alone. Example: the *НОВОСИБИРСКИЙ КРЕМАТОРИЙ* T-shirt + a guy intensely digging a grave = the absurdist joke.
+**For documentaries, teasers, and montage sequences (like Grave Stakes):** lean toward idea cuts. The juxtaposition between two shots produces a third meaning that exists in neither shot alone. Example: the *NOVOSIBIRSK CREMATORIUM* T-shirt + a guy intensely digging a grave = the absurdist joke.
 
 ---
 
@@ -75,7 +75,7 @@ Use when continuity matters and you must hide the seam. Skip in idea-cut sequenc
 
 ---
 
-## V. Eye Trace — concrete protocol
+## V. Eye Trace - concrete protocol
 
 Before each cut, ask: **where is the viewer's eye in the outgoing frame?** Then ensure the incoming shot's primary subject lands at or near that same screen position.
 
@@ -84,13 +84,13 @@ Before each cut, ask: **where is the viewer's eye in the outgoing frame?** Then 
 2. Identify the focal point (face, action, contrast peak).
 3. `pr_set_playhead` to the first frame of the incoming clip.
 4. If the new focal point lands near the old position → cut works for eye trace.
-5. If not — either re-frame (motion effect / Position kf), or reorder the cut, or accept the eye-trace cost (allowed if the upper four rules win).
+5. If not - either re-frame (motion effect / Position kf), or reorder the cut, or accept the eye-trace cost (allowed if the upper four rules win).
 
 ---
 
 ## VI. Dreaming in Pairs
 
-A cut is never about one shot — always about two. Always evaluate the **A→B relationship**, not A or B in isolation.
+A cut is never about one shot - always about two. Always evaluate the **A→B relationship**, not A or B in isolation.
 - Two cuts that work individually may not work together (rhythm collision).
 - Two cuts that look weak alone may sing as a pair.
 
@@ -104,26 +104,26 @@ These are starting points, not absolutes. Override per Rule of Six.
 
 | Beat type | Typical duration | Why |
 |---|---|---|
-| **Establishing / breath shot** | 5–8 sec | Audience needs time to orient |
-| **Hook / opening reveal** | 4–6 sec | Long enough to register, short enough to provoke |
-| **Comedy beat** | 4–5 sec | Joke needs time to read; cut on the audience's mental "punchline received" |
-| **Rhythmic action montage** | 2–4 sec each | Cumulative energy; no single shot dominates |
-| **Cinematic / emotional center** | 6–8 sec | The shot the trailer is built around — let it land |
-| **Interview / talking head** | 5–7 sec minimum | Below 5s the speech feels truncated |
-| **Title card** | 3–5 sec | Long enough to read aloud + 1 sec |
-| **End title** | 6–10 sec | Closure beat |
-| **Climax / payoff reveal** | 6–10 sec | The "moneyshot" — overrides all rhythm rules |
+| **Establishing / breath shot** | 5-8 sec | Audience needs time to orient |
+| **Hook / opening reveal** | 4-6 sec | Long enough to register, short enough to provoke |
+| **Comedy beat** | 4-5 sec | Joke needs time to read; cut on the audience's mental "punchline received" |
+| **Rhythmic action montage** | 2-4 sec each | Cumulative energy; no single shot dominates |
+| **Cinematic / emotional center** | 6-8 sec | The shot the trailer is built around - let it land |
+| **Interview / talking head** | 5-7 sec minimum | Below 5s the speech feels truncated |
+| **Title card** | 3-5 sec | Long enough to read aloud + 1 sec |
+| **End title** | 6-10 sec | Closure beat |
+| **Climax / payoff reveal** | 6-10 sec | The "moneyshot" - overrides all rhythm rules |
 
-**Ratio rule**: the longest shot in a teaser should be 2–4× the shortest. More than that and the sequence breaks rhythm; less and it feels monotone.
+**Ratio rule**: the longest shot in a teaser should be 2-4× the shortest. More than that and the sequence breaks rhythm; less and it feels monotone.
 
 ---
 
-## VIII. Process — the editor's workflow Murch advocates
+## VIII. Process - the editor's workflow Murch advocates
 
-1. **First viewing — DON'T touch tools.** Just watch all the rushes. Make notes by hand.
-2. **Mark "selects"** — the moments that are alive, the gold.
-3. **First assembly is always too long.** The teaser will be 2–3× its target length on first pass.
-4. **Cut by feel, then justify.** If a cut feels wrong but you can't say why — trust the feel, find the why later.
+1. **First viewing - DON'T touch tools.** Just watch all the rushes. Make notes by hand.
+2. **Mark "selects"** - the moments that are alive, the gold.
+3. **First assembly is always too long.** The teaser will be 2-3× its target length on first pass.
+4. **Cut by feel, then justify.** If a cut feels wrong but you can't say why - trust the feel, find the why later.
 5. **Watch a cut, walk away, watch again.** Distance reveals what's hidden when too close.
 6. **Show to one person you trust before locking.** Their gut reaction is data.
 
@@ -131,49 +131,49 @@ These are starting points, not absolutes. Override per Rule of Six.
 
 ## IX. The Decisive Moment
 
-Borrowed from Cartier-Bresson: the single frame in any take where everything aligns — gesture, expression, light, composition. **For every clip going into a sequence, identify its decisive moment** and ensure the cut either lands ON or LEADS TO that frame.
+Borrowed from Cartier-Bresson: the single frame in any take where everything aligns - gesture, expression, light, composition. **For every clip going into a sequence, identify its decisive moment** and ensure the cut either lands ON or LEADS TO that frame.
 
-When using `pi.setInPoint(ss, 4)` and `pi.setOutPoint(ss + dur, 4)` via the bridge, the **out-point** of each clip should ideally fall at or just past the decisive moment — never before it.
+When using `pi.setInPoint(ss, 4)` and `pi.setOutPoint(ss + dur, 4)` via the bridge, the **out-point** of each clip should ideally fall at or just past the decisive moment - never before it.
 
 ---
 
 ## X. Concrete operational checklist for Premiere via the bridge
 
 Before placing a clip on the timeline:
-- [ ] Have I identified the decisive moment? (If not — `pr_set_playhead` and scrub via `pr_eval_jsx` to find it.)
+- [ ] Have I identified the decisive moment? (If not - `pr_set_playhead` and scrub via `pr_eval_jsx` to find it.)
 - [ ] Does this clip serve emotion FIRST?
 - [ ] Does it advance story?
 - [ ] Is its duration appropriate to its beat type (table above)?
 - [ ] Does its first frame eye-trace from the previous shot's last frame?
 - [ ] Does its last frame complete a thought?
-- [ ] If breaking 3D continuity — am I doing it deliberately?
+- [ ] If breaking 3D continuity - am I doing it deliberately?
 
 After laying down a sequence:
-- [ ] Pull `pr_list_timeline` and audit the duration distribution. Is the longest shot 2–4× the shortest?
+- [ ] Pull `pr_list_timeline` and audit the duration distribution. Is the longest shot 2-4× the shortest?
 - [ ] Are the 3 most important emotional beats the 3 longest shots?
-- [ ] Is there variety — are no 4 consecutive shots the same length?
+- [ ] Is there variety - are no 4 consecutive shots the same length?
 - [ ] Mark suspect cuts with `pr_add_marker` for human review.
 
 ---
 
 ## XI. Russian terminology mapping
 
-When Vladimir uses Russian terms, map to Murch concepts:
+When Vladimir uses Russian editing slang (glossed here in English), map it to Murch concepts:
 
-| Russian | Murch |
+| Russian term (translated) | Murch |
 |---|---|
-| склейка | cut |
-| монтажная фраза | montage sequence |
-| ритм / темп | rhythm |
-| эмоциональный центр | emotional center / decisive moment |
-| внутрикадровый монтаж | intra-shot continuity |
-| 8-ка / правило восьмёрки | 180° rule (3D continuity) |
-| перебивка | cutaway / reaction shot |
-| монтажный аттракцион | idea cut / Eisensteinian montage |
-| стык по движению | motion-matched cut (eye-trace tool) |
-| на эмоции | "cut on the emotion" |
-| дать вздохнуть | "let it breathe" (extend a shot) |
-| дожать | tighten, trim further |
+| the join | cut |
+| montage phrase | montage sequence |
+| rhythm / tempo | rhythm |
+| emotional center | emotional center / decisive moment |
+| in-frame editing | intra-shot continuity |
+| the figure eight / figure-eight rule | 180° rule (3D continuity) |
+| interruption (cutaway) | cutaway / reaction shot |
+| montage of attractions | idea cut / Eisensteinian montage |
+| join on movement | motion-matched cut (eye-trace tool) |
+| on the emotion | "cut on the emotion" |
+| give it a breath | "let it breathe" (extend a shot) |
+| squeeze it | tighten, trim further |
 
 ---
 
@@ -189,7 +189,7 @@ When Vladimir uses Russian terms, map to Murch concepts:
 | `mcp__premiere__pr_add_marker` | Mark decisive moments, problem cuts, notes |
 | `mcp__premiere__pr_export_ame` | Send to Adobe Media Encoder for output |
 | `mcp__premiere__pr_eval_jsx` | Escape hatch for any custom ExtendScript (set in/out, insertClip, motion params, color) |
-| `pr_make_sequence` / `pr_build_sequences` (0.6) | Sequences from clip ranges with NO dialog (never `createNewSequence` with a preset id: it opens "Создать эпизод" and hangs the bridge) |
+| `pr_make_sequence` / `pr_build_sequences` (0.6) | Sequences from clip ranges with NO dialog (never `createNewSequence` with a preset id: it opens "Create Sequence" and hangs the bridge) |
 | `pr_import_media` / `pr_probe_media` | Codec gate first: AV1/VP9 import as sound only; get the H.264 copy command for just the range; nothing under 2 GB free |
 | `pr_set_motion` / `pr_set_motion_keyframes` | Scale/Position in pixels; `hold: true` between shots (interpolation 4; 5 is Bezier and slides). Keys live in media time (inPoint + t), the tool converts; verify with a frame export, `getValueAtTime` cannot tell |
 | `pr_add_markers` / `pr_get_inout` | Markers in bulk; the clip borders after the editor's manual trim, for a render from his borders |
@@ -198,9 +198,9 @@ When Vladimir uses Russian terms, map to Murch concepts:
 
 ---
 
-## XIII. Analysis pipeline — making the LLM "see" motion
+## XIII. Analysis pipeline - making the LLM "see" motion
 
-**Hard truth:** by default the LLM sees stop-frames, not motion. Murch's Rule of Six leans on perceiving how a gesture begins and completes — impossible from one frame. The pipeline below partially closes that gap.
+**Hard truth:** by default the LLM sees stop-frames, not motion. Murch's Rule of Six leans on perceiving how a gesture begins and completes - impossible from one frame. The pipeline below partially closes that gap.
 
 ### Tool: `tools/analyze_clips.py`
 
@@ -218,9 +218,9 @@ Per clip, two layers. **Machine layer** (measured by the program):
 | `_thumb.jpg` | mid-clip frame, 480w | identify content (faces, objects, location) |
 | `_strip.jpg` | **6 evenly-spaced frames hstacked** | approximate motion: see how subject moves across the clip |
 | `motion_score` | scene-change frequency | distinguish action clips from static b-roll |
-| `audio_peak_db` + `audio_peak_time_sec` | loudness peak + when | find applause, gasps, dialogue moments — these are emotional anchors |
+| `audio_peak_db` + `audio_peak_time_sec` | loudness peak + when | find applause, gasps, dialogue moments - these are emotional anchors |
 | `audio_mean_db` | average loudness | identify speech-bearing vs ambient-only clips |
-| `horizon_tilt_deg` + `horizon_correction_filter` | level check (OpenCV) | flag/level tilted shots — **unreliable on vertical video, do not auto-rotate portrait** |
+| `horizon_tilt_deg` + `horizon_correction_filter` | level check (OpenCV) | flag/level tilted shots - **unreliable on vertical video, do not auto-rotate portrait** |
 | `shake_score` + `needs_stabilization` | camera-shake (OpenCV, 24 samples) | rank jitter; feeds `core.value` |
 | `speech_text` (with `--whisper`) | transcript first 300 chars | exact dialogue + timing |
 
@@ -229,17 +229,17 @@ Per clip, two layers. **Machine layer** (measured by the program):
 | Field | What it is | Why it exists |
 |---|---|---|
 | `desc_ru` | one line: what is actually in the shot, plain Russian | a metrics dump is not a usable log; the picture's *content* is the thing you cut on |
-| `tags` | keywords (дед, сарай, руки, природа, монолог…) | search/group; the cut is built from these, not from loudness |
-| `keep` | `true` = part of the story, `false` = junk to drop | the program cannot know a clip is "not from this story" — only eyes can |
+| `tags` | keywords (grandfather, barn, hands, nature, monologue...) | search/group; the cut is built from these, not from loudness |
+| `keep` | `true` = part of the story, `false` = junk to drop | the program cannot know a clip is "not from this story" - only eyes can |
 
 Output bundle: `report.json` (machine-readable, UTF-8) + `report.html` (contact
-sheet with desc/tags + a green **в историю** / red **лишнее** badge). Both are
+sheet with desc/tags + a green **in the story** / red **extra** badge). Both are
 rewritten **after every clip**, so the table is viewable while the run goes.
 
 ### Mandatory editorial protocol with this data
 
 The metrics rank by loudness and movement. They have **no eyes and no
-meaning** — left alone they produce a chaotic dump that glues a market, a cow
+meaning** - left alone they produce a chaotic dump that glues a market, a cow
 and a stranger together because all three read "loud + moving". Meaning is the
 agent's job, and it comes first.
 
@@ -247,21 +247,21 @@ agent's job, and it comes first.
    60 clips incl. shake/horizon). It writes the table after every clip.
 2. **SEE every clip.** Build contact sheets from the thumbs (ffmpeg
    `tile=7x3`) and `Read` them. One mid-frame can lie (see Grave Stakes
-   below) — for anything ambiguous read its `_strip.jpg` or `/watch` it.
+   below) - for anything ambiguous read its `_strip.jpg` or `/watch` it.
 3. **Classify: keep or drop.** Write `desc_ru` + `tags` + `keep` per clip and
    feed back via `--desc`. Mark `keep:false` for anything **not in this
-   story** — the author's later life, another place/date, a stranger. (Дед:
-   8 of 63 were a husky, a European city, a café, a child — dropped.)
+   story** - the author's later life, another place/date, a stranger. (Grandfather:
+   8 of 63 were a husky, a European city, a café, a child - dropped.)
 4. **For talking footage, get the words, then order by meaning.** Loudness
    never tells you *what he says*. Transcribe the talkers (`--whisper`, or the
    `/watch` local backend, real `--language` + `--word_timestamps`), **read the
-   transcripts yourself**, and sequence the spoken beats by content/arc — that
-   is what "сложить по смыслу" means. Picture serves the words: market talk →
+   transcripts yourself**, and sequence the spoken beats by content/arc - that
+   is what "assemble by meaning" means. Picture serves the words: market talk →
    show the market; hard-labour talk → his hands, the shed.
-5. **Only now use the metrics** — for in/out and ranking *within* a kept,
+5. **Only now use the metrics** - for in/out and ranking *within* a kept,
    meaningful group: `audio_peak_time_sec` as a candidate IN-anchor,
    `shake`/`horizon` to flag fixes, `core.value` to order energy inside a beat.
-6. **Cross-reference rankings against your gut** — a clip that ranks high but
+6. **Cross-reference rankings against your gut** - a clip that ranks high but
    reads wrong usually has the wrong in-point; look at its strip again.
 
 ### Lessons from Grave Stakes case study
@@ -270,10 +270,10 @@ agent's job, and it comes first.
 - **Audio peak ≠ visual peak.** For documentary footage, audio peaks (a clap, a shout, a tool strike) often mark the moment that ought to be in the cut. Use `audio_peak_time_sec` as a candidate IN-anchor.
 - **Whisper `tiny` model fails on noisy field audio in non-English languages.** For real dialogue extraction use `--model medium --language XX`. Plan for ~15 sec/min of audio per Whisper pass.
 
-### Lessons from the Дед case study
+### Lessons from the Grandfather case study
 
 63 phone clips of an old man in a Russian village (Aug 2019), lots of talk and
-dead air. A value-ranked auto-cut on this was rejected outright — twice — and
+dead air. A value-ranked auto-cut on this was rejected outright - twice - and
 the reasons are the rules above:
 
 - **A loudness/motion auto-cut on talking footage is a chaotic dump.** It had
@@ -281,9 +281,9 @@ the reasons are the rules above:
   metric layer is blind; do not ship its order as a cut.
 - **The agent must SEE and CLASSIFY before cutting.** Contact sheets of all 63
   revealed 8 clips that belonged to the author's later life (a husky in a flat,
-  a European street, a café, a child) — invisible to motion/audio, obvious to
+  a European street, a café, a child) - invisible to motion/audio, obvious to
   eyes. Drop them via `keep:false`.
-- **"Сложить по смыслу" = transcribe, read, then sequence by content.** The
+- **"Assemble by meaning" = transcribe, read, then sequence by content.** The
   monologues were about repression, prisons, hard peasant labour, the market.
   Only the transcript reveals that; loudness ranked the silent action clips on
   top instead. Picture follows the words.
@@ -307,20 +307,20 @@ the reasons are the rules above:
 | Story-by-meaning | ✅ process | transcribe → read → sequence (not metrics) |
 | Speech-to-text | ⚠️ use `small`/`medium` + `--language` | Whisper (`tiny`/`base` garble dialect+mat) |
 | OCR (signage, T-shirts) | 🚧 planned | tesseract on motion-strip frames |
-| Auto silent-trim (kill dead air) | ✅ shipped | `core.silence` — ffmpeg silencedetect → speech segments; `tighten_cutlist` repacks. Дед: 38-51% of a talking take was dead air |
+| Auto silent-trim (kill dead air) | ✅ shipped | `core.silence` - ffmpeg silencedetect → speech segments; `tighten_cutlist` repacks. Grandfather: 38-51% of a talking take was dead air |
 | Optical flow direction | 🚧 planned | ffmpeg mestimate filter for match-cut |
 | Multicam sync | 🚧 planned | audio waveform xcorr |
-| Face recognition | ⛔ out of scope | privacy boundary — search by *what's said*, not faces |
+| Face recognition | ⛔ out of scope | privacy boundary - search by *what's said*, not faces |
 
 ---
 
 ## XIV. Real video perception via the bundled `/watch` skill
 
-The honest limitation called out in §XIII — "the LLM sees stop-frames, not motion" — is **partially closed** by vendoring [bradautomates/claude-video](https://github.com/bradautomates/claude-video) into `skills/watch/`. See `skills/watch/ATTRIBUTION.md` for the full credit.
+The honest limitation called out in §XIII - "the LLM sees stop-frames, not motion" - is **partially closed** by vendoring [bradautomates/claude-video](https://github.com/bradautomates/claude-video) into `skills/watch/`. See `skills/watch/ATTRIBUTION.md` for the full credit.
 
 `/watch` does what our 6-frame motion strip can't:
-- Pulls **30–100 frames** per clip (auto-scaled to duration), not 6
-- Pulls a **timestamped transcript** — native captions if available, Whisper API (Groq or OpenAI) as fallback
+- Pulls **30-100 frames** per clip (auto-scaled to duration), not 6
+- Pulls a **timestamped transcript** - native captions if available, Whisper API (Groq or OpenAI) as fallback
 - Lets Claude `Read` every frame as a multimodal image and align to the transcript
 
 ### When to use `/watch` from inside an editing session
@@ -340,7 +340,7 @@ python3 skills/watch/scripts/watch.py "/path/to/clip.MTS" --start 28 --end 35
 ```
 Then in the editing thread: read the frames, pick the in/out, call `pi.setInPoint(...)` via the bridge.
 
-**Get a real transcript of the interview clip used in Grave Stakes (Hungarian) — three backends, no key needed if you have local whisper:**
+**Get a real transcript of the interview clip used in Grave Stakes (Hungarian) - three backends, no key needed if you have local whisper:**
 
 ```bash
 # 1. Local backend (no API key, runs offline). Recommended for non-English:
@@ -379,12 +379,12 @@ Claude will return a beat sheet you can encode as a recipe in `skills/trailer-br
 ### Setup (one-time)
 
 ```bash
-# macOS — auto-installs ffmpeg + yt-dlp via brew
+# macOS - auto-installs ffmpeg + yt-dlp via brew
 python3 skills/watch/scripts/setup.py
 
 # Pick ONE Whisper backend:
 
-# (a) Free, offline, no key — recommended default. Handles any language well:
+# (a) Free, offline, no key - recommended default. Handles any language well:
 pip install -U openai-whisper
 
 # (b) Cloud (faster for short clips), Groq (cheap) or OpenAI:
@@ -396,8 +396,8 @@ After that the editing skill can call `/watch` on any clip in the project bin.
 
 ### Cost discipline
 
-- Each `/watch` call burns ~30–100 image tokens. On a 108-clip raw folder, watching all of them = ~5 000 frames = significant context pressure.
-- **Don't watch everything.** Use `analyze_clips.py` first (motion + audio + horizon) to rank, then `/watch` only the top 10–15 candidates.
+- Each `/watch` call burns ~30-100 image tokens. On a 108-clip raw folder, watching all of them = ~5 000 frames = significant context pressure.
+- **Don't watch everything.** Use `analyze_clips.py` first (motion + audio + horizon) to rank, then `/watch` only the top 10-15 candidates.
 - For long clips, always use `--start`/`--end` once you know roughly where the action is.
 
 ---
@@ -415,7 +415,7 @@ color, variant board, voice-directed turnkey).
 |---|---|---|---|
 | 1 | Analyze | `skills/film-editing/tools/analyze_clips.py` | `report.json`: motion, audio_peak(+time), horizon tilt+filter, **shake_score**, duration |
 | 2 | Value ("meat") | `core.value.ValuePool` | composite rank + explicit `meat_tag`; `protected()` is never dropped; `anchors()` reserved for PIT/PAYOFF |
-| 3 | Variants | `core.variants.build_variants` | **DRIVE + BREATH** — two contrasting cuts, both `is_clean` by construction, length-aware. Two, because the director picks the feel |
+| 3 | Variants | `core.variants.build_variants` | **DRIVE + BREATH** - two contrasting cuts, both `is_clean` by construction, length-aware. Two, because the director picks the feel |
 | 4 | Conform | `core.conform` | bare clip names → real media on this machine (+ proxy) |
 | 5 | Cleanup | `core.cleanup.corrections_for_cutlist` | horizon leveled whenever flagged; stabilization for **relative outliers only** |
 | 6 | Render | `core.render` | anamorphic-safe geometry (un-squish) + horizon rotate; **never** ffmpeg deshake |
@@ -424,7 +424,7 @@ color, variant board, voice-directed turnkey).
 | 9 | Review loop | `core.review_loop` | `analyze_cutlist` (deterministic Murch) → `CutlistPatch` → re-render, with `history`/`diff()` |
 | 10 | **QC gate** | `core.qc` | mandatory: geometry no-squish + residual-shake; **fail-closed** |
 | 11 | **Colour gate** | `core.colorgate` | mandatory before showing a grade: burnt (clipping / oversat / skin) **and** invisible (mean ΔE, floor 5.0); `assert_ok()` **fail-closed** |
-| 12 | **Round trip** | `core.prproj` | reads the editor's saved `.prproj` back — his cues, his razors, his cut points — so subtitles and grade conform to *his* version |
+| 12 | **Round trip** | `core.prproj` | reads the editor's saved `.prproj` back - his cues, his razors, his cut points - so subtitles and grade conform to *his* version |
 | 13 | **Loudness gate** | `core.loudness` | shots levelled against each other, then static gain + true-peak limiter; `check_delivery()` gates LUFS, true peak and shot-to-shot spread, **fail-closed** |
 | 14 | **Delivery integrity** | `core.qc.qc_delivery` | the file decodes clean end to end, has the promised size and rate, and has sound |
 
@@ -432,12 +432,12 @@ Discovery + finishing modules (not strictly sequential):
 
 | Step | Module | What it gives you |
 |---|---|---|
-| Library | `core.library.MediaLibrary` | tag + search the footage by speech/tags/name, `find_lines()` a character's dialogue, and `to_cutlist()` pulls matches into a NEW sequence (Denis's "split by character / don't lose it"). NO face recognition — by what's said. |
-| Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). **Auto-align:** `timeline_transcript(cutlist, transcripts)` maps per-clip transcripts onto the assembled — or dead-air-tightened — cut, so subtitles follow the edit; `parse_srt` reuses an existing SRT as the source. |
+| Library | `core.library.MediaLibrary` | tag + search the footage by speech/tags/name, `find_lines()` a character's dialogue, and `to_cutlist()` pulls matches into a NEW sequence (Denis's "split by character / don't lose it"). NO face recognition - by what's said. |
+| Subtitles | `core.subtitles` | transcript → **SRT** (deliverable, e.g. DUALITY SUB/SRT) + styled **ASS** karaoke (2-word UPPERCASE, MarginV 90 safe-zone); `burn()` via ffmpeg. Word-level karaoke needs Whisper `--word_timestamps` (now on in `skills/watch`). **Auto-align:** `timeline_transcript(cutlist, transcripts)` maps per-clip transcripts onto the assembled - or dead-air-tightened - cut, so subtitles follow the edit; `parse_srt` reuses an existing SRT as the source. |
 | Overlays | `core.overlays` | lower-thirds / title / brand (lime #C8FF00) via ffmpeg `drawtext`; `from_markers(cutlist)` auto-titles from the edit's own beats. |
 | Screen insert | `core.screen_comp` | a clip inside a phone / monitor / TV in the plate: ECC camera track, quad or mask, optional glass/CRT look, colour-exact Rec.709 I/O; the gate proves the plate outside the screen came back unchanged. Affine track only - no parallax, no occlusion. |
 | Eyes + hatch | `core.adapters.resolve_run`, `mcp-server/pk.js` | composited timeline frames from Resolve (`still`, `grab`), clip dump with `gaps()`, and a script runner on each side for what the typed tools do not cover. |
-| Dead air | `core.silence` | detect silence (ffmpeg `silencedetect`) → keep speech-dense regions; `tighten_cutlist` removes pauses inside takes so a rambling talking head goes tight. Loudness-gated, not semantic — pair with the meaning pass. |
+| Dead air | `core.silence` | detect silence (ffmpeg `silencedetect`) → keep speech-dense regions; `tighten_cutlist` removes pauses inside takes so a rambling talking head goes tight. Loudness-gated, not semantic - pair with the meaning pass. |
 
 Progress is measured, not vibed: `examples/grave-stakes-teaser/benchmark/`
 scores every version with `analyze_cutlist` (v3 not-clean → v4 clean → v5
@@ -445,11 +445,11 @@ two clean variants).
 
 ### The review loop (operationalizes §VIII)
 
-Assemble → **perceive** (`ReviewLoop.watch_plan()` + `/watch`, §XIV — this is
+Assemble → **perceive** (`ReviewLoop.watch_plan()` + `/watch`, §XIV - this is
 where taste lives, yours) → **measure** (`analyze_cutlist`: §VII 2-4× ratio,
-§X monotony, beat-pacing — objective inputs, not a substitute for taste) →
+§X monotony, beat-pacing - objective inputs, not a substitute for taste) →
 **patch** (`CutlistPatch`, immutable, validated) → re-render to any backend.
-Repeat until `is_clean()` **and** the emotion (Rule 1) is right — emotion is
+Repeat until `is_clean()` **and** the emotion (Rule 1) is right - emotion is
 never decided by the analyzer.
 
 ```bash
@@ -460,74 +460,74 @@ python -m core.tests                       # full core suite (must be green)
 
 ---
 
-## XVII. Hard rules (non-negotiable — learned from real defects)
+## XVII. Hard rules (non-negotiable - learned from real defects)
 
 These were paid for in shipped mistakes. Do not relearn them.
 
 1. **Anamorphic is the default trap.** Source `.MTS` is 1440×1080 **SAR
-   4:3** — it must display 1920×1080. A naive `scale=1920:1080` squishes
+   4:3** - it must display 1920×1080. A naive `scale=1920:1080` squishes
    faces while the container DAR still reads 16:9, so a thumbnail check
    misses it. `core.render` applies pixel aspect *before* fit, always.
    `core.qc.qc_geometry` exists solely to catch a regression here.
-2. **ffmpeg `deshake` is banned.** It crawls/jitters — worse than the
+2. **ffmpeg `deshake` is banned.** It crawls/jitters - worse than the
    untouched handheld. Real stabilization is Resolve's
    `TimelineItem.Stabilize()`. A standalone stabilized MP4 needs libvidstab
-   (2-pass vidstab) — a tracked follow-up; **never fake it with deshake**.
+   (2-pass vidstab) - a tracked follow-up; **never fake it with deshake**.
 3. **Stabilize relative outliers only**, never blanket. Handheld
    documentary energy is intentional; over-smoothing kills it (Rule 1/3 >
    technical polish). `core.cleanup` uses median + k·MAD.
 4. **Self-verification is mandatory and fail-closed.** Run `core.qc` with
    the OpenCV venv before saying "done"; "can't verify" ≠ pass. *Also* read
-   a **full-resolution** frame yourself — a tiled thumbnail sheet hid the
+   a **full-resolution** frame yourself - a tiled thumbnail sheet hid the
    squish once. The QC gate has already caught my own measurement bugs;
    trust it over a clean-looking metric.
-5. **Two variants, not one.** DRIVE/BREATH — the director chooses the feel.
+5. **Two variants, not one.** DRIVE/BREATH - the director chooses the feel.
    Taste is never the system's call.
-6. **Interpreter map.** Resolve `fusionscript` binds CPython 3.9–3.13 (not
+6. **Interpreter map.** Resolve `fusionscript` binds CPython 3.9-3.13 (not
    3.14); otio file-IO needs 3.12/3.13; shake/qc need the analysis venv
    (OpenCV). Wrong interpreter = false "can't verify", not a real verdict.
 7. **Report verified vs pending.** Never claim a fix you did not measure.
 8. **ASR is a draft, not a subtitle.** Whisper on dialect/field audio misreads
-   words and drops particles — a lost «не» flips the meaning. After
+   words and drops particles - a lost "not" flips the meaning. After
    transcription the agent must **read the text and fix it for sense** before
-   it becomes subtitles (Дед: «Скотт»→«скот, скотина»; restored a dropped «не»
-   that had reversed «тогда не болели» into «тогда болели»). Build subs from
+   it becomes subtitles (Grandfather: "Scott" -> "cattle, livestock" (a Russian near-homophone); restored a dropped "not"
+   that had reversed "back then they weren't sick" into "back then they were sick"). Build subs from
    word timestamps (`readable_chunks`) so a sentence split by dead-air removal
    is never duplicated.
 9. **A talking cut is never silent.** `core.render(audio=True)` is the default;
    only a b-roll/teaser that gets music laid under it renders `audio=False`.
    After rendering, confirm the file actually carries an audio stream
-   (`ffprobe ... stream=codec_type`) — a silent sync cut is a defect.
+   (`ffprobe ... stream=codec_type`) - a silent sync cut is a defect.
 10. **Deliver a project, not a file.** An .mp4 is a preview; the delivery is
     sequences inside the editor's *own open project*, so he can drag a cut
     himself. Check what is open (`pr_get_project_info`) before building
     anything, build into that project, and never touch a sequence he has
-    edited — his version wins by default. Titles go on a real caption track
+    edited - his version wins by default. Titles go on a real caption track
     he can retype, not burned into the picture. When he saves, read his
     version back with `core.prproj.conform_captions()` and conform the
     renders to it.
 11. **Colour is gated, both ways** (`core.colorgate`). Every grade runs
     `check_grade(base, graded)` before it is shown: clipping, oversaturation
     and skin against the ungraded base *and* mean ΔE against it. A burnt
-    grade fails; so does an invisible one — the floor is ΔE 5.0, set by a
+    grade fails; so does an invisible one - the floor is ΔE 5.0, set by a
     director who did not notice a 3.23 grade at all. Inspect frames large
     (≥400px plus a face crop), never an 8-up thumbnail sheet: small previews
     are exactly how blown highlights shipped once already.
 12. **Two grading traps.** *Never auto-white-balance on whole-frame
-    statistics* — a frame that is mostly wall pulls the wall neutral and
-    drags skin orange; correct exposure at half strength (clamp 0.9–1.15)
+    statistics* - a frame that is mostly wall pulls the wall neutral and
+    drags skin orange; correct exposure at half strength (clamp 0.9-1.15)
     and leave balance to an eye. *Film-emulation LUTs (Kodak 2383, Fuji
-    3513) expect Cineon Log input* — the .cube header says so; fed Rec709
+    3513) expect Cineon Log input* - the .cube header says so; fed Rec709
     they blow the highlights. On Rec709 blend them at ≤55% and let the gate
     walk the strength down, or build the look by hand (S-curve, teal in the
     shadows, warmth in the highlights).
 13. **End cards go after the fade, on black.** A title over the last frame
     lands on the speaker's face. Fade the picture, pad ~2.5s of black, put
-    the card there — it also gives a clean still to screenshot.
+    the card there - it also gives a clean still to screenshot.
 14. **Two off-by-ones that hide on short tests.** Resolve's
     `AppendToTimeline` takes `endFrame` **exclusive** (one frame lost per
     clip: 13 clips = 0.43s and drifted subtitles). And a stock `brew ffmpeg`
-    can ship without `libass`/`drawtext`/`lut3d` — check `-filters` before
+    can ship without `libass`/`drawtext`/`lut3d` - check `-filters` before
     trusting a burn, use a full build if missing, feed labelled graphs
     through `-filter_complex`, and keep filter paths free of spaces.
 
@@ -643,12 +643,12 @@ These were paid for in shipped mistakes. Do not relearn them.
     from that with ffmpeg.
 30. **Caption files go in one at a time: `pr_import_captions`.**
     `importFiles([several .srt], suppressUI=true, ...)` hung Premiere on
-    "Импорт файлов..." for good (20.10.2026). One file per call with the UI
+    "Importing files..." for good (20.10.2026). One file per call with the UI
     allowed, then `createCaptionTrack(item, 0, CAPTION_FORMAT_SUBTITLE)`.
 31. **Effects by the name Premiere shows, verified: `pr_add_video_effect`.**
     In a Russian UI `getVideoEffectByName("Black & White")` returns an
     object and `addVideoEffect` adds nothing, with no error; the name is
-    "Черное и белое". Count `components.numItems` before and after.
+    "Black and White". Count `components.numItems` before and after.
 32. **Never export a sequence with an ingest/proxy preset.**
     `IngestPresets/Proxy/02_H.264 MP4.epr` squashed a 1080x1920 vertical
     into 1280x720. Use a Match Source preset and read the output size with
@@ -698,7 +698,7 @@ colour".
    wall itself drifted into flesh tones.
 4. **Assemble in frames and ticks only.** Accumulated float seconds leave
    one-frame holes between clips - the director had to close them by hand and
-   called them "микропропуски". The next clip goes at the *actual* `seq.end` in
+   called them "micro-gaps". The next clip goes at the *actual* `seq.end` in
    ticks, read back from the sequence, never at a number you added up yourself.
    Safer still: lay the whole clip down and razor with ripple, where a hole is
    structurally impossible. Tools: [`tools/build_sequence.jsx`](tools/build_sequence.jsx),
@@ -723,9 +723,9 @@ colour".
 
 ## XV. Reference
 
-- Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing*, 2nd ed., Silman-James Press, 2001 (Russian: «В мгновение ока», аудиокнига Кирилла Никитенко 2024)
-- Murch's Sydney lecture (1988) — origin of the Rule of Six
-- StudioBinder, "Walter Murch's The Rule of Six" — modern annotation with examples (*Godfather*, *Eternal Sunshine*, *Bonnie and Clyde*, *Fight Club*, *Mad Max: Fury Road*, *The Shining*, *Inception*)
+- Walter Murch, *In the Blink of an Eye: A Perspective on Film Editing*, 2nd ed., Silman-James Press, 2001 (Russian edition: "In the Blink of an Eye" ("V mgnovenie oka"), audiobook read by Kirill Nikitenko, 2024)
+- Murch's Sydney lecture (1988) - origin of the Rule of Six
+- StudioBinder, "Walter Murch's The Rule of Six" - modern annotation with examples (*Godfather*, *Eternal Sunshine*, *Bonnie and Clyde*, *Fight Club*, *Mad Max: Fury Road*, *The Shining*, *Inception*)
 
 ---
 
@@ -734,15 +734,14 @@ colour".
 render queue you did not fill, shots levelled before normalising, the
 colour matrix stated on every pipe, and ProRes out of Resolve with the H.264
 made by ffmpeg.) Earlier: 2026-08-17 (§XVI pipeline steps 11-12: `core.colorgate`
-two-sided colour gate and `core.prproj` round trip; §XVII hard rules 10–14:
+two-sided colour gate and `core.prproj` round trip; §XVII hard rules 10-14:
 deliver a project rather than a file, gate every grade both ways, the
 auto-WB and Cineon-Log LUT traps, end cards after the fade on black, and the
-two off-by-ones — Resolve's exclusive `endFrame` and ffmpeg builds without
+two off-by-ones - Resolve's exclusive `endFrame` and ffmpeg builds without
 libass/lut3d. All from a vertical announcement reel cut, conformed, graded
 and delivered end to end in August 2026.) Earlier: 2026-05-22 (§XIII meaning layer: `analyze_clips --desc`
 adds Russian `desc_ru` + `tags` + `keep/drop` and shake/horizon to a complete
-per-clip table written incrementally; editorial protocol rewritten meaning-first
-— see → classify → transcribe → sequence by content, metrics last; Дед case
+per-clip table written incrementally; editorial protocol rewritten meaning-first - see → classify → transcribe → sequence by content, metrics last; Grandfather case
 study: why a loudness/motion auto-cut on talking footage is a dump and how the
 agent fixes it). Earlier: 2026-05-18 §XVI automated pipeline + §XVII hard rules
 (anamorphic un-squish, Resolve-native Stabilize over banned ffmpeg deshake,

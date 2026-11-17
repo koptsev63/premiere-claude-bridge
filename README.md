@@ -100,9 +100,7 @@ Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour
 
 ## Demo
 
-[![Real session in Premiere Pro](docs/demo/reel-session-poster.jpg)](docs/demo/reel-session.mp4)
-
-The clip above is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
+The clip at the top of this page is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
 
 ```
 You:    "Open Premiere. Import all .MTS from ~/Desktop/Footage/.

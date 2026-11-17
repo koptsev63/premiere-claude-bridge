@@ -25,6 +25,7 @@ from core.tests import (
     test_hits,
     test_library,
     test_loudness,
+    test_motion,
     test_overlays,
     test_pk_runner,
     test_probe,
@@ -92,6 +93,8 @@ MODULES = [
     test_avp_build,
     # editor rules from a live cut, Denis (16.11.2026)
     test_taste,
+    # motion at cuts (November 2026)
+    test_motion,
 ]
 
 

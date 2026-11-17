@@ -500,7 +500,7 @@ MIT - see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copyri
 
 ## Status
 
-🟡 **Beta, v0.8.8.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish - a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
+🟡 **Beta, v0.8.9.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish - a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
 
 **Stuck on install or found a bug?** Open an issue or a discussion here. News goes to the Telegram channel [@koptsev_AI](https://t.me/koptsev_AI) (in Russian).
 

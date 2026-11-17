@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.8.9] - 2026-11-17 - motion at the cuts
+
+The editing brain saw stills, not motion. A cut on movement, a kept screen
+direction and the viewer's eye landing where it already was are now
+measured, the same way 0.8.8 measures cuts against the drums.
+
+### Added
+- `core.motion` (new): motion at cuts, measured with optical flow, numbers
+  only. For every cut the 0.4 s before and after is run through Farneback
+  flow at 320 px; a RANSAC similarity fit gives the camera (pan, tilt, zoom),
+  the residual gives the subject (share, centroid, direction, speed). Each cut
+  gets a verdict (action continues, direction flip, cut on stop, cut into
+  motion, still to still, speed jump, flat) and an eye-trace distance between
+  the two subject centroids (eye stays / moves / jumps). CLI:
+  `python -m core.motion VIDEO [--cuts 5.24,9.36] [--json] [--sheet out.jpg]`.
+  Needs numpy + opencv (imported lazily). Thresholds are engineering
+  defaults, not calibrated on a corpus.
+  Textureless points (sky, walls) are masked out of the camera fit and the
+  subject; two moving sides are compared by the angle of their travel
+  vectors (`action continues` / `direction turns` / `direction flip`).
+
 ## [0.8.8] - 2026-11-16 - assembly cuts like a live editor
 
 Denis cut a 63 s promo by hand (16.11.2026) and named five rules he

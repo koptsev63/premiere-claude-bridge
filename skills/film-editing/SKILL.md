@@ -86,6 +86,8 @@ Before each cut, ask: **where is the viewer's eye in the outgoing frame?** Then 
 4. If the new focal point lands near the old position → cut works for eye trace.
 5. If not - either re-frame (motion effect / Position kf), or reorder the cut, or accept the eye-trace cost (allowed if the upper four rules win).
 
+**Measure it first (0.8.9):** `python3 -m core.motion CUT.mp4 --sheet cuts.jpg` reads every cut of a rendered cut with optical flow and prints, per cut, the camera move, the moving subject (centroid, speed), the travel direction and an eye-trace distance (`eye stays` < 0.15 < `eye moves` < 0.35 < `eye jumps`, in frame diagonals). Use it as the first pass over a whole edit, then look only at the cuts it flags with the playhead protocol above. Verdicts: `action continues` (join on movement worked), `direction flip` (screen direction reversed - a 180° question, fine only if intended), `direction turns`, `cut on stop`, `cut into motion`, `speed jump`, `still to still`, `flat`. The camera label on a close-up with a big gesture can be wrong; the travel arrow is what the verdict uses.
+
 ---
 
 ## VI. Dreaming in Pairs
@@ -201,6 +203,10 @@ When Vladimir uses Russian editing slang (glossed here in English), map it to Mu
 ## XIII. Analysis pipeline - making the LLM "see" motion
 
 **Hard truth:** by default the LLM sees stop-frames, not motion. Murch's Rule of Six leans on perceiving how a gesture begins and completes - impossible from one frame. The pipeline below partially closes that gap.
+
+### Tool: `core.motion` - motion at the cuts of a finished edit
+
+`python3 -m core.motion EDIT.mp4 [--cuts 5.24,9.36] [--json] [--sheet out.jpg]` - optical flow 0.4 s either side of every cut: camera (pan, tilt, push, pull), subject (share, centroid, speed), travel direction, verdict and eye-trace. The sheet puts the last frame before and the first frame after each cut side by side with the travel arrow and the subject circle, so the motion the LLM cannot see in stills is drawn on them. Numbers only, no AI; about 8 s for a 37 s teaser.
 
 ### Tool: `tools/analyze_clips.py`
 

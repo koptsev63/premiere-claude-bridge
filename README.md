@@ -138,7 +138,7 @@ There are about fifteen Premiere MCP servers on GitHub now, and several for Reso
 | **Work before the timeline** | Auto-log of raw footage, offline transcript, dead-air removal, two rough-cut variants, subtitles |
 | **An editing method** | Walter Murch's Rule of Six as decision rules in `skills/film-editing/SKILL.md` |
 | **One brain, two editors** | The same cut list goes to Premiere or Resolve |
-| **Small surface** | 31 tools, one of them the escape hatch `pr_eval_jsx`: a few dozen, not hundreds, so the model does not need a tool search to find its way |
+| **Small surface** | 35 tools, one of them the escape hatch `pr_eval_jsx`: a few dozen, not hundreds, so the model does not need a tool search to find its way |
 
 If you need an agent that can reach every button in Premiere, pick one of the big servers. If you want an assistant editor for documentary material that checks its own output and follows your manual changes, this one is for you.
 
@@ -456,10 +456,11 @@ These were all real bugs found during the *Grave Stakes* case study. See [`CHANG
 
 - [x] v0.1 - MCP bridge + film-editing skill + analyze_clips
 - [x] v0.2 - `/watch` skill bundled, local Whisper, horizon detection v2
-- [ ] **v0.3 - `trailer-bridge` skill pack** - 7 genre-specific recipes (action, drama, comedy, horror, doc, thriller, romance) + LUT presets + auto-rendering
-- [ ] **v0.4 - multicam audio sync** - match camera angles by audio waveform xcorr, build multicam clips programmatically
-- [ ] **v0.5 - face/sentiment detection** - mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
-- [ ] **v0.6 - MCP Registry publish** - official listing + GitHub Action for auto-release
+- [x] v0.3 to v0.8 - shipped, see [`CHANGELOG.md`](CHANGELOG.md)
+- [x] **MCP Registry publish** - official listing + GitHub Action for auto-release (since 0.8.2)
+- [~] **`trailer-bridge` skill pack** - 7 genre-specific recipes (action, drama, comedy, horror, doc, thriller, romance) + LUT presets + auto-rendering. Scaffold with the first recipes is in [`skills/trailer-bridge`](skills/trailer-bridge/SKILL.md)
+- [ ] **Multicam audio sync** - match camera angles by audio waveform xcorr, build multicam clips programmatically
+- [ ] **Face/sentiment detection** - mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
 - [~] **v1.0 - universal NLE core** - editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 672 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
@@ -499,7 +500,7 @@ MIT - see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copyri
 
 ## Status
 
-🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish - a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
+🟡 **Beta, v0.8.8.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish - a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
 
 **Stuck on install or found a bug?** Open an issue or a discussion here. News goes to the Telegram channel [@koptsev_AI](https://t.me/koptsev_AI) (in Russian).
 

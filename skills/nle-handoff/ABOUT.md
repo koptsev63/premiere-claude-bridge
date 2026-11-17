@@ -1,34 +1,34 @@
-# nle-handoff: передача монтажа в Premiere и Avid
+# nle-handoff: edit handoff to Premiere and Avid
 
-## Что это в двух словах
-Помощник, который превращает ваш проект в DaVinci Resolve в файлы, которые можно открыть в Premiere Pro или Avid Media Composer, и проверяет такие файлы перед отправкой монтажёру.
+## What it is in brief
+A helper that turns your DaVinci Resolve project into files that can be opened in Premiere Pro or Avid Media Composer, and checks those files before you send them to the editor.
 
-## Как это работает, по частям
+## How it works, in parts
 
-**1. Проект для Premiere.**
-Помощник читает открытый проект Resolve (только читает) и собирает файл `.prproj`: папки с клипами, все таймлайны, дорожки, клипы с их местом, началом и концом, скоростью, положением и масштабом кадра, громкостью. Основа берётся из вашего настоящего проекта Premiere, который вы укажете как шаблон: его настройки сохраняются, а содержимое заменяется вашим. Цвет и эффекты Resolve в Premiere не создаются: такой клип помечается цветом, а в итоговом отчёте написано, что было и что не перенесено.
+**1. Premiere project.**
+The helper reads the open Resolve project (read-only) and builds a `.prproj` file: folders with clips, all timelines, tracks, clips with their position, in and out points, speed, frame position and scale, and volume. The base is taken from your real Premiere project, which you give as a template: its settings are kept and its content is replaced with yours. Resolve color and effects are not created in Premiere: such a clip is marked with a color, and the final report says what was carried over and what was not.
 
-**2. Бин и настройки проекта для Avid.**
-Бин (`.avb`) - это сам проект с материалом: звуковые клипы дублей с колонками (сцена, дубль, названия каналов), клипы камер, «sync»-клипы (камера со звуком, уже совмещённые) и «group»-клипы (выбор между камерами). Настройки проекта - отдельный файл `.avp` (и `Settings.xml`): частота кадров, размер, цветовое пространство. Их помощник готовит из вашего настоящего проекта Avid: меняет только номер проекта, время и параметры формата.
+**2. Avid bin and project settings.**
+The bin (`.avb`) is the project itself with the material: sound clips of the takes with columns (scene, take, channel names), camera clips, "sync" clips (camera with sound, already aligned) and "group" clips (a choice between cameras). The project settings are a separate `.avp` file (and `Settings.xml`): frame rate, size, color space. The helper prepares them from your real Avid project: it changes only the project number, the time and the format parameters.
 
-**3. Проверка AAF и XML.**
-Перед отправкой помощник проверяет файл: сколько в нём объектов, одинаковая ли частота кадров, нет ли ссылок в пустоту, лежат ли файлы на диске. Resolve записывает в AAF все катушки (тейпы) без названия; помощник умеет вписать названия из файлов.
+**3. AAF and XML check.**
+Before sending, the helper checks the file: how many objects it holds, whether the frame rate is consistent, whether any references point to nothing, whether the files are on disk. Resolve writes all reels (tapes) in the AAF without a name; the helper can fill in the names from the files.
 
-## Когда он включается
-Когда вы просите: проект для Premiere, бин для Avid, настройки проекта Avid, проверить или исправить AAF или XML, или говорите, что файл у монтажёра не открывается.
+## When it kicks in
+When you ask for: a project for Premiere, a bin for Avid, Avid project settings, to check or fix an AAF or XML, or say that a file will not open for the editor.
 
-## Что он читает и что пишет
-- Читает: открытый проект Resolve (только чтение), MXF-файлы для сборки бина, ваши шаблоны проектов.
-- Пишет: новые файлы `.prproj`, `.avb`, `.avp`, `Settings.xml`, исправленную копию AAF. Исходные файлы и ваши шаблоны не изменяются.
+## What it reads and what it writes
+- Reads: the open Resolve project (read-only), the MXF files used to build the bin, your project templates.
+- Writes: new `.prproj`, `.avb`, `.avp` and `Settings.xml` files, and a fixed copy of the AAF. Source files and your templates are not changed.
 
-## Что нужно, чтобы работало
-Python 3.13; пакеты `pyaaf2` (AAF), `pyavb` (бины Avid), `av` (чтение заголовков MXF); Resolve Studio для проекта Premiere; ваши шаблоны: настоящий `.prproj` (сохранённый самым старым Premiere, в котором нужен результат) и настоящий Avid-проект.
+## What it needs to work
+Python 3.13; the packages `pyaaf2` (AAF), `pyavb` (Avid bins), `av` (reading MXF headers); Resolve Studio for the Premiere project; your templates: a real `.prproj` (saved by the oldest Premiere in which you need the result) and a real Avid project.
 
-## Чего он не умеет и где может ошибиться
-- Ни один из выходных файлов не открывался в целевой программе: проверялись структура, ссылки и сверка с исходником. Первый открытый файл у монтажёра - настоящая проверка.
-- В Premiere не переносятся: грейд и эффекты Resolve, затухания и кроссфейды громкости, переходы, маркеры, прозрачность, составные клипы, титры.
-- В `.avp` список бинов остаётся из шаблона, Avid покажет их как отсутствующие. Известен один готовый формат (1080p, 24 кадра), для других нужен образец такого проекта.
-- Исправление названий тейпов в AAF - лучшая попытка, а не гарантия, что Avid откроет файл.
+## What it cannot do and where it can be wrong
+- None of the output files was opened in its target application: only structure, references and a comparison against the source were checked. The first file the editor opens is the real test.
+- Not carried over to Premiere: Resolve grade and effects, volume fades and crossfades, transitions, markers, opacity, compound clips, titles.
+- In `.avp` the list of bins stays from the template, and Avid will show them as missing. One ready format is known (1080p, 24 fps); others need a sample of such a project.
+- Fixing tape names in the AAF is a best effort, not a guarantee that Avid will open the file.
 
-## Как убрать
-Удалить папку `nle-handoff` из `~/.claude/skills/`. Созданные файлы остаются там, куда вы их сохранили.
+## How to remove it
+Delete the `nle-handoff` folder from `~/.claude/skills/`. Created files stay wherever you saved them.

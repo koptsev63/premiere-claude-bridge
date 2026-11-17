@@ -1,6 +1,6 @@
 # Contributing to premiere-claude-bridge
 
-Thanks for considering a contribution. This project is built by and for film editors who happen to code, so the bar is "make it useful in real production work" — not "elegant abstraction for its own sake".
+Thanks for considering a contribution. This project is built by and for film editors who happen to code, so the bar is "make it useful in real production work" - not "elegant abstraction for its own sake".
 
 ## Quick orientation
 
@@ -8,9 +8,9 @@ Thanks for considering a contribution. This project is built by and for film edi
 |---|---|
 | Add a new MCP tool | [`mcp-server/server.js`](mcp-server/server.js) + matching ExtendScript in [`cep-extension/jsx/host.jsx`](cep-extension/jsx/host.jsx) |
 | Encode a new editing principle | [`skills/film-editing/SKILL.md`](skills/film-editing/SKILL.md) (markdown, no code needed) |
-| Add a genre-specific recipe | New folder under [`skills/`](skills/) — see [`skills/film-editing/SKILL.md`](skills/film-editing/SKILL.md) for the format |
-| Add an analysis tool | [`skills/film-editing/tools/`](skills/film-editing/tools/) — Python, must run via the venv at `tools/.venv` |
-| Improve `/watch` | Don't edit `skills/watch/` directly — it's vendored from upstream. Open a PR to [bradautomates/claude-video](https://github.com/bradautomates/claude-video) and we'll re-vendor. |
+| Add a genre-specific recipe | New folder under [`skills/`](skills/) - see [`skills/film-editing/SKILL.md`](skills/film-editing/SKILL.md) for the format |
+| Add an analysis tool | [`skills/film-editing/tools/`](skills/film-editing/tools/) - Python, must run via the venv at `tools/.venv` |
+| Improve `/watch` | Don't edit `skills/watch/` directly - it's vendored from upstream. Open a PR to [bradautomates/claude-video](https://github.com/bradautomates/claude-video) and we'll re-vendor. |
 | Document a workflow | [`docs/`](docs/) or [`examples/`](examples/) |
 
 ## Development setup
@@ -37,7 +37,7 @@ node mcp-server/server.js
 
 **Code:**
 - Node: keep `mcp-server/server.js` zero-dep beyond `@modelcontextprotocol/sdk` and `ws` and `zod`. No build step.
-- Python: standard library + `pillow` + `opencv-python-headless` + `numpy` + `openai-whisper`. Add to `requirements.txt` if you introduce a new dep — and explain why in the PR description.
+- Python: standard library + `pillow` + `opencv-python-headless` + `numpy` + `openai-whisper`. Add to `requirements.txt` if you introduce a new dep - and explain why in the PR description.
 - ExtendScript: ES3 only (Adobe's JS engine). No `let`, no arrow functions, no `JSON` (we ship a polyfill in `host.jsx`).
 
 **Markdown:**
@@ -47,8 +47,8 @@ node mcp-server/server.js
 
 **Commits:**
 - Conventional commits prefix where it makes sense: `feat`, `fix`, `docs`, `chore`, `refactor`.
-- Body explains *why*, not *what* — the diff already shows what.
-- Co-authored AI commits welcome — keep the `Co-Authored-By:` trailer if you used Claude/Cursor/Copilot.
+- Body explains *why*, not *what* - the diff already shows what.
+- Co-authored AI commits welcome - keep the `Co-Authored-By:` trailer if you used Claude/Cursor/Copilot.
 
 ## What I'm looking for
 
@@ -66,7 +66,7 @@ node mcp-server/server.js
 - A SaaS / hosted variant (out of scope for OSS core; bring it up if you want to fork)
 
 **Politely decline:**
-- "I rewrote it in [language]" — no reciprocal benefit unless there's a strong technical reason
+- "I rewrote it in [language]" - no reciprocal benefit unless there's a strong technical reason
 - LLM-generated PRs that don't run, don't compile, or change unrelated whitespace
 
 ## Issue labels
@@ -75,7 +75,7 @@ node mcp-server/server.js
 |---|---|
 | `good first issue` | Self-contained, well-scoped, no deep context needed |
 | `help wanted` | I want this but won't get to it soon |
-| `claim` | You're starting work — leave a comment, I'll assign |
+| `claim` | You're starting work - leave a comment, I'll assign |
 | `bug` | Something broken |
 | `enhancement` | Net-new feature |
 | `documentation` | Docs only, no code |
@@ -84,8 +84,8 @@ node mcp-server/server.js
 
 ## Code of conduct
 
-Be useful, don't be a jerk. The author is a working filmmaker, not a software bureaucrat — keep it human.
+Be useful, don't be a jerk. The author is a working filmmaker, not a software bureaucrat - keep it human.
 
 ## Author
 
-Vladimir Koptsev — film director, Barcelona. TG [@koptsev_AI](https://t.me/koptsev_AI) · koptsev63@gmail.com
+Vladimir Koptsev - film director, Barcelona. TG [@koptsev_AI](https://t.me/koptsev_AI) · koptsev63@gmail.com

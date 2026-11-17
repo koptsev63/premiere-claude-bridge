@@ -32,7 +32,7 @@ If the panel is disconnected: `{ "connected": false, "hint": "Open panel in Prem
 ### `pr_get_project_info`
 Full bin tree of the open project.
 
-**Returns:** `{name, path, itemCount, items: [{name, type, treePath, nodeId, path}, ...]}` — `items` is flat (recursive walk into bins). `nodeId` is what you reference in subsequent calls.
+**Returns:** `{name, path, itemCount, items: [{name, type, treePath, nodeId, path}, ...]}` - `items` is flat (recursive walk into bins). `nodeId` is what you reference in subsequent calls.
 
 ### `pr_get_active_sequence`
 Specs of the active sequence.
@@ -84,10 +84,10 @@ Markers are typed as comments (visible as text bubbles in the timeline).
 Queue active sequence export to Adobe Media Encoder. Non-blocking.
 
 **Args:** `{outPath: string, eprPath: string}`
-- `outPath` — absolute path including filename and extension (e.g. `/path/to/teaser.mp4`)
-- `eprPath` — absolute path to a `.epr` Adobe Media Encoder preset
+- `outPath` - absolute path including filename and extension (e.g. `/path/to/teaser.mp4`)
+- `eprPath` - absolute path to a `.epr` Adobe Media Encoder preset
 
-**Returns:** `{ok: true, jobID, outPath, eprPath}` — the job is queued; AME launches if not already running.
+**Returns:** `{ok: true, jobID, outPath, eprPath}` - the job is queued; AME launches if not already running.
 
 **Use a Match Source preset for a sequence.** Ingest and proxy presets (`Settings/IngestPresets/...`, anything named Proxy) carry their own frame size: on 20.10.2026 `exportAsMediaDirect` with `IngestPresets/Proxy/02_H.264 MP4.epr` turned a 1080x1920 vertical sequence into 1280x720. `pr_export_ame` refuses such presets unless `allowProxyPreset: true`. The same applies to `exportAsMediaDirect` in your own scripts.
 
@@ -120,7 +120,7 @@ Why a tool: `app.project.importFiles([several .srt], true, bin, false)` (suppres
 ## Effects
 
 ### `pr_list_video_effects`
-Effect names exactly as this Premiere shows them. In a Russian UI most are Russian (`Черное и белое`), some newer ones stay English (`Gaussian Blur`, `Vignette`).
+Effect names exactly as this Premiere shows them. In a Russian UI most are Russian (for example the localized name of Black & White), some newer ones stay English (`Gaussian Blur`, `Vignette`).
 
 **Args:** `{filter?: string}` (matches the local name or its known English name)
 **Returns:** `{count, effects: [{name, en?}]}`
@@ -132,7 +132,7 @@ Add a video effect and prove it landed.
 
 **Returns:** `{requested, resolved, how, results: [{track, clip, name, before, after, added, component}]}`. An error if any clip's component count did not grow.
 
-Why a tool: `qe.project.getVideoEffectByName("Black & White")` in a Russian UI returned an object and `addVideoEffect` silently added nothing; `"Черное и белое"` worked (20.10.2026). The name is resolved against `qe.project.getVideoEffectList()` of the running Premiere: exact name, then case/ё-insensitive, then an English-to-local map checked against the real 26.0.2 list, then a loose match that is used only when it is unique. Otherwise the tool refuses and lists candidates. The QE item is found by start ticks, not by index (QE counts gaps as items).
+Why a tool: `qe.project.getVideoEffectByName("Black & White")` in a Russian UI returned an object and `addVideoEffect` silently added nothing; the localized Russian name of the effect worked (20.10.2026). The name is resolved against `qe.project.getVideoEffectList()` of the running Premiere: exact name, then case- and yo/ye-insensitive, then an English-to-local map checked against the real 26.0.2 list, then a loose match that is used only when it is unique. Otherwise the tool refuses and lists candidates. The QE item is found by start ticks, not by index (QE counts gaps as items).
 
 ---
 
@@ -144,7 +144,7 @@ no panel reinstall. Field facts behind them (Premiere 26.0.2, Russian UI,
 24.10.2026):
 
 - `createNewSequence(name, presetId)` with an id that is not an installed
-  preset opens "Создать эпизод" and blocks the script thread. The bridge
+  preset opens "Create Sequence" and blocks the script thread. The bridge
   never calls it.
 - In/out points snap to the source frame grid (10 s at 29.97 → 9.977 s).
 - Motion keyframe times (`addKey`, `setValueAtKey`) are MEDIA time: seconds
@@ -171,8 +171,8 @@ window list comes from Quartz (`CGWindowListCopyWindowInfo`), because
 Premiere's windows are not visible to Accessibility; a dialog is a new titled
 window compared with the baseline remembered on the last healthy check
 (`~/.claude/state/premiere-windows-baseline.json`). `message` is Russian and
-names the button for known dialogs ("Создать эпизод" → «Отмена», "Несоответствие
-медиаданных" → «Отмена»). Looks, never clicks. Every 0.6 tool runs it on a
+names the button for known dialogs ("Create Sequence" → "Cancel", "Media
+Mismatch" → "Cancel"). Looks, never clicks. Every 0.6 tool runs it on a
 timeout and adds `hint`.
 
 ### `pr_probe_media`
@@ -200,8 +200,8 @@ V1 is an error that names the cause.
 
 ### `pr_set_motion`
 `{seq?, track?, clip?, scale?, posX?, posY?, rotation?, anchorX?, anchorY?, units?}`.
-Properties found by localized name (`Движение`/`Motion`, `Масштаб`/`Scale`,
-`Положение`/`Position`, `Поворот`/`Rotation`, `Опорная точка`/`Anchor Point`).
+Properties found by localized name (`Motion`, `Scale`,
+`Position`, `Rotation`, `Anchor Point`, in the Russian or English UI name).
 Position in pixels of the sequence frame by default (`units: "norm"` for
 0..1). Returns the values read back.
 
@@ -242,11 +242,11 @@ Stops at the first failure unless `continueOnError`; every finished step is
 reported. The spec is the same JSON `pk.js build --spec` takes:
 
 ```json
-{ "bin": "ПОДКАСТ шортсы", "width": 1080, "height": 1920, "fps": 29.97, "exists": "replace",
-  "sequences": [ { "name": "ПОДКАСТ 01 - ... (34 с)", "file": "/abs/01-src.mp4", "in": 10, "out": 43.653,
+{ "bin": "PODCAST shorts", "width": 1080, "height": 1920, "fps": 29.97, "exists": "replace",
+  "sequences": [ { "name": "PODCAST 01 - ... (34 s)", "file": "/abs/01-src.mp4", "in": 10, "out": 43.653,
                    "motion": { "scale": 177.778, "x": 753, "y": 960 },
                    "motionKeys": [ { "t": 0, "posX": 753 }, { "t": 8, "posX": 664 } ], "hold": true,
-                   "markers": [ { "t": 0, "name": "КРОП", "comment": "..." } ] } ] }
+                   "markers": [ { "t": 0, "name": "CROP", "comment": "..." } ] } ] }
 ```
 
 ---
@@ -281,9 +281,9 @@ away from the nearest picture cut, J = leads, L = trails), tracks used.
 node mcp-server/pk.js journal snapshot [--dir D] [--note "..."]
 node mcp-server/pk.js journal watch --every 120 [--minutes 480]   # until Ctrl-C
 node mcp-server/pk.js journal import "~/Documents/Adobe/Premiere Pro/26.0/Adobe Premiere Pro Auto-Save"
-node mcp-server/pk.js journal diff [A.json B.json] --project "подкаст.prproj"
-node mcp-server/pk.js journal ls --project "подкаст.prproj"
-node mcp-server/pk.js journal report --project "подкаст.prproj" --md
+node mcp-server/pk.js journal diff [A.json B.json] --project "podcast.prproj"
+node mcp-server/pk.js journal ls --project "podcast.prproj"
+node mcp-server/pk.js journal report --project "podcast.prproj" --md
 ```
 `import` groups files by project (an Auto-Save folder holds every project
 ever opened) and orders them by the time in the file name.
@@ -313,7 +313,7 @@ Code with a top-level `return` (outside any function) runs as a function body, a
 
 **Returns:** the value (parsed if it's valid JSON, raw string otherwise). A statement with no value (`var x = 1;`) returns `""`.
 
-**Example — create a sequence and place clips:**
+**Example - create a sequence and place clips:**
 ```javascript
 return (function() {
   app.enableQE();
@@ -343,7 +343,7 @@ app.project.saveAs("/path/to/new.prproj");
 ```
 
 **Common gotchas:**
-- ExtendScript is ES3 — no `let`, no arrow functions, no `Object.assign`
+- ExtendScript is ES3 - no `let`, no arrow functions, no `Object.assign`
 - `JSON.stringify` works because we ship a polyfill in `host.jsx`
 - Without a top-level `return` the value of the last expression comes back; with one, only what you `return` comes back
 - Error handling: wrap in `__safe(function(){...})` for friendly error JSON
@@ -366,12 +366,12 @@ node mcp-server/pk.js targets        # what the debug port exposes
 node mcp-server/pk.js                # usage: every typed command (0.6)
 node mcp-server/pk.js status         # health + dialog check
 node mcp-server/pk.js probe /abs/talk.mp4 --in 1396 --out 1450
-node mcp-server/pk.js make-seq --name "ПОДКАСТ 01" --file /abs/01-src.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "ПОДКАСТ шортсы" --exists replace
-node mcp-server/pk.js motion --seq "ПОДКАСТ 01" --scale 177.778 --x 753 --y 960
-node mcp-server/pk.js motion-keys --seq "ПОДКАСТ 01" --keys '[{"t":0,"posX":753},{"t":8,"posX":664}]' --hold
-node mcp-server/pk.js markers --seq "ПОДКАСТ 01" --markers @markers.json --clear
-node mcp-server/pk.js inout --seq "ПОДКАСТ 01"   # clip borders after a manual trim
-node mcp-server/pk.js open "ПОДКАСТ 01" "ПОДКАСТ 02" --activate "ПОДКАСТ 01"
+node mcp-server/pk.js make-seq --name "PODCAST 01" --file /abs/01-src.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "PODCAST shorts" --exists replace
+node mcp-server/pk.js motion --seq "PODCAST 01" --scale 177.778 --x 753 --y 960
+node mcp-server/pk.js motion-keys --seq "PODCAST 01" --keys '[{"t":0,"posX":753},{"t":8,"posX":664}]' --hold
+node mcp-server/pk.js markers --seq "PODCAST 01" --markers @markers.json --clear
+node mcp-server/pk.js inout --seq "PODCAST 01"   # clip borders after a manual trim
+node mcp-server/pk.js open "PODCAST 01" "PODCAST 02" --activate "PODCAST 01"
 node mcp-server/pk.js build --spec spec.json
 ```
 
@@ -403,4 +403,4 @@ The expensive tools are the ones that iterate large structures:
 - `pr_get_project_info` on a project with 1000+ clips: ~2-5s
 - `pr_list_timeline` on a 5-hour edit: ~3-10s
 
-For batch operations, prefer `pr_eval_jsx` with one big script over many small typed calls — saves the round-trip cost N times.
+For batch operations, prefer `pr_eval_jsx` with one big script over many small typed calls - saves the round-trip cost N times.

@@ -1,4 +1,4 @@
-# Install — detailed walkthrough
+# Install - detailed walkthrough
 
 The one-sentence install at the top of the [README](../README.md#install-in-one-sentence) covers the happy path, and [Manual install](../README.md#manual-install) lists the steps. This file is the long version: per-OS notes, troubleshooting, and what to do when something doesn't work.
 
@@ -9,12 +9,12 @@ The one-sentence install at the top of the [README](../README.md#install-in-one-
 | Component | Tested | Likely-works | Won't work |
 |---|---|---|---|
 | **OS** | macOS 14+ (Sonoma, Sequoia) | Windows 11 + WSL for Python parts | Linux (Premiere is macOS/Windows only) |
-| **Premiere Pro** | 2026 (v25), 2025 (v24) | 2024 (v23) | ≤ 2023 — CEP 12 host required |
+| **Premiere Pro** | 2026 (v25), 2025 (v24) | 2024 (v23) | ≤ 2023 - CEP 12 host required |
 | **Node.js** | 20.x, 22.x | 18.x | < 18 |
 | **Python** | 3.11, 3.12, 3.14 | 3.10 | < 3.10 (tomllib & syntax) |
 | **Claude client** | Claude Code 2.1+ | any MCP-compatible client | clients without `stdio` transport |
 
-If you're on Linux: the analysis tools (`analyze_clips.py`, `horizon_detect.py`, `/watch`) work fine standalone — but the bridge itself talks to Premiere, and Premiere doesn't run on Linux.
+If you're on Linux: the analysis tools (`analyze_clips.py`, `horizon_detect.py`, `/watch`) work fine standalone - but the bridge itself talks to Premiere, and Premiere doesn't run on Linux.
 
 ---
 
@@ -43,7 +43,7 @@ cd ../../..
 # 4b. Optional: packages for the dailies-prep / nle-handoff add-ons (0.8.4)
 # skills/film-editing/tools/.venv/bin/pip install numpy av Pillow pyaaf2 pyavb
 
-# 5. Register with Claude Code — edit ~/.claude.json
+# 5. Register with Claude Code - edit ~/.claude.json
 # Add the "premiere" MCP server entry (see README Quickstart step 2)
 
 # 6. Allow unsigned CEP extensions + symlink the panel
@@ -58,12 +58,12 @@ ln -sf "$(pwd)/cep-extension" \
 ### macOS troubleshooting
 
 **Panel doesn't appear under Window → Extensions:**
-- Confirm `defaults read com.adobe.CSXS.12 PlayerDebugMode` returns `1`. If not, the `defaults write` didn't take — check you wrote both `CSXS.11` and `CSXS.12`.
+- Confirm `defaults read com.adobe.CSXS.12 PlayerDebugMode` returns `1`. If not, the `defaults write` didn't take - check you wrote both `CSXS.11` and `CSXS.12`.
 - Restart Premiere fully (Quit, not just close window).
 - If the symlink is broken: `ls -l ~/Library/Application\ Support/Adobe/CEP/extensions/com.koptsev.claude-bridge` should show `→ /your/path/cep-extension`.
 
-**Panel says "Disconnected — retrying":**
-- The MCP server isn't running. Check Claude Code's MCP status (`/mcp`) — there should be a "premiere" entry as ready.
+**Panel says "Disconnected - retrying":**
+- The MCP server isn't running. Check Claude Code's MCP status (`/mcp`) - there should be a "premiere" entry as ready.
 - Port 9876 with several sessions: the session that calls a tool takes the port over (0.5.0+). If a tool says the port is held by a pid that "does not hand it over", that is a bridge from before 0.5.0 or another program: restart that Claude session or stop the pid. Meanwhile `node mcp-server/pk.js info` reaches Premiere through the panel's debug port (see "Direct path" in the README).
 
 **Installed fine, but Claude does not see Premiere:**
@@ -99,7 +99,7 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 cd ..\..\..
 
-# 5. Register with Claude Code — edit %USERPROFILE%\.claude.json
+# 5. Register with Claude Code - edit %USERPROFILE%\.claude.json
 
 # 6. CEP debug + symlink (admin shell required)
 New-ItemProperty -Path "HKCU:\Software\Adobe\CSXS.11" -Name PlayerDebugMode -Value 1 -PropertyType String -Force
@@ -213,4 +213,4 @@ Open an issue with:
 - The output of `node mcp-server/server.js --check` (or whatever errored)
 - Whether the panel shows green or red
 
-I read every issue. — Vladimir
+I read every issue. - Vladimir

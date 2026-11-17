@@ -29,22 +29,22 @@ On DaVinci Resolve Studio there is no panel. Set **Preferences → System → Ge
 
 You need Premiere Pro 2024 or newer, or DaVinci Resolve Studio, and a Claude or Codex subscription. Tested on macOS. Windows has install steps but nobody has confirmed them yet. Prefer to do it by hand? See [Manual install](#manual-install).
 
-## По-русски: для монтажёров
+## For editors (Russian-speaking users)
 
-**Как поставить.** Откройте Claude (приложение, вкладка Code) и отправьте ему фразу:
-«Установи мост Premiere с github.com/koptsev63/premiere-claude-bridge и доведи меня до зелёной надписи Connected в Premiere». Дальше Claude всё сделает сам и скажет, когда перезапустить Premiere.
+**How to install.** Open Claude (the app, Code tab) and send it this phrase:
+"Install the Premiere bridge from github.com/koptsev63/premiere-claude-bridge and take me to the green Connected label in Premiere." Claude does the rest and tells you when to restart Premiere.
 
-**Как работать.** В Premiere откройте Окно → Расширения → Claude Bridge. Панель должна гореть зелёным. Пишите Claude обычными словами: «собери секвенцию 1080 на 1920 из этого файла», «поставь маркеры на паузы», «открой все секвенции подкаста вкладками».
+**How to work.** In Premiere open Window → Extensions → Claude Bridge. The panel should be green. Talk to Claude in plain words: "build a 1080 by 1920 sequence from this file", "put markers on the pauses", "open all the podcast sequences in tabs".
 
-**Как обновиться.** Скажите Claude: «обнови мост». Потом закройте и снова откройте Claude, а в Premiere закройте и снова откройте панель. Когда выходит новая версия, Claude сам говорит об этом при проверке связи.
+**How to update.** Tell Claude: "update the bridge". Then close and reopen Claude, and in Premiere close and reopen the panel. When a new version is out, Claude says so when it checks the connection.
 
-**Если Premiere не отвечает.** Чаще всего в Premiere открыто окно, которое ждёт нажатия. Спросите Claude: «Premiere ждёт клика?» Он назовёт окно и кнопку.
+**If Premiere does not respond.** Most often Premiere has a dialog open that is waiting for a click. Ask Claude: "Is Premiere waiting for a click?" It will name the window and the button.
 
-**Если видео пришло без картинки.** Ролики с YouTube часто в формате, который Premiere открывает без изображения. Просто попросите Claude импортировать файл: мост проверит его заранее и при необходимости сделает рабочую копию.
+**If a video arrives with no picture.** Clips from YouTube are often in a format that Premiere opens without an image. Just ask Claude to import the file: the bridge checks it beforehand and makes a working copy if needed.
 
-**Помочь обучать ассистента.** В панели есть галочка «Помогать обучать ассистента», с версии 0.8.3 она стоит по умолчанию. Мост сам отправляет обезличенную схему монтажа: где разрезы, сколько кадров снято, длины планов. Без видео, звука и названий. Уходит только работа после обновления моста. Не хотите: снимите галочку или скажите Claude «не отправляй журнал». Проект под NDA можно исключить: галочка «Не отправлять этот проект» или фраза Claude «не отправляй этот проект». Сняли главную галочку - всё отправленное удалилось. Подробно и политика конфиденциальности: [DATA.md](DATA.md).
+**Help train the assistant.** The panel has a checkbox "Help train the assistant", on by default since version 0.8.3. The bridge sends an anonymized outline of the edit: where the cuts are, how many takes were shot, shot lengths. No video, no audio, no names. Only work done after the bridge update is sent. If you do not want this, uncheck the box or tell Claude "do not send the journal". A project under NDA can be excluded: the checkbox "Do not send this project" or the phrase "do not send this project" to Claude. If you turn off the main checkbox, everything already sent is deleted. Details and the privacy policy: [DATA.md](DATA.md).
 
-**Чат монтажёров.** Вопросы, ошибки, пожелания, приёмы: [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
+**Editors' chat.** Questions, bugs, wishes, techniques: [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
 
 ## What you can ask it to do
 
@@ -78,13 +78,11 @@ It has no taste. Decisions stay with you; it takes the logging, sorting and chec
 
 ## What an editor said
 
-> "Все установилось по твоей инструкции без проблем, единственный затык, который случился - это настройка первого коннекта."
+> "Everything installed by your instruction with no problems. The only snag was setting up the first connection."
 >
-> "Я пока попробовал использовать помощника только для базовой организации файлов на таймлайне, типа расставить в хронологическом порядке дубли, срезать пустые фазы и т.д. С этим он справился отлично, все вполне интуитивно."
+> "So far I have used the assistant only for basic organisation of files on the timeline, like putting takes in chronological order and cutting the empty phases. It handled that very well, it is all quite intuitive."
 >
 > Andrey, film editor, October 2026
-
-In English: "Everything installed by your instruction with no problems. The only snag was setting up the first connection." And: "So far I have used the assistant only for basic organisation of files on the timeline, like putting takes in chronological order and cutting the empty phases. It handled that very well, it is all quite intuitive."
 
 The snag he hit is now step 2 above.
 
@@ -102,9 +100,7 @@ Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour
 
 ## Demo
 
-[![Real session in Premiere Pro](docs/demo/reel-session-poster.jpg)](docs/demo/reel-session.mp4)
-
-The clip above is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
+The clip at the top of this page is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
 
 ```
 You:    "Open Premiere. Import all .MTS from ~/Desktop/Footage/.
@@ -113,7 +109,7 @@ You:    "Open Premiere. Import all .MTS from ~/Desktop/Footage/.
         Add markers at every emotional beat per Murch's hierarchy."
 
 Claude: ✓ Imported 108 clips into bin '01_Source_MTS'
-        ✓ Created Rough — 1920x1080, 25fps, 3 V / 6 A tracks
+        ✓ Created Rough - 1920x1080, 25fps, 3 V / 6 A tracks
         ✓ Placed 3 clips on V1, total 14 sec
         ✓ Marked 5 emotional beats: HOOK @0s, COMEDY @5s,
           PIT @8s, BREATH @11s, PAYOFF @13s
@@ -148,11 +144,11 @@ If you need an agent that can reach every button in Premiere, pick one of the bi
 
 ## Why I built this
 
-I'm a film director (festival shorts, currently developing two features in screenplay labs — *Doukhobors* in TFL Next, *Grave Stakes* in Cinéfondation). I monkey with Adobe Premiere all the time, and I burn 4-6 hours per teaser on the same boring assistant-editor work: watching all the dailies, writing notes in Excel, dragging selects to a timeline, trimming, re-timing.
+I'm a film director (festival shorts, currently developing two features in screenplay labs - *Doukhobors* in TFL Next, *Grave Stakes* in Cinéfondation). I monkey with Adobe Premiere all the time, and I burn 4-6 hours per teaser on the same boring assistant-editor work: watching all the dailies, writing notes in Excel, dragging selects to a timeline, trimming, re-timing.
 
 I tried Adobe's own AI tools. Their official Creative Cloud connector advertises "Premiere capabilities" but the actual surface is four cloud video tools that have nothing to do with the desktop app. The Adobe docs themselves say: *for trim by timestamp, use Adobe Premiere*. So I made the thing that actually does that.
 
-The non-obvious bit: I didn't want a chatbot that randomly clicks buttons. I wanted one that **thinks like an editor**. So the core of this repo is `skills/film-editing/SKILL.md` — Walter Murch's *In the Blink of an Eye* compressed into machine-actionable decision rules. Every cut my AI assistant proposes ranks Emotion > Story > Rhythm > Eye-trace > 2D > 3D, and I can override per shot.
+The non-obvious bit: I didn't want a chatbot that randomly clicks buttons. I wanted one that **thinks like an editor**. So the core of this repo is `skills/film-editing/SKILL.md` - Walter Murch's *In the Blink of an Eye* compressed into machine-actionable decision rules. Every cut my AI assistant proposes ranks Emotion > Story > Rhythm > Eye-trace > 2D > 3D, and I can override per shot.
 
 It worked on my actual *Grave Stakes* teaser. I wanted other directors and editors to have the same thing without re-implementing the bridge from scratch.
 
@@ -163,7 +159,7 @@ The bridge gives Claude full programmatic control of Premiere. With the `watch` 
 
 - **Sub-frame timing intuition.** Murch-level "trim 8 frames" calls still need a human editor.
 - **Micro-expression nuance.** Frames + transcript get you 80% of the way; the last 20% is taste.
-- **Dramaturgy from nothing.** Structure must be specified — the skill won't invent the through-line.
+- **Dramaturgy from nothing.** Structure must be specified - the skill won't invent the through-line.
 
 Position it as: **senior assistant editor + automation, not director's editor.**
 
@@ -176,14 +172,14 @@ Position it as: **senior assistant editor + automation, not director's editor.**
 
 ### Prerequisites
 
-You pick one **agent** and one **NLE** — the bridge connects them:
+You pick one **agent** and one **NLE** - the bridge connects them:
 
-- **Agent:** [Claude Code](https://claude.ai/download) **or** OpenAI **Codex** (both speak MCP) — or any MCP-compatible client
-- **NLE:** **Adobe Premiere Pro 2024+** **or** **DaVinci Resolve _Studio_** (the paid Studio — the free edition has no scripting API or stabilizer). Premiere runs on macOS/Windows; the Resolve path is tested on macOS.
+- **Agent:** [Claude Code](https://claude.ai/download) **or** OpenAI **Codex** (both speak MCP) - or any MCP-compatible client
+- **NLE:** **Adobe Premiere Pro 2024+** **or** **DaVinci Resolve _Studio_** (the paid Studio - the free edition has no scripting API or stabilizer). Premiere runs on macOS/Windows; the Resolve path is tested on macOS.
 - **Node.js 20+** for the MCP server
 - **Python 3.11+** + **ffmpeg** for the analysis tools (camera-shake + horizon need OpenCV: `pip install opencv-python-headless`)
 
-You drive it by **talking in plain language** — no commands to memorize. The terminal is only for the one-time install.
+You drive it by **talking in plain language** - no commands to memorize. The terminal is only for the one-time install.
 
 ### 1. Clone and install
 
@@ -241,7 +237,7 @@ brew install yt-dlp ffmpeg          # macOS
 # Linux: sudo apt install ffmpeg && pip install yt-dlp
 ```
 
-`openai-whisper` is the offline transcription backend for `/watch` — no API key needed, works on Hungarian/Russian/etc. far better than the cloud `whisper-1`.
+`openai-whisper` is the offline transcription backend for `/watch` - no API key needed, works on Hungarian/Russian/etc. far better than the cloud `whisper-1`.
 
 → **Detailed install + troubleshooting:** [`docs/install.md`](docs/install.md)
 
@@ -271,16 +267,16 @@ brew install yt-dlp ffmpeg          # macOS
 | `pr_get_timeline` / `pr_get_inout` | Any sequence's clips with borders in seconds; the render range after a manual trim |
 | `pr_delete_sequence` / `pr_move_to_bin` / `pr_list_bin` / `pr_save_project` | Project housekeeping |
 | `pr_build_sequences` | Many sequences from one spec: import, create, motion, keyframes, markers, open |
-| `pr_share` / `pr_update_bridge` | Help train the assistant (on by default since 0.8.3, off with one click, see [DATA.md](DATA.md)); update in one sentence: «обнови мост» |
+| `pr_share` / `pr_update_bridge` | Help train the assistant (on by default since 0.8.3, off with one click, see [DATA.md](DATA.md)); update in one sentence: "update the bridge" |
 | `pr_journal_snapshot` / `pr_journal_report` | The editor's journal (0.7): snapshots of every sequence, diffs as editing decisions, the hand report |
 
 → **Full tool reference + ExtendScript recipes:** [`docs/tools.md`](docs/tools.md)
 
 ### New in 0.8: updates in one sentence, sharing by consent
 
-- **Updates.** `pr_status` says when a new release is out. The editor tells Claude «обнови мост»; `pr_update_bridge` pulls and reinstalls a git install (never touching local edits) or hands a Claude Desktop install the new `.mcpb`.
-- **Updates arrive on their own (0.8.6).** A git install moves itself to each new release in the background (fast-forward to the release tag, never over local edits or commits, only on the default branch); Claude says when a restart is needed. Off: `pk.js update auto off` or «не обновляй сам». A Claude Desktop bundle still updates with «обнови мост».
-- **Sharing the journal.** On by default since 0.8.3, off with one click (panel checkbox) or one sentence to Claude; Claude tells the editor once. An earlier no stays a no. While on, every 10 minutes the bridge reads Premiere's new Auto-Save files and saved projects (found from Premiere's own recent projects list, so work done with Claude closed is caught up) and, since 0.8.7, DaVinci Resolve projects (each `Project.db` in Resolve's project library, read from a copy, plus project backups and `.drp` files in Resolve's backup folder) into the journal and sends new decisions and sequence shapes, anonymized with a salt that never leaves the machine. Only work done after the first run of 0.8.3 (or after turning it back on) is sent, and any project can be kept out for good (NDA): panel checkbox or «не отправляй этот проект». A later no deletes everything sent. `pk.js share status | on | off | preview | send | doctor | exclude [project]`; `doctor` says in words why nothing went. Full terms and privacy policy: [DATA.md](DATA.md).
+- **Updates.** `pr_status` says when a new release is out. The editor tells Claude "update the bridge"; `pr_update_bridge` pulls and reinstalls a git install (never touching local edits) or hands a Claude Desktop install the new `.mcpb`.
+- **Updates arrive on their own (0.8.6).** A git install moves itself to each new release in the background (fast-forward to the release tag, never over local edits or commits, only on the default branch); Claude says when a restart is needed. Off: `pk.js update auto off` or "do not update on your own". A Claude Desktop bundle still updates with "update the bridge".
+- **Sharing the journal.** On by default since 0.8.3, off with one click (panel checkbox) or one sentence to Claude; Claude tells the editor once. An earlier no stays a no. While on, every 10 minutes the bridge reads Premiere's new Auto-Save files and saved projects (found from Premiere's own recent projects list, so work done with Claude closed is caught up) and, since 0.8.7, DaVinci Resolve projects (each `Project.db` in Resolve's project library, read from a copy, plus project backups and `.drp` files in Resolve's backup folder) into the journal and sends new decisions and sequence shapes, anonymized with a salt that never leaves the machine. Only work done after the first run of 0.8.3 (or after turning it back on) is sent, and any project can be kept out for good (NDA): panel checkbox or "do not send this project". A later no deletes everything sent. `pk.js share status | on | off | preview | send | doctor | exclude [project]`; `doctor` says in words why nothing went. Full terms and privacy policy: [DATA.md](DATA.md).
 - **Editors' chat:** [t.me/+Fw5nSiqUkCswNjBi](https://t.me/+Fw5nSiqUkCswNjBi)
 
 ### New in 0.7: the editor's journal
@@ -311,7 +307,7 @@ Ten vertical shorts had to be built as Premiere sequences from one podcast
 (24.10.2026). Four things went wrong in a row, all of them now bridge
 functions:
 
-- `createNewSequence(name, presetId)` opened the "Создать эпизод" dialog and
+- `createNewSequence(name, presetId)` opened the "New Sequence" dialog and
   the bridge hung on a timeout. `pr_make_sequence` takes the dialog-free path
   (`setInPoint/setOutPoint` on the item, `createNewSequenceFromClips`,
   `getSettings/setSettings`) and reads the settings back.
@@ -355,7 +351,7 @@ node mcp-server/pk.js eval 'app.project.name'    # one ExtendScript expression
 node mcp-server/pk.js file build_sequence.jsx    # a whole script
 echo 'app.version' | node mcp-server/pk.js eval -
 node mcp-server/pk.js status                     # 0.6: health + "is Premiere waiting for a click?"
-node mcp-server/pk.js make-seq --name "ПОДКАСТ 01" --file /abs/clip.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "ПОДКАСТ шортсы"
+node mcp-server/pk.js make-seq --name "PODCAST 01" --file /abs/clip.mp4 --in 10 --out 43.6 --w 1080 --h 1920 --fps 29.97 --bin "PODCAST shorts"
 node mcp-server/pk.js build --spec spec.json     # many sequences from one spec
 ```
 
@@ -378,7 +374,7 @@ return composited timeline frames as PNG.
 ## The delivery loop (what actually ships a cut)
 
 A render is not a delivery. The editor has to be able to open the work,
-disagree with it, and move a cut — so the loop closes back on the machine:
+disagree with it, and move a cut - so the loop closes back on the machine:
 
 ```
 cutlist → sequences in the editor's own project → he edits and saves →
@@ -397,7 +393,7 @@ core.colorgate passes it or sends it back
 | [`core/`](core/README.md) | The rest of the pipeline: cutlist IR, adapters, subtitles, ducking, denoise, highlights, beats |
 
 ```bash
-# does this grade burn the picture — or is it invisible?
+# does this grade burn the picture - or is it invisible?
 python -m core.colorgate base.mov graded.mp4 --frames 8 --upto 60
 
 # what did the human actually approve in there?
@@ -421,13 +417,13 @@ Walter Murch's editing operating system as Claude decision rules:
 - Russian↔English terminology mapping
 
 Plus tooling:
-- `tools/analyze_clips.py` — folder → HTML contact sheet (motion + audio + horizon + strips)
-- `tools/horizon_detect.py` — sky-ground segmentation + Hough fallback for tilt detection
+- `tools/analyze_clips.py` - folder → HTML contact sheet (motion + audio + horizon + strips)
+- `tools/horizon_detect.py` - sky-ground segmentation + Hough fallback for tilt detection
 
 ### `watch/` *(vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video), MIT)*
 
 Lets Claude actually watch a clip. Extracts 30-100 frames + transcript via three Whisper backends:
-- **`local`** (openai-whisper, no key, offline, free) — recommended
+- **`local`** (openai-whisper, no key, offline, free) - recommended
 - **Groq `whisper-large-v3`** (cloud, fastest, ~$0.0002/min)
 - **OpenAI `whisper-1`** (cloud, slowest, ~$0.006/min)
 
@@ -445,25 +441,25 @@ Honest limits: the Premiere project, the Avid bin and the `.avp` have not been o
 
 ## Architecture
 
-![How Claude drives Premiere — three processes, four hops](docs/img/architecture.png)
+![How Claude drives Premiere - three processes, four hops](docs/img/architecture.png)
 
 See [`docs/architecture.md`](docs/architecture.md). Notable design choices:
 
 - **The calling session gets the panel** - every Claude or Codex session starts its own server, and only one can hold port 9876. Since 0.5.0 the server that receives a tool call asks the holder to let go (HTTP on the same port), binds, and waits for the panel to reconnect; a holder in the middle of a request keeps the port until it is done. Nothing polls. A holder that is not a 0.5.0+ bridge is never touched: the error names its pid. [`mcp-server/pk.js`](mcp-server/pk.js) still reaches the panel through its debug port ([direct path](#direct-path-when-several-claude-sessions-fight-for-the-port)).
-- **ExtendScript JSON polyfill** — Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
-- **Self-healing socket lookup** — adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
+- **ExtendScript JSON polyfill** - Adobe never shipped JSON in their ES3 engine. Without the polyfill, every typed tool fails on `JSON.stringify`.
+- **Self-healing socket lookup** - adopts live `wss.clients[0]` if the cached `panelSocket` goes stale after a CEP panel reload.
 
 These were all real bugs found during the *Grave Stakes* case study. See [`CHANGELOG.md`](CHANGELOG.md).
 
 
 ## Roadmap
 
-- [x] v0.1 — MCP bridge + film-editing skill + analyze_clips
-- [x] v0.2 — `/watch` skill bundled, local Whisper, horizon detection v2
-- [ ] **v0.3 — `trailer-bridge` skill pack** — 7 genre-specific recipes (action, drama, comedy, horror, doc, thriller, romance) + LUT presets + auto-rendering
-- [ ] **v0.4 — multicam audio sync** — match camera angles by audio waveform xcorr, build multicam clips programmatically
-- [ ] **v0.5 — face/sentiment detection** — mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
-- [ ] **v0.6 — MCP Registry publish** — official listing + GitHub Action for auto-release
+- [x] v0.1 - MCP bridge + film-editing skill + analyze_clips
+- [x] v0.2 - `/watch` skill bundled, local Whisper, horizon detection v2
+- [ ] **v0.3 - `trailer-bridge` skill pack** - 7 genre-specific recipes (action, drama, comedy, horror, doc, thriller, romance) + LUT presets + auto-rendering
+- [ ] **v0.4 - multicam audio sync** - match camera angles by audio waveform xcorr, build multicam clips programmatically
+- [ ] **v0.5 - face/sentiment detection** - mediapipe pass per clip → "where is the actor's most emotional moment in this take?"
+- [ ] **v0.6 - MCP Registry publish** - official listing + GitHub Action for auto-release
 - [~] **v1.0 - universal NLE core** - editing brain decoupled from Premiere via an OpenTimelineIO cutlist; Premiere, DaVinci Resolve (Studio Python API), and Final Cut (FCPXML) become interchangeable backends ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)). **Foundation landed in [`core/`](core/README.md)**: cutlist IR + lossless OTIO round-trip, capability matrix, all three adapters, NLE-neutral review loop, 672 tests green. **Resolve adapter verified end-to-end on Resolve Studio 21.** Remaining: conform/proxy relink, capability-probe.
 
 → Want to claim one? [Open an issue with `claim` label](https://github.com/koptsev63/premiere-claude-bridge/issues/new?labels=claim).
@@ -473,15 +469,15 @@ These were all real bugs found during the *Grave Stakes* case study. See [`CHANG
 The three editors integrate in fundamentally different ways, so v1.0 is an **adapter design**, not a copy of the Premiere bridge ([epic #6](https://github.com/koptsev63/premiere-claude-bridge/issues/6)):
 
 - **The editing brain stays NLE-agnostic.** `skills/film-editing/` (Murch's Rule of Six) and the `/watch` perception layer reason about footage and cuts, not about Premiere. They don't change.
-- **One cutlist, expressed in [OpenTimelineIO](https://opentimelineio.readthedocs.io/).** A cut is decided once as an OTIO timeline (the `cutlist_*.json` in the Grave Stakes example, formalized). OTIO is the industry interchange standard — Resolve reads/writes it natively, FCPXML has OTIO adapters, Premiere goes through this bridge.
-- **Thin per-NLE drivers, same verb set.** Premiere = the existing CEP/ExtendScript bridge. DaVinci Resolve = direct Python via the official scripting API (**requires Resolve Studio** — external scripting is disabled in the free version). Final Cut = FCPXML round-trip (file exchange, not live control).
+- **One cutlist, expressed in [OpenTimelineIO](https://opentimelineio.readthedocs.io/).** A cut is decided once as an OTIO timeline (the `cutlist_*.json` in the Grave Stakes example, formalized). OTIO is the industry interchange standard - Resolve reads/writes it natively, FCPXML has OTIO adapters, Premiere goes through this bridge.
+- **Thin per-NLE drivers, same verb set.** Premiere = the existing CEP/ExtendScript bridge. DaVinci Resolve = direct Python via the official scripting API (**requires Resolve Studio** - external scripting is disabled in the free version). Final Cut = FCPXML round-trip (file exchange, not live control).
 
 Net: a decision made once renders into any editor. Raw "AI controls Resolve" is already crowded ([several MCP servers exist](https://github.com/samuelgursky/davinci-resolve-mcp)); the differentiator here is the editing operating system on top, not the driver underneath.
 
 
 ## Contributing
 
-PRs, issues, and skill packs are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the short guide.
+PRs, issues, and skill packs are welcome - see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the short guide.
 
 **Easiest ways to help:**
 - 🐛 [Open an issue](https://github.com/koptsev63/premiere-claude-bridge/issues) if anything in the install steps doesn't work on your OS
@@ -494,19 +490,19 @@ Look for [`good first issue`](https://github.com/koptsev63/premiere-claude-bridg
 
 ## Privacy
 
-Journal sharing is on by default and off with one click on «Помогать обучать ассистента»; turning it off deletes everything sent. What goes, what never goes, who keeps it and how to delete it: [DATA.md](DATA.md), the privacy policy.
+Journal sharing is on by default and off with one click on "Help train the assistant"; turning it off deletes everything sent. What goes, what never goes, who keeps it and how to delete it: [DATA.md](DATA.md), the privacy policy.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copyright Bradley Bonanno — see [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md).
+MIT - see [`LICENSE`](LICENSE). The vendored `skills/watch/` is also MIT, copyright Bradley Bonanno - see [`skills/watch/ATTRIBUTION.md`](skills/watch/ATTRIBUTION.md).
 
 
 ## Status
 
-🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish — a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
+🟡 **Beta v0.3.** Tested end-to-end on real festival-bound documentary footage (Grave Stakes, 108 raw .MTS clips, 4.4 GB), then on a second production job start to finish - a vertical announcement reel cut in Premiere, conformed and graded through DaVinci Resolve, with the delivery loop above running on the director's own project file (August 2026). Three outside editors have it so far; the first one installed it on his own in October 2026.
 
 **Stuck on install or found a bug?** Open an issue or a discussion here. News goes to the Telegram channel [@koptsev_AI](https://t.me/koptsev_AI) (in Russian).
 
-**Author:** Vladimir Koptsev — film director, Barcelona. [TG @koptsev_AI](https://t.me/koptsev_AI) · [koptsev63@gmail.com](mailto:koptsev63@gmail.com)
+**Author:** Vladimir Koptsev - film director, Barcelona. [TG @koptsev_AI](https://t.me/koptsev_AI) · [koptsev63@gmail.com](mailto:koptsev63@gmail.com)
 
 - `core/hits.py` - music accents (loud hits) and "cut on the hit" verification with a two-frame tolerance; `core/xmeml.py` - FCP7 XML writer for Premiere from a cutlist (0.5.1).

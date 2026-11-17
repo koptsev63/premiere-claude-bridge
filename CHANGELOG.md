@@ -42,8 +42,8 @@ fallback.
 
 ## [0.8.7] - 2026-11-15 - sharing learns from DaVinci Resolve too
 
-An editor cut a promo in DaVinci Resolve 20.3 with «Помогать обучать
-ассистента» ticked, and nothing reached the receiver: the bridge only knew
+An editor cut a promo in DaVinci Resolve 20.3 with "Help train the
+assistant" ticked, and nothing reached the receiver: the bridge only knew
 Premiere.
 
 ### Added
@@ -97,7 +97,7 @@ Premiere.
 ## [0.8.6] - 2026-11-15 - updates arrive on their own
 
 Editors stayed on old versions: an update needed the editor to say
-«обнови мост», and a fix only reached them when someone remembered to ask.
+"update the bridge", and a fix only reached them when someone remembered to ask.
 
 ### Added
 - Background updates for a git install: a minute and a half after start, then
@@ -108,18 +108,18 @@ Editors stayed on old versions: an update needed the editor to say
   repository folder).
 - `pr_status` says when a new version is installed and waits for a restart
   (`update.restartNeeded`, `say`): close and reopen Claude and the panel.
-- Off and on: `pr_update_bridge auto=false|true` (the editor's «не обновляй
-  сам»), `node mcp-server/pk.js update auto off|on|now`, or
+- Off and on: `pr_update_bridge auto=false|true` (the editor's "don't update
+  yourself"), `node mcp-server/pk.js update auto off|on|now`, or
   `PREMIERE_BRIDGE_AUTO_UPDATE=0`.
 
 ### Known limits
 - A Claude Desktop bundle (.mcpb) cannot replace itself; it keeps the
-  «обнови мост» hint with the download link.
+  "update the bridge" hint with the download link.
 - The running bridge keeps its code until Claude restarts.
 
 ## [0.8.5] - 2026-11-14 - sharing finds the editor's projects on its own
 
-An editor cut for days with «Помогать обучать ассистента» ticked and nothing
+An editor cut for days with "Help train the assistant" ticked and nothing
 reached the receiver. The bridge learned a project folder only when Claude
 asked the open Premiere for it, with the panel connected at that moment; work
 done with Claude closed, or in a project Claude never touched, was never read.
@@ -204,8 +204,8 @@ and Avid. Nothing in the bridge is replaced; the set only adds files.
 
 ## [0.8.3] - 2026-11-02 - helping train the assistant is on by default
 
-The owner's decision: «чтобы по умолчанию галочка стояла включённой. Чтобы её
-можно было выключить».
+The owner's decision: "the checkbox should be on by default. So that it
+can be turned off".
 
 ### Changed
 - Journal sharing is on by default. An editor who never chose starts sharing
@@ -214,7 +214,7 @@ The owner's decision: «чтобы по умолчанию галочка сто
 - An explicit no from 0.8.1 or 0.8.2 stays a no. A no is kept for good and
   survives updates; unticking deletes everything sent, as before.
 - Claude tells the editor once that sharing is on and how to turn it off
-  (pr_status `share.tellEditor`); the panel says «Включено по умолчанию».
+  (pr_status `share.tellEditor`); the panel says "On by default".
 - Lawful basis in DATA.md moves from consent (a pre-ticked box is not
   consent under GDPR) to legitimate interest with the right to object at any
   time (art. 6(1)(f), art. 21). Terms version 2.
@@ -238,7 +238,7 @@ platform, editors' feedback, distribution), step 1 of the plan.
   sent the journal and every autosave already on the machine, older projects
   included.
 - Any project can be kept out of sharing for good (NDA): the panel checkbox
-  «Не отправлять этот проект», `pr_share exclude=true`, `pk share exclude`.
+  "Don't send this project", `pr_share exclude=true`, `pk share exclude`.
   Work done while it is out never goes, even after it is let back in.
 - DATA.md is now the privacy policy, linked from the bundle manifest and README.
 
@@ -268,7 +268,7 @@ automatically, behind a checkbox like other apps; and a Telegram chat for
 editors linked from GitHub.
 
 ### Added
-- `lib/update.js`, `pr_update_bridge`, `pk.js update [--check]`: «обнови мост»
+- `lib/update.js`, `pr_update_bridge`, `pk.js update [--check]`: "update the bridge"
   pulls and reinstalls a git install, or links the new `.mcpb` for Claude
   Desktop. Local edits stop the update instead of being overwritten.
   `pr_status` carries `update` (latest release, checked twice a day).
@@ -318,8 +318,8 @@ editor's consent.
 
 ## [0.6.0] - 2026-10-24 - sequences without a single click
 
-Order of the day (his words, 13:58): "допили мост так, чтобы мне не надо было
-вручную постоянно кликать ... как создаёшь секвенцию". Ten podcast shorts had
+Order of the day (his words, 13:58): "finish the bridge so that I do not have to
+keep clicking by hand ... like when you create a sequence". Ten podcast shorts had
 to become Premiere sequences; four things in a row needed a click or lied.
 
 ### Added - `mcp-server/lib/seq.js`, `lib/ops.js`, `lib/mediagate.js`, `lib/dialog.js`
@@ -332,7 +332,7 @@ to become Premiere sequences; four things in a row needed a click or lied.
   `pr_delete_sequence`, `pr_move_to_bin`, `pr_list_bin`, `pr_save_project`,
   `pr_build_sequences`.
 - Sequence creation without a dialog: `createNewSequence(name, presetId)`
-  opened "Создать эпизод" and hung the bridge; the bridge now uses
+  opened "Create Sequence" and hung the bridge; the bridge now uses
   `setInPoint/setOutPoint` + `createNewSequenceFromClips` + `setSettings`
   and reads the settings, clip counts and borders back.
 - Media gate before any import (Node twin of `core/media_gate.py`): ffprobe,
@@ -358,10 +358,10 @@ to become Premiere sequences; four things in a row needed a click or lied.
   `test/ops.test.js` (fake executor: build stops at the first failure,
   markers chunked, VP9 refused before Premiere), `test/pk.test.js`. 67 pass.
 
-### Checked live (Premiere 26.0.2, RU UI, project «подкаст.prproj»)
+### Checked live (Premiere 26.0.2, RU UI, project "podcast.prproj")
 
 Every command on the open project without a dialog; acceptance:
-`pr_build_sequences` rebuilt ПОДКАСТ 01-10 (1080x1920, 29.97, Motion,
+`pr_build_sequences` rebuilt PODCAST 01-10 (1080x1920, 29.97, Motion,
 2-7 hold keyframes each, 25-62 markers each) in 6 s, then each sequence was
 read back (timeline, Motion, marker names) and two frames were exported.
 
@@ -387,8 +387,8 @@ read back (timeline, Motion, marker names) and two frames were exported.
 ### Added - `core/media_gate.py`
 
 - A podcast downloaded with yt-dlp came as AV1 (1920x1080, 65 min).
-  Premiere 26.0.2 imported only its audio ("сжатие видео неподдерживаемого
-  типа «av01»"), and ten short sequences were built on it with an empty V1.
+  Premiere 26.0.2 imported only its audio ("video compression of an unsupported
+  type 'av01'"), and ten short sequences were built on it with an empty V1.
   The disk had 2 GB free, then 1.1 GB: a full copy (~9.7 GB) would not fit.
 - `check_for_premiere(path, start, end)` reads the streams with ffprobe and
   refuses AV1, VP9 and VP8. It returns the ffmpeg command for an edit copy
@@ -475,7 +475,7 @@ An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
 ### Added - `pr_import_captions`
 
 - `app.project.importFiles([several .srt], suppressUI=true, bin, false)`
-  hung Premiere on "Импорт файлов..." for good. One file at a time with
+  hung Premiere on "Import files..." for good. One file at a time with
   the UI allowed went through, then
   `seq.createCaptionTrack(item, 0, Sequence.CAPTION_FORMAT_SUBTITLE)`.
 - The tool does exactly that. Paths are checked on disk before Premiere is
@@ -487,9 +487,9 @@ An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
 
 - `qe.project.getVideoEffectByName("Black & White")` in the Russian UI
   returned an object, `addVideoEffect` took it and added nothing, with no
-  error. The localized name "Черное и белое" worked.
+  error. The localized Russian name worked.
 - `lib/effects.js` resolves a name against the running Premiere's
-  `getVideoEffectList()`: exact, then case/ё-insensitive, then an
+  `getVideoEffectList()`: exact, then case- and yo/ye-insensitive, then an
   English-to-Russian map of 66 effects, then a loose match only when it is
   unique; otherwise it refuses and lists candidates. Every Russian name in
   the map is checked against the real 26.0.2 list (131 effects, kept as a
@@ -523,7 +523,7 @@ An agent drove Premiere Pro 2026 (Russian UI) through the bridge on
   the item instead of importing again. No dialog hang.
 - The pitfall reproduced: `getVideoEffectByName("Black & White")` gave an
   object, `addVideoEffect` left the clip at 2 components. Then
-  `pr_add_video_effect "Black & White"` resolved to "Черное и белое" and
+  `pr_add_video_effect "Black & White"` resolved to the Russian-UI name of Black & White and
   the clip went 2 -> 3 components. "Blur" was refused with five candidates.
 - `pr_eval_jsx` without `return` and with a trailing comment returned
   `bridge_test_seq 1920`; `pr_export_ame` refused the proxy preset.
@@ -598,11 +598,11 @@ colourist downstream, camera originals in 4K S-Log3, AI shots and a drone.
 - A shot sent to replace a wrong one is cut by the editor's timecode from
   the original and checked by PSNR against that source frame (56 dB here).
 
-## [0.3.0] - 2026-10-06 — universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
+## [0.3.0] - 2026-10-06 - universal NLE core ([#6](https://github.com/koptsev63/premiere-claude-bridge/issues/6), in progress)
 
 The editing brain is now NLE-agnostic. A cut is decided once as a `Cutlist`;
 per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
-Final Cut. Raw "AI controls Resolve" is already crowded — the differentiator
+Final Cut. Raw "AI controls Resolve" is already crowded - the differentiator
 is the Murch operating system on top, not the driver underneath.
 
 ### Added - XML hand-off to a DaVinci Resolve editor (07.10.2026)
@@ -722,26 +722,26 @@ as `core.colorgate`); and the S-Log3 grading scripts (white-balance gains
 and look tables are hard-coded per job - a general version needs a
 neutral-patch input and a gate of its own first).
 
-### Added — colour gate + human-in-the-loop round trip (August 2026)
+### Added - colour gate + human-in-the-loop round trip (August 2026)
 
 Both modules come out of one production job: a vertical announcement reel,
 cut in Premiere, conformed and graded in Resolve, delivered as sequences in
 the director's own project. Everything here is calibrated on what he
 rejected, not on what the literature suggests.
 
-- **`core/colorgate.py`** — a grade now has to pass two gates. *Upper:*
+- **`core/colorgate.py`** - a grade now has to pass two gates. *Upper:*
   clipping (% luma > 250), oversaturation (% S > .85 at V > .5), skin Cr and
   skin saturation, each against the ungraded base with both a relative
   headroom and an absolute cap. *Lower:* mean CIE ΔE against the base, so a
   look nobody can see fails as loudly as a burnt one. Reproduces the
   director's own calls on the reel: Kodak 2383 at full strength 5.47%
-  clipped and Fuji 3513 5.67% over a 1.59% base (ceiling 2.79%) — both
-  rejected; the timid grade he "did not notice at all" measured ΔE 3.23 —
-  rejected; the three looks he approved measured 5.57, 5.70 and 10.18 —
+  clipped and Fuji 3513 5.67% over a 1.59% base (ceiling 2.79%) - both
+  rejected; the timid grade he "did not notice at all" measured ΔE 3.23 -
+  rejected; the three looks he approved measured 5.57, 5.70 and 10.18 -
   passed. Hence the ΔE floor sits at 5.0, not at the textbook 2.5 (that
   threshold is for flat patches, and 3.23 was invisible on a moving
   picture). ffmpeg-only, numpy is an optional accelerator. 32 tests.
-- **`core/prproj.py`** — the loop closes. A saved `.prproj` (gzipped XML) is
+- **`core/prproj.py`** - the loop closes. A saved `.prproj` (gzipped XML) is
   parsed back into sequences, caption cues and picture cuts, so renders
   conform to the human's cut instead of the machine's original plan.
   Verified against the reel: 29 raw caption items → the 23 lines actually on
@@ -749,28 +749,28 @@ rejected, not on what the literature suggests.
   version exactly. Two traps are handled explicitly: a cue with no text
   block is *untouched*, not empty (Premiere keeps that text in the linked
   caption file), and a razor half is only a razor half when it starts on a
-  picture cut — the naive "textless cue after an edited one" rule ate three
+  picture cut - the naive "textless cue after an edited one" rule ate three
   whole lines before the cut list was brought in. Sidecar text resolves by
   order, never by overlap: transcript time and cut time are different
   clocks, and overlap slid every line one cue out of place. 32 tests.
 
 ### Fixed
 
-- **`core/adapters/resolve.py` — one frame lost per clip.** `AppendToTimeline`
+- **`core/adapters/resolve.py` - one frame lost per clip.** `AppendToTimeline`
   treats `endFrame` as **exclusive**; the adapter passed `start + duration -
   1`, so every clip came up a frame short. Measured on the reel: 13 clips
-  rendered 64.767s instead of 65.200s at 30fps — exactly 13 frames — and
+  rendered 64.767s instead of 65.200s at 30fps - exactly 13 frames - and
   subtitles built for the true timeline drifted 0.43s by the end. The error
   scales with clip count, which is why it hides on short tests. Now covered
   by a stubbed-media-pool unit test.
 - **`core/tests/test_denoise.py`** imported `pytest` without using it, so
-  `python -m core.tests` died on a clean checkout — the aggregate runner is
+  `python -m core.tests` died on a clean checkout - the aggregate runner is
   meant to have no pytest dependency. Suite now runs stdlib-only: 497 green.
 
 ### Added - OpenReel-inspired audio & edit-intelligence (June 2026)
 
 Five self-contained modules. Algorithms (not code) ported from the MIT browser
-editor OpenReel Video, each mapped to a real pain hit on the Дед / Grave Stakes
+editor OpenReel Video, each mapped to a real pain hit on the Grandfather (Ded) / Grave Stakes
 footage. All run on the ffmpeg already required (zero new pip deps); numpy is an
 optional accelerator only.
 
@@ -785,7 +785,7 @@ optional accelerator only.
   mis-hears fewer words. ~15 dB suppression on pure noise. Wired into the
   Whisper path via `whisper.py --denoise`. 12 tests.
 - **`core/asr_verify.py`** - the transcript second pass we wanted: flags low
-  confidence, repetition loops, truncated tokens (the "Ско"->"скот" class),
+  confidence, repetition loops, truncated tokens (the "Sko"->"skot" class),
   impossible timing, mixed Cyrillic/Latin garble; `apply_corrections()` fixes
   them. Wired into `subtitles.write_timeline_srt/ass(verify=, corrections=)`.
   66 tests.
@@ -799,44 +799,44 @@ optional accelerator only.
   hardware/VideoToolbox encoder, which banded the flat-black Grave Stakes title
   cards); optional `pix_fmt="yuv420p10le"` for gradient-heavy masters.
 
-### Added — automated editing pipeline
+### Added - automated editing pipeline
 
 End-to-end generation, dogfooded to produce **v5** on the Grave Stakes
 footage (two contrasting Murch-clean teasers, see
 `examples/grave-stakes-teaser/benchmark/`):
 
-- **`skills/film-editing/tools/shake_detect.py`** — OpenCV phase-correlation
+- **`skills/film-editing/tools/shake_detect.py`** - OpenCV phase-correlation
   camera-shake metric (no libvidstab). Honest calibration:
   `flag_stabilization_relative()` flags only outliers (median + k·MAD),
-  never blanket — handheld doc energy is intentional. Wired into
+  never blanket - handheld doc energy is intentional. Wired into
   `analyze_clips.py`.
-- **`core/cleanup.py`** — per-clip technical corrections from the analysis
+- **`core/cleanup.py`** - per-clip technical corrections from the analysis
   report: horizon leveling (always when flagged) + outlier-only
   stabilization. `ResolveAdapter.apply_corrections()` undoes tilt live via
   the scripting API; deshake stays in the ffmpeg path (Resolve's
   stabilizer isn't cleanly scriptable). 11 tests.
-- **`core/value.py`** — the "meat" model: composite value
+- **`core/value.py`** - the "meat" model: composite value
   (audio-peak + motion − conditional shake penalty) + an explicit
   human/LLM `meat_tag` override; `ValuePool` protects the strong material
   and reserves anchors for the emotional-center beats. 15 tests.
-- **`core/variants.py`** — two contrasting strategies (DRIVE vs BREATH),
+- **`core/variants.py`** - two contrasting strategies (DRIVE vs BREATH),
   both `is_clean` by construction; length-aware assignment (a clip too
-  short for its beat is skipped *with a note* — physics > value >
+  short for its beat is skipped *with a note* - physics > value >
   protection). 19 tests.
-- **`core/probe.py`** — capability probe + `select_adapter()`;
-  live-verified. **`core/conform.py`** — clip relink to real media.
+- **`core/probe.py`** - capability probe + `select_adapter()`;
+  live-verified. **`core/conform.py`** - clip relink to real media.
 - Full suite: **168 passed / 0 failed / 1 skipped**.
 
-### Added — discovery + finishing (after assessing MIT peers video-use / claude-code-video-toolkit; ideas only)
+### Added - discovery + finishing (after assessing MIT peers video-use / claude-code-video-toolkit; ideas only)
 
-- **`core/library.py`** — smart media library: tag + search footage by
+- **`core/library.py`** - smart media library: tag + search footage by
   speech/tags/name, `find_lines()` a character's dialogue, `to_cutlist()`
   pulls matches into a new sequence. NO face recognition (by what's said).
-- **`core/subtitles.py`** — transcript → SRT (deliverable) + styled ASS
+- **`core/subtitles.py`** - transcript → SRT (deliverable) + styled ASS
   karaoke (2-word chunks, MarginV-90 safe-zone; approach credited to
   browser-use/video-use, MIT). `skills/watch` whisper now emits
   `--word_timestamps` so karaoke has real word times.
-- **`core/overlays.py`** — lower-thirds / title / brand via ffmpeg
+- **`core/overlays.py`** - lower-thirds / title / brand via ffmpeg
   drawtext; `from_markers()` auto-titles from the cutlist's beats.
 
 ### Audit (full static + dynamic pass)
@@ -847,42 +847,42 @@ tree + git history clean (no leaked keys/tokens in this public repo).
 E2E verified through the committed core modules on real footage
 (12/12 pipeline steps). Suite: **258 passed / 0 failed / 1 skipped**.
 
-### Added — `core/`
+### Added - `core/`
 
-- **`core/cutlist.py`** — the cutlist intermediate representation. Same JSON
+- **`core/cutlist.py`** - the cutlist intermediate representation. Same JSON
   shape as `examples/grave-stakes-teaser/cutlist_v3.json`, formalized:
   validation (out>in, no overlap, no negatives) and **lossless
   OpenTimelineIO round-trip** (verified in-memory against the real example),
   plus structural reconstruction (gap-honoring) and a CLI
   (`validate`/`to-otio`/`from-otio`/`roundtrip`). `opentimelineio` is an
   *optional* dependency.
-- **`core/capabilities.{json,py}`** — per-backend matrix
+- **`core/capabilities.{json,py}`** - per-backend matrix
   (live_control, requires_paid_tier, round_trip_only, markers,
   triggered_export, native_otio, unavailable_features). Facts verified
   May 2026.
-- **`core/adapters/`** — one verb set, three drivers:
+- **`core/adapters/`** - one verb set, three drivers:
   - `PremiereAdapter` compiles a cutlist to ExtendScript run via
     `mcp__premiere__pr_eval_jsx` (Premiere has no live API; the bridge is
     the link).
-  - `ResolveAdapter` — direct official Python scripting API. Lazy, guarded
+  - `ResolveAdapter` - direct official Python scripting API. Lazy, guarded
     bootstrap; raises `ResolveUnavailable` with an actionable hint instead
     of a cryptic ImportError. **Requires Resolve Studio** (external
     scripting is disabled in the free version). **Verified end-to-end**
     against DaVinci Resolve Studio 21 Public Beta (macOS) on Python
     3.9/3.11/3.13: connect, project info, CreateEmptyTimeline, media
-    import, clip placement, markers — frame math exact (14 s → frame 350
+    import, clip placement, markers - frame math exact (14 s → frame 350
     @ 25 fps). Re-runnable by any Studio user via
     `python -m core.adapters.resolve_smoketest`.
-  - `FcpxmlAdapter` — native FCPXML 1.10 writer (round-trip; no otio
+  - `FcpxmlAdapter` - native FCPXML 1.10 writer (round-trip; no otio
     file-IO dependency).
   - Shared `apply_cutlist()` orchestration consults the matrix and degrades
     gracefully (round-trip backends get a project file, never live calls).
-- **`core/review_loop.py`** — NLE-neutral self-review: deterministic Murch
+- **`core/review_loop.py`** - NLE-neutral self-review: deterministic Murch
   arithmetic (`analyze_cutlist`: §VII 2-4× ratio, §X monotony, beat-type
   pacing), `/watch` plan, NLE-free ffmpeg rough assembler, immutable
   validated `CutlistPatch`, `ReviewLoop` history/diff. Taste stays with the
   LLM by design; the harness only does the deterministic parts.
-- **`core/tests/`** — dependency-free runner (`python -m core.tests`),
+- **`core/tests/`** - dependency-free runner (`python -m core.tests`),
   values pinned to the real example. **93 passed, 0 failed, 1 skipped**
   (the skip is documented below).
 - `skills/film-editing/SKILL.md` §XVI documents the core + the review loop
@@ -892,51 +892,51 @@ E2E verified through the committed core modules on real footage
 
 - `.otio` **file** I/O needs Python 3.12 or 3.13. opentimelineio's JSON
   layer raises `bad any cast` on CPython 3.14 (upstream otio C++ binding
-  issue — it cannot parse even its own builtin manifest). In-memory
+  issue - it cannot parse even its own builtin manifest). In-memory
   `to_otio`/`from_otio` work on any Python with otio; the file helpers
   raise a clear `OtioUnavailable` and the suite *skips* (does not fail)
   the file round-trip there while still hard-asserting the in-memory one.
-- The **Resolve adapter** needs Python ~3.9–3.13 for a live `connect()`:
+- The **Resolve adapter** needs Python ~3.9-3.13 for a live `connect()`:
   Resolve's `fusionscript` does not bind CPython 3.14 (the repo's analysis
   venv). The adapter imports cleanly on 3.14; only attaching needs a
   compatible interpreter and fails with a clear `ResolveUnavailable`.
 
 ## [0.2.0] - 2026-05-15
 
-### Added — `skills/watch/` (vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video) + extended)
+### Added - `skills/watch/` (vendored from [bradautomates/claude-video](https://github.com/bradautomates/claude-video) + extended)
 
 Closes the "stop-frames only" honest limitation called out in v0.1. Lets Claude actually watch a clip:
 
 - `yt-dlp` download (URL or local path)
-- `ffmpeg` frame extraction (~30–100 frames auto-scaled to clip duration, 2 fps cap)
+- `ffmpeg` frame extraction (~30-100 frames auto-scaled to clip duration, 2 fps cap)
 - Timestamped transcript via three Whisper backends with auto-fallback:
-  1. **`local` (openai-whisper CLI)** — our extension on top of upstream. **No API key, runs offline, free.** Default model `medium`, override via `WATCH_LOCAL_WHISPER_MODEL=small|large-v3`. Tested on Hungarian field-recorded interview from Grave Stakes — produces real transcript where the v0.1 `tiny` model returned garbage.
+  1. **`local` (openai-whisper CLI)** - our extension on top of upstream. **No API key, runs offline, free.** Default model `medium`, override via `WATCH_LOCAL_WHISPER_MODEL=small|large-v3`. Tested on Hungarian field-recorded interview from Grave Stakes - produces real transcript where the v0.1 `tiny` model returned garbage.
   2. **Groq `whisper-large-v3`** (cloud, fastest, ~$0.0002/min)
   3. **OpenAI `whisper-1`** (cloud, slowest, ~$0.006/min)
 - Section-focused mode via `--start`/`--end` flags
 - New `--language` flag passed through to local backend (ISO-639-1 or English name; auto-detection is unreliable on noisy field audio)
-- Frames + transcript handed back as multimodal input — Claude `Read`s each frame path
+- Frames + transcript handed back as multimodal input - Claude `Read`s each frame path
 
-Full attribution preserved in `skills/watch/LICENSE`, `skills/watch/.claude-plugin/plugin.json`, and a new `skills/watch/ATTRIBUTION.md`. The `watch` skill is MIT-licensed and is **not** a fork — clean vendor copy. Upgrade path documented in ATTRIBUTION.
+Full attribution preserved in `skills/watch/LICENSE`, `skills/watch/.claude-plugin/plugin.json`, and a new `skills/watch/ATTRIBUTION.md`. The `watch` skill is MIT-licensed and is **not** a fork - clean vendor copy. Upgrade path documented in ATTRIBUTION.
 
-### Changed — `skills/film-editing/SKILL.md`
+### Changed - `skills/film-editing/SKILL.md`
 
-- New §XIV "Real video perception via the bundled `/watch` skill" — wires the new skill into the editing operating system with concrete recipes (decisive moment finding, interview transcription with proper Whisper backend, reference-trailer study)
-- Updated cost-discipline note: use `analyze_clips.py` first to rank, `/watch` only the top 10–15 candidates
+- New §XIV "Real video perception via the bundled `/watch` skill" - wires the new skill into the editing operating system with concrete recipes (decisive moment finding, interview transcription with proper Whisper backend, reference-trailer study)
+- Updated cost-discipline note: use `analyze_clips.py` first to rank, `/watch` only the top 10-15 candidates
 
-### Changed — root `README.md`
+### Changed - root `README.md`
 
 - New "Skills" section now lists both `film-editing/` and `watch/`
 - Honest-limitations section softened: with `/watch` bundled, "Claude cannot watch clips" is no longer true. Remaining limits are sub-frame timing, micro-expression nuance, dramaturgy invention.
 
-### Changed — `skills/film-editing/tools/`
+### Changed - `skills/film-editing/tools/`
 
-- `horizon_detect.py` v2 — sky-ground segmentation (HSV mask + RANSAC line fit) replaces naive Hough-line averaging; falls back to length-weighted Hough when no sky visible. Validated on Grave Stakes 12-clip teaser cutlist.
+- `horizon_detect.py` v2 - sky-ground segmentation (HSV mask + RANSAC line fit) replaces naive Hough-line averaging; falls back to length-weighted Hough when no sky visible. Validated on Grave Stakes 12-clip teaser cutlist.
 
 ### New examples
 
-- `examples/grave-stakes-teaser/build-scripts/build_v4_final.py` — first turnkey final render (intro + outro + Kevin MacLeod music, 72s)
-- `examples/grave-stakes-teaser/build-scripts/build_v5_brides_cigar.py` — v5 with Suno-generated Balkan brass track replacing the cliched MacLeod default
+- `examples/grave-stakes-teaser/build-scripts/build_v4_final.py` - first turnkey final render (intro + outro + Kevin MacLeod music, 72s)
+- `examples/grave-stakes-teaser/build-scripts/build_v5_brides_cigar.py` - v5 with Suno-generated Balkan brass track replacing the cliched MacLeod default
 
 ### Roadmap moved to v0.3
 
@@ -956,9 +956,9 @@ Full attribution preserved in `skills/watch/LICENSE`, `skills/watch/.claude-plug
 Three-component bridge giving Claude programmatic control of Adobe Premiere Pro.
 
 **Components:**
-- `mcp-server/` — Node MCP server with 10 tools (status, project info, sequence info, timeline list, selected clips, playhead control, marker, AME export, eval-jsx escape hatch)
-- `cep-extension/` — Adobe CEP panel running ExtendScript via CSInterface; live WS to MCP server on port 9876
-- `skills/film-editing/` — Walter Murch's *In the Blink of an Eye* encoded as decision rules (Rule of Six, Blink theory, eye trace, decisive moment, Russian↔English terminology) + `tools/analyze_clips.py` clip-analysis pipeline
+- `mcp-server/` - Node MCP server with 10 tools (status, project info, sequence info, timeline list, selected clips, playhead control, marker, AME export, eval-jsx escape hatch)
+- `cep-extension/` - Adobe CEP panel running ExtendScript via CSInterface; live WS to MCP server on port 9876
+- `skills/film-editing/` - Walter Murch's *In the Blink of an Eye* encoded as decision rules (Rule of Six, Blink theory, eye trace, decisive moment, Russian↔English terminology) + `tools/analyze_clips.py` clip-analysis pipeline
 
 **Features:**
 - Multi-instance-safe WS server: retries on EADDRINUSE every 3s

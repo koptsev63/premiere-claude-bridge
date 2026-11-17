@@ -1,29 +1,29 @@
 ---
 name: addons-installer
-description: Установка скиллов из пакета bridge-addons с обязательным подробным объяснением ДО установки. Запускай, когда просят установить, подключить, включить или обновить скиллы dailies-prep и nle-handoff, или просто "что в этом пакете".
+description: Installing skills from the bridge-addons package with a mandatory, detailed explanation BEFORE installation. Use when asked to install, connect, enable or update the dailies-prep and nle-handoff skills, or simply "what is in this package".
 ---
 
-# Установка скиллов: сначала объясни, потом предложи
+# Installing skills: explain first, then offer
 
-Порядок жёсткий. Нельзя ставить, пока человек не прочитал и не понял, что он ставит.
+The order is strict. Nothing gets installed until the person has read and understood what they are installing.
 
-## Шаги
+## Steps
 
-1. **Покажи список.** `python -m core.addons_install list` - какие скиллы есть в пакете.
-2. **Объясни каждый скилл подробно и простыми словами.** Для каждого скилла выполни `python -m core.addons_install describe <имя>` - команда печатает полное описание и записывает, что оно показано. Затем перескажи его своими словами, без жаргона, и обязательно разбери по пунктам:
-   - что скилл делает и зачем он человеку (на понятном примере);
-   - как он работает по шагам;
-   - когда он включается (какие фразы);
-   - что он читает и что пишет, меняет ли что-то в чужих файлах и в Resolve;
-   - что нужно на машине (программы, пакеты, шаблоны);
-   - чего он не умеет и где может ошибиться;
-   - как его убрать.
-   Не сокращай до одной строки и не вставляй описание целиком: перескажи так, чтобы человек мог ответить «да» или «нет» осознанно.
-3. **Только после этого предложи установить.** Спроси отдельно по каждому скиллу (ставить / не ставить), где будет лежать (по умолчанию `~/.claude/skills/`).
-4. **Установи только согласованное.** `python -m core.addons_install install <имя> --yes [--dest ПУТЬ]`. Команда сама откажется, если описание этого скилла не было показано.
-5. **Отчитайся.** Что и куда скопировано, какие пакеты Python ещё нужно поставить (команда их не ставит), как удалить: `python -m core.addons_install uninstall <имя>`.
+1. **Show the list.** `python -m core.addons_install list` - which skills the package contains.
+2. **Explain each skill in detail, in plain words.** For each skill run `python -m core.addons_install describe <name>` - the command prints the full description and records that it was shown. Then retell it in your own words, without jargon, and be sure to cover these points:
+   - what the skill does and why the person needs it (with an easy example);
+   - how it works, step by step;
+   - when it turns on (which phrases);
+   - what it reads and what it writes, and whether it changes anything in other people's files or in Resolve;
+   - what the machine needs (programs, packages, templates);
+   - what it cannot do and where it can go wrong;
+   - how to remove it.
+   Do not shrink this to one line and do not paste the description whole: retell it so the person can answer "yes" or "no" knowingly.
+3. **Only after that, offer to install.** Ask separately for each skill (install / do not install) and where it should go (default `~/.claude/skills/`).
+4. **Install only what was agreed.** `python -m core.addons_install install <name> --yes [--dest PATH]`. The command refuses on its own if that skill's description was not shown.
+5. **Report.** What was copied and where, which Python packages still need to be installed (the command does not install them), and how to remove it: `python -m core.addons_install uninstall <name>`.
 
-## Чего не делать
-- Не запускать `install` до `describe`.
-- Не ставить пакеты Python и не менять чужие настройки без отдельного согласия.
-- Не говорить «установлено и работает»: скилл установлен, а работу в Resolve, Premiere и Avid подтверждает только первый запуск.
+## What not to do
+- Do not run `install` before `describe`.
+- Do not install Python packages or change other people's settings without separate consent.
+- Do not say "installed and working": the skill is installed, but whether it works in Resolve, Premiere and Avid is confirmed only by the first run.

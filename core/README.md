@@ -1,4 +1,4 @@
-# `core/` — universal NLE core
+# `core/` - universal NLE core
 
 The editing brain is **NLE-agnostic**. A cut is decided once as a *cutlist*;
 per-NLE adapters render that one cutlist into Premiere, DaVinci Resolve, or
@@ -15,19 +15,19 @@ editing brain (skills/film-editing, /watch)   ← reasons about footage & cuts
 
 ## Layers
 
-1. **NLE-agnostic editing brain** — `skills/film-editing/` (Murch's Rule of
+1. **NLE-agnostic editing brain** - `skills/film-editing/` (Murch's Rule of
    Six) + `skills/watch/` (perception). No editor knowledge. Unchanged.
-2. **One cutlist** — `core/cutlist.py`. The same JSON shape already used in
+2. **One cutlist** - `core/cutlist.py`. The same JSON shape already used in
    `examples/grave-stakes-teaser/cutlist_v3.json`, formalized, validated, and
-   round-tripped losslessly through OpenTimelineIO (OTIO) — the industry
+   round-tripped losslessly through OpenTimelineIO (OTIO) - the industry
    interchange standard (Resolve reads/writes it natively; FCPXML has OTIO
    adapters; Premiere goes through this project's bridge).
-3. **Thin per-NLE adapters** — `core/adapters/` (added incrementally):
-   - Premiere — the existing CEP/ExtendScript bridge.
-   - DaVinci Resolve — direct Python via the official scripting API
+3. **Thin per-NLE adapters** - `core/adapters/` (added incrementally):
+   - Premiere - the existing CEP/ExtendScript bridge.
+   - DaVinci Resolve - direct Python via the official scripting API
      (**requires Resolve Studio**; external scripting is disabled in the
      free version).
-   - Final Cut — FCPXML round-trip (file exchange, not live control).
+   - Final Cut - FCPXML round-trip (file exchange, not live control).
 
 ## `core/cutlist.py`
 
@@ -64,7 +64,7 @@ python -m core.adapters.resolve_smoketest --build "/path/to/footage"
 
 **Verified end-to-end** May 2026 against **DaVinci Resolve Studio 21
 Public Beta** (macOS), Python 3.9 / 3.11 / 3.13: connect, get_project_info,
-CreateEmptyTimeline, media import, clip placement, markers — frame math
+CreateEmptyTimeline, media import, clip placement, markers - frame math
 exact (a 14 s marker landed on frame 350 @ 25 fps). Requires
 Preferences → System → General → "External scripting using" = Local.
 
@@ -76,15 +76,15 @@ import otio.
 
 `.otio` **file** I/O additionally needs **Python 3.12 or 3.13**.
 opentimelineio's JSON layer raises `bad any cast` on CPython 3.14 (an upstream
-otio C++ binding issue — it can't parse even its own builtin manifest). The
+otio C++ binding issue - it can't parse even its own builtin manifest). The
 code degrades gracefully: file helpers raise a clear `OtioUnavailable` with
 this hint instead of a cryptic crash, and the test suite *skips* (does not
 fail) the file round-trip on such interpreters while still hard-asserting the
 in-memory lossless round-trip.
 
 The **Resolve adapter** has its own interpreter constraint: Resolve's
-`fusionscript` binds CPython ~3.9–3.13. The repo's analysis venv is 3.14 and
-will **not** attach — run anything that drives Resolve with python3.13 /
+`fusionscript` binds CPython ~3.9-3.13. The repo's analysis venv is 3.14 and
+will **not** attach - run anything that drives Resolve with python3.13 /
 3.11 / 3.9. The adapter still imports cleanly on 3.14; only a live
 `connect()` needs a compatible interpreter, and it fails with a clear
 `ResolveUnavailable` if the binding can't load.
@@ -92,7 +92,7 @@ will **not** attach — run anything that drives Resolve with python3.13 /
 ## Audio & edit-intelligence modules
 
 Algorithms ported from the MIT browser editor OpenReel Video, each tied to a
-real pain on the Дед / Grave Stakes footage. ffmpeg-only (no new pip deps).
+real pain on the Grandfather / Grave Stakes footage. ffmpeg-only (no new pip deps).
 
 ```bash
 # auto-duck music under speech (replaces hand-balancing a music bed)
@@ -126,7 +126,7 @@ Two modules from the August 2026 reel job, where the machine cut, the human
 recut, and the grade had to survive a director's eye.
 
 ```bash
-# is this grade burnt — or is it invisible? (exit 1 = do not ship)
+# is this grade burnt - or is it invisible? (exit 1 = do not ship)
 python -m core.colorgate BASE.mov GRADED.mp4 --frames 8 --upto 60
 # what did the human actually approve in his project?
 python -m core.prproj "reel.prproj" --srt subs.srt [--track N] [--json]
@@ -138,7 +138,7 @@ python -m core.prproj "reel.prproj" --srt subs.srt [--track N] [--json]
   fails as loudly as a burnt one. `check_grade()` measures, `judge()` decides
   on stats you already have, `assert_ok()` raises. numpy optional.
 - `core/prproj.py` - reads a saved `.prproj` (gzipped XML): sequences, caption
-  cues per track, picture cuts. `conform_captions()` is the one call — it
+  cues per track, picture cuts. `conform_captions()` is the one call - it
   picks the track the human worked on, stitches razor halves back against the
   cut list, and resolves untouched lines from the sidecar **by order**
   (transcript time ≠ cut time; overlap matching slides every line one cue

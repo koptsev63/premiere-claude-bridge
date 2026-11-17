@@ -1,46 +1,46 @@
-# Дополнения к мосту: подготовка дня и передача монтажа
+# Bridge add-ons: day preparation and edit handoff
 
-Набор поверх `premiere-claude-bridge`. Ничего из моста не заменяет: добавляет новые файлы.
+A set on top of `premiere-claude-bridge`. It replaces nothing in the bridge: it adds new files.
 
-## Что внутри
+## What is inside
 
-| что | где | зачем |
+| what | where | why |
 |---|---|---|
-| Синхронизация звука | `core/dailies_sync.py` | дубли по таймкоду и заголовкам MXF, подгонка звука к камере корреляцией, отчёт о надёжности |
-| Восстановление звука | `core/adapters/resolve_restore_sound.py` | каждому клипу таймлайна Resolve возвращается звук его дубля |
-| Ступенчатая проверка кадров | `core/framecheck.py` | числа, обзор, края, кадры вокруг склеек (только бесшовный монтаж) |
-| Проект Premiere из Resolve | `core/prproj_build.py`, `core/adapters/resolve_spec.py`, `core/adapters/resolve_prproj_job.py` | `.prproj` из открытого проекта Resolve |
-| Бин Avid | `core/avb_build.py` | мастера с колонками, sync-клипы, group-клипы |
-| Настройки проекта Avid | `core/avp_build.py` | отдельный `.avp` и `Settings.xml` |
-| Проверка AAF и XML | `core/handoff_check.py` | отчёт и вписывание имён тейпов |
-| Два скилла для Claude | `skills/dailies-prep/`, `skills/nle-handoff/` | порядок работы и ограничения; в каждом `ABOUT.md` - описание простыми словами |
-| Установщик скиллов | `skills/addons-installer/`, `core/addons_install.py` | сначала подробное объяснение, потом предложение установить |
-| Описание формата Premiere | `docs/prproj-format.md` | как устроен `.prproj` |
-| Тесты | `core/tests/test_prproj_build.py`, `test_avb_build.py`, `test_avp_build.py` | запускать по одному: `python -m core.tests.test_avb_build` |
+| Audio sync | `core/dailies_sync.py` | takes by timecode and MXF headers, fitting audio to camera by correlation, reliability report |
+| Sound restore | `core/adapters/resolve_restore_sound.py` | gives every clip on a Resolve timeline the sound of its take |
+| Staged frame check | `core/framecheck.py` | numbers, overview, edges, frames around cuts (seamless edits only) |
+| Premiere project from Resolve | `core/prproj_build.py`, `core/adapters/resolve_spec.py`, `core/adapters/resolve_prproj_job.py` | `.prproj` from an open Resolve project |
+| Avid bin | `core/avb_build.py` | masters with columns, sync clips, group clips |
+| Avid project settings | `core/avp_build.py` | a separate `.avp` and `Settings.xml` |
+| AAF and XML check | `core/handoff_check.py` | report and filling in tape names |
+| Two skills for Claude | `skills/dailies-prep/`, `skills/nle-handoff/` | order of work and limits; each has an `ABOUT.md` with a plain-words description |
+| Skill installer | `skills/addons-installer/`, `core/addons_install.py` | a detailed explanation first, then an offer to install |
+| Premiere format description | `docs/prproj-format.md` | how `.prproj` is built |
+| Tests | `core/tests/test_prproj_build.py`, `test_avb_build.py`, `test_avp_build.py` | run one at a time: `python -m core.tests.test_avb_build` |
 
-## Что нужно на машине
+## What the machine needs
 
-- Мост уже стоит, Python 3.13 и Resolve Studio (внешние скрипты: Local).
-- Пакеты: `numpy`, `av` (PyAV), `Pillow` - для синхронизации и кадров; `pyaaf2` - для AAF; `pyavb` - для бинов Avid.
-- Свои шаблоны. В набор намеренно НЕ входят чужие проекты. Нужны: реальный `.prproj` (сохранённый самым старым Premiere, в котором результат должен открываться), реальный Avid-проект (`.avp` и его `Settings.xml`).
+- The bridge is already installed, Python 3.13 and Resolve Studio (external scripts: Local).
+- Packages: `numpy`, `av` (PyAV), `Pillow` for sync and frames; `pyaaf2` for AAF; `pyavb` for Avid bins.
+- Your own templates. Other people's projects are deliberately NOT included. You need: a real `.prproj` (saved by the oldest Premiere the result must open in), a real Avid project (`.avp` and its `Settings.xml`).
 
-## Установка
+## Installation
 
-1. Распакуй архив в корень репозитория моста: папки `core`, `docs`, `skills` сольются с существующими.
-2. Скилы ставь через установщик, не копированием: попроси Claude «установи скиллы из пакета». Он сначала подробно и простыми словами расскажет про каждый скилл (что делает, когда включается, что читает и пишет, что нужно, чего не умеет, как убрать) и только потом предложит поставить. Вручную то же самое: `python -m core.addons_install list`, потом `describe <скилл>`, потом `install <скилл> --yes`. Команда `install` откажется работать, пока описание не показано и пока нет `--yes`. Установщик копирует только папку скилла (по умолчанию в `~/.claude/skills/`) и не ставит пакеты Python.
-3. Проверка установки (быстрая): `python -m core.tests.test_avb_build` и `python -m core.tests.test_avp_build`. Тесты, которым нужен шаблон, пропускаются без `AVP_TEMPLATE` / `PRPROJ_TEMPLATE`.
+1. Unpack the archive into the root of the bridge repository: the `core`, `docs`, `skills` folders merge with the existing ones.
+2. Install the skills through the installer, not by copying: ask Claude "install the skills from the package". It will first explain each skill in detail and in plain words (what it does, when it triggers, what it reads and writes, what it needs, what it cannot do, how to remove it) and only then offer to install. By hand it is the same: `python -m core.addons_install list`, then `describe <skill>`, then `install <skill> --yes`. The `install` command refuses to work until the description has been shown and until `--yes` is given. The installer copies only the skill folder (by default into `~/.claude/skills/`) and does not install Python packages.
+3. Install check (quick): `python -m core.tests.test_avb_build` and `python -m core.tests.test_avp_build`. Tests that need a template are skipped without `AVP_TEMPLATE` / `PRPROJ_TEMPLATE`.
 
-## Порядок работы
+## Order of work
 
-1. `dailies-prep`: `scan` -> `sync` -> проверка результата (`trusted`, `fixed_by_roll`).
-2. Звук в таймлайн: `resolve_restore_sound.py` (опция камеры: `keep` / `mute` / `omit`).
-3. Проверка кадров по ступеням; плотные листы вокруг склеек только если монтаж бесшовный.
-4. `nle-handoff`: проект Premiere, бин и настройки Avid, проверка AAF/XML перед отправкой.
+1. `dailies-prep`: `scan` -> `sync` -> check the result (`trusted`, `fixed_by_roll`).
+2. Sound into the timeline: `resolve_restore_sound.py` (camera option: `keep` / `mute` / `omit`).
+3. Frame check in stages; dense sheets around cuts only if the edit is seamless.
+4. `nle-handoff`: Premiere project, Avid bin and settings, AAF/XML check before sending.
 
-## Честно о границах
+## Honest limits
 
-- Ни проект Premiere, ни бин, ни `.avp` не открывались в целевой программе: проверена структура, ссылки и сверка с Resolve. Первый запуск у монтажёра - это и есть проверка; пришли текст ошибки, если будет.
-- Premiere не переносит: грейд и эффекты Resolve (клип помечается и попадает в отчёт), ключи и затухания громкости, переходы, маркеры, прозрачность, составные клипы, титры. Список полный - в отчёте сборщика.
-- `.avp`: список бинов внутри остаётся как в шаблоне. Известен один пресет формата (`hd-1080p24`).
-- AAF: имена тейпов вписываются, но что именно это чинит открытие в Avid, не подтверждено.
-- Восстановление звука для Resolve писалось на рабочем проекте и после переноса в общий вид в Resolve не перезапускалось.
+- Neither the Premiere project, nor the bin, nor the `.avp` has been opened in the target program: structure, references and comparison with Resolve were checked. The first run on the editor's side is the check; send the error text if there is one.
+- Premiere does not carry over: Resolve grade and effects (the clip is flagged and goes into the report), volume keys and fades, transitions, markers, opacity, compound clips, titles. The full list is in the builder's report.
+- `.avp`: the list of bins inside stays as in the template. One format preset is known (`hd-1080p24`).
+- AAF: tape names are filled in, but what exactly this fixes when opening in Avid is not confirmed.
+- Sound restore for Resolve was written on a working project and has not been rerun in Resolve since being moved to the general form.

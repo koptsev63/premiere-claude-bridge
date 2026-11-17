@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.9] - 2026-11-17 - motion at the cuts
+
+The editing brain saw stills, not motion. A cut on movement, a kept screen
+direction and the viewer's eye landing where it already was are now
+measured, the same way 0.8.8 measures cuts against the drums.
 
 ### Added
 - `core.motion` (new): motion at cuts, measured with optical flow, numbers

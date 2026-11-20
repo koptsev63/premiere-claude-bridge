@@ -292,10 +292,23 @@ def judge(integrated: float | None, true_peak: float | None,
         rep.add("loudness measured", False, "UNVERIFIED - ffmpeg loudnorm "
                 "returned nothing (no audio, or ffmpeg missing)")
         return rep
+    off = integrated - target_lufs
+    how = ""
+    if abs(off) > lufs_tolerance:
+        # Say what closes the gap, so a FAIL is a one-command fix and not a number to argue with.
+        headroom = target_tp - true_peak
+        if off < 0 and headroom >= -off:
+            how = f"; quiet by {-off:.1f} LU with {headroom:.1f} dB of peak headroom: plain gain fixes it"
+        elif off < 0:
+            how = (f"; quiet by {-off:.1f} LU but the peak has only {max(headroom, 0.0):.1f} dB left: "
+                   "gain alone will clip, it needs the limiter")
+        else:
+            how = f"; loud by {off:.1f} LU"
+        how += " (python3 -m core.loudness IN OUT masters to the target)"
     rep.add("integrated loudness on target",
-            abs(integrated - target_lufs) <= lufs_tolerance,
+            abs(off) <= lufs_tolerance,
             f"{integrated:.1f} LUFS, target {target_lufs:.1f} "
-            f"±{lufs_tolerance:.1f}")
+            f"±{lufs_tolerance:.1f}{how}")
     rep.add("true peak under the ceiling",
             true_peak <= target_tp + TP_SLACK,
             f"{true_peak:.1f} dBTP, ceiling {target_tp:.1f}")

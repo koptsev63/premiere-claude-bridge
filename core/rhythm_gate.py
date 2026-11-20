@@ -2,7 +2,7 @@
 
 Run on a locked cut before it is shown or delivered:
 
-    python3 -m core.rhythm_gate SOURCE --genre trailer [--fps 25] [--brief DIR] [--music TRACK] [--json]
+    python3 -m core.rhythm_gate SOURCE --genre trailer [--fps 25] [--cuts 1.2,3.4] [--brief DIR] [--music TRACK] [--json]
 
 SOURCE is one of:
   * a bridge cutlist .json ("cuts": [...]) - exact shot lengths plus beat labels;
@@ -77,6 +77,7 @@ MIN_SPREAD = 2.0          # p90/p10 below this = monotone
 MONOTONY_RUN = 4          # this many same-length shots in a row
 SAME_LEN_FRAMES = 2       # "same length" tolerance
 FLASH_FRAMES = 6          # shorter than this = flash
+SOFT_EDIT_SEC = 20.0      # a "single shot" longer than this is more likely a dissolve-built edit
 MIN_FINAL_SEC = 2.0       # final shot shorter than this = no button / card
 
 # Editor rules from a live cut (Denis, 16.11.2026)
@@ -152,12 +153,28 @@ def media_duration(path: str) -> float:
     return float(out.strip())
 
 
-def shots_from_media(path: str, threshold: float = 0.3) -> list[Shot]:
-    from core.highlights import scene_cuts
+def shots_from_media(path: str, threshold: float = 0.3, cuts: list[float] | None = None) -> list[Shot]:
+    """Shots of a rendered file. `cuts` (seconds) overrides detection, so the caller can hand
+    the same list to every tool. Detected cuts: a flash burst counts once, a dip to black counts."""
+    from core.highlights import edit_points
 
     dur = media_duration(path)
-    cuts = [c for c in scene_cuts(path, threshold=threshold) if 0.05 < c < dur - 0.05]
+    if cuts is None:
+        cuts = edit_points(path, threshold=threshold)
+    cuts = [c for c in cuts if 0.05 < c < dur - 0.05]
     return shots_from_bounds([0.0, *cuts, dur])
+
+
+def media_fps(path: str) -> float | None:
+    """Average frame rate of the first video stream, None if it cannot be read."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate",
+             "-of", "csv=p=0", path], capture_output=True, text=True, check=True).stdout.strip()
+        n, d = out.split("/")
+        return float(n) / float(d) if float(d) else None
+    except (ValueError, OSError, subprocess.CalledProcessError):
+        return None
 
 
 def shots_from_bounds(bounds: list[float]) -> list[Shot]:
@@ -336,6 +353,11 @@ def check(shots: list[Shot], genre: str, fps: float, *, source: str = "",
         rep.brief = str(Path(brief_dir).expanduser() / GENRE_BRIEF[genre])
     if len(durs) < 3:
         rep.warns.append(f"only {len(durs)} shot(s): rhythm checks need 3+")
+        if shot_source == "detected" and sum(durs) > SOFT_EDIT_SEC:
+            rep.warns.append(
+                f"{sum(durs):.0f}s with no hard cuts found: cross-dissolves are invisible to scene "
+                "detection, so this is NOT a pass on rhythm. Name the cuts with --cuts or check by eye."
+            )
         return rep
 
     frame = 1.0 / fps
@@ -467,13 +489,20 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m core.rhythm_gate", description=__doc__.split("\n\n")[0])
     ap.add_argument("source", help="cutlist .json, Premiere timeline dump .json, or a media file")
     ap.add_argument("--genre", required=True, choices=sorted(GENRE_BRIEF))
-    ap.add_argument("--fps", type=float, default=25.0)
+    ap.add_argument("--fps", type=float, help="timeline frame rate (default: read from a media source, else 25)")
+    ap.add_argument("--cuts", help="comma-separated cut times in seconds for a media source (default: detect)")
     ap.add_argument("--brief", help="folder with the genre digests (trailer.md, documentary.md, ...)")
     ap.add_argument("--music", help="music track: check cuts against percussive accents and strong beats")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    is_media = Path(a.source).suffix.lower() != ".json"
+    if a.fps is None:
+        a.fps = (media_fps(a.source) if is_media else None) or 25.0
     try:
-        shots, kind, cl = load_shots(a.source)
+        if a.cuts is not None and is_media:
+            shots, kind, cl = shots_from_media(a.source, cuts=[float(x) for x in a.cuts.split(",") if x.strip()]), "given", None
+        else:
+            shots, kind, cl = load_shots(a.source)
     except (ValueError, OSError, subprocess.CalledProcessError) as e:
         print(f"rhythm gate: cannot read shots: {e}", file=sys.stderr)
         return 2

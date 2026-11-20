@@ -87,8 +87,18 @@ DEF_WIN = 0.4                 # s per side
 EDGE_GUARD_S = 0.05           # cuts closer than this to start/end are dropped
 MIN_PAIRS = 2                 # a side needs at least this many flow pairs
 
-FLAT_BRIGHTNESS = 12.0        # mean gray level (0-255) below this = black
+FLAT_BRIGHTNESS = 20.0        # mean gray level (0-255) below this = black
+DARK_MEDIAN = 12.0            # median gray below this = a card: title or logo on black
 FLAT_TEXTURE = 3.0            # mean per-frame gray std below this = flat field
+FLASH_WHITE = 235.0           # a frame this bright on a side = flash frame
+FLASH_STEP = 60.0             # brightness jump between two frames of a side = flash
+FADE_DELTA = 25.0             # brightness drift over the window = fade in / out
+EFFECT_ZOOM = 0.5             # 1/s: a zoom faster than this is a transition effect
+BURST_GAP = 0.15              # s: cuts closer than this (under 4 frames) are one flash / effect, not edits
+DUP_DIFF = 0.3                # mean abs gray difference below this = the same frame again ...
+DUP_REL = 0.25                # ... and below this share of the side's live (80th percentile) difference
+DUP_LIVE = 0.2                # a side whose live difference is below this is simply static
+VFR_TOLERANCE = 0.01          # avg vs nominal frame rate apart by more than this = variable rate
 
 SUBJECT_MIN_PX = 0.5          # residual floor, px at analysis width
 SUBJECT_MEDIAN_K = 3.0        # ... or this many times the median residual
@@ -106,8 +116,14 @@ STATIC_ZOOM = 0.08            # 1/s: below this a push / pull is "static"
 MOVING_SPEED = 0.04           # fw/s: a side whose motion is below is "still"
 SPEED_RATIO = (0.5, 2.0)      # speed B / speed A inside = same pace
 
+COHERENT = 0.6                # per-pair directions must agree this much (0..1) to be motion
+FLIP_MIN_SPEED = 0.10         # fw/s: both sides at least this fast before a flip is called
+SUBJECT_MAX_SPREAD = 0.15     # frame units: centroid scatter across pairs of a real subject
+
 EYE_STAYS = 0.15              # frame-diagonal units
-EYE_JUMPS = 0.35
+EYE_JUMPS = 0.42
+EYE_MIN_SHARE = 0.05          # both subjects at least this big before "eye jumps" is called
+EYE_EDGE = 0.08               # a centroid this close to the frame edge is not an eye target
 
 ARROW_PX_PER_FW = 1.5         # sheet arrow length: px per (fw/s * frame width)
 
@@ -120,6 +136,7 @@ ARROW_PX_PER_FW = 1.5         # sheet arrow length: px per (fw/s * frame width)
 @dataclass
 class SideMotion:
     flat: bool = False
+    note: str = ""            # why a side is not judged: dark, flat field, flash, fade, effect, short
     pairs: int = 0
     pan_x: float = 0.0
     pan_y: float = 0.0
@@ -136,6 +153,28 @@ class SideMotion:
     energy: float = 0.0
     brightness: float = 0.0
     texture: float = 0.0
+    cam_coherence: float = 1.0    # 1 = every pair pans the same way, 0 = jitter
+    subj_coherence: float = 1.0   # same for the subject's direction
+    spread: float = 0.0           # scatter of the subject centroid across pairs, frame units
+    dup_ratio: float = 0.0        # share of repeated frames taken out before measuring
+
+    @property
+    def kind(self) -> str:
+        """What the travel vector comes from: "subject", "camera" or ""."""
+        if self.subject_moving:
+            return "subject"
+        if self.camera_label.startswith(("pan", "tilt")) and self.camera_speed >= STATIC_PAN:
+            return "camera"
+        return ""
+
+    @property
+    def steady(self) -> bool:
+        """True when the travel is one coherent move, not flicker (generated footage, grain, smoke)."""
+        if self.kind == "subject":
+            return self.subj_coherence >= COHERENT and self.spread <= SUBJECT_MAX_SPREAD
+        if self.kind == "camera":
+            return self.cam_coherence >= COHERENT
+        return False
 
     @property
     def camera_speed(self) -> float:
@@ -178,6 +217,13 @@ class CutMotion:
     eye_distance: Optional[float] = None
     eye_label: Optional[str] = None
     size: tuple = field(default=(ANALYSIS_WIDTH, 180))
+    burst: int = 1            # scene-detect hits merged into this cut (flash, strobe, effect)
+    t_end: Optional[float] = None
+
+    @property
+    def flagged(self) -> bool:
+        """The two verdicts worth a second look. Everything else is a description."""
+        return self.verdict == "direction flip" or self.eye_label == "eye jumps"
 
 
 # --------------------------------------------------------------------------- #
@@ -223,14 +269,56 @@ def _read_range(cap, start: int, count: int) -> list:
     return out
 
 
+def is_vfr(path: str) -> bool:
+    """True when the average and the nominal frame rate differ: frame index != time * fps."""
+    import subprocess
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=r_frame_rate,avg_frame_rate", "-of", "csv=p=0", path],
+                           capture_output=True, text=True, timeout=30)
+        vals = []
+        for part in r.stdout.strip().replace("\n", ",").split(","):
+            if "/" in part:
+                n, d = part.split("/")
+                if float(d):
+                    vals.append(float(n) / float(d))
+        return len(vals) == 2 and min(vals) > 0 and abs(vals[0] - vals[1]) / max(vals) > VFR_TOLERANCE
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+def _read_span(cap, t0: float, t1: float) -> list:
+    """Frames whose timestamps fall in [t0, t1), as (seconds, frame) - for variable-rate files."""
+    cv2, _ = _deps()
+    cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, t0 - 0.5) * 1000.0)
+    out = []
+    while True:
+        ok, fr = cap.read()
+        if not ok:
+            break
+        ts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+        if ts >= t1:
+            break
+        if ts >= t0:
+            out.append((ts, _scaled(fr)))
+        if len(out) > 400:
+            break
+    return out
+
+
+def _side_fps(span: list, fallback: float) -> float:
+    return (len(span) - 1) / (span[-1][0] - span[0][0]) if len(span) > 1 and span[-1][0] > span[0][0] else fallback
+
+
 def cuts_from_media(path: str, threshold: float = 0.3) -> list[float]:
     """Scene cuts (ffmpeg select), minus any within 0.05 s of start or end."""
-    from core.highlights import scene_cuts
+    from core.highlights import dip_cuts, scene_cuts
 
     cap, fps, n = _open(path)
     dur = n / fps if n else 0.0
     cap.release()
     cuts = scene_cuts(path, threshold=threshold)
+    cuts = sorted(set(cuts + dip_cuts(path, cuts)))     # bursts are merged later, in analyze()
     return [c for c in cuts if c > EDGE_GUARD_S and (not dur or c < dur - EDGE_GUARD_S)]
 
 
@@ -292,28 +380,66 @@ def _pair_motion(g0, g1) -> Optional[dict]:
     return out
 
 
+def _coherence(vecs: list) -> float:
+    """|mean vector| / mean |vector|: 1 when every pair moves the same way, near 0 for jitter."""
+    if not vecs:
+        return 0.0
+    mx = sum(v[0] for v in vecs) / len(vecs)
+    my = sum(v[1] for v in vecs) / len(vecs)
+    mean_len = sum(math.hypot(v[0], v[1]) for v in vecs) / len(vecs)
+    return math.hypot(mx, my) / mean_len if mean_len > 1e-9 else 0.0
+
+
 def measure_side(frames: list, fps: float) -> SideMotion:
     """Average the flow pairs of one side. `frames` are BGR/gray arrays at analysis width."""
     cv2, np = _deps()
     side = SideMotion()
     if len(frames) < MIN_PAIRS + 1:
         side.flat = True
+        side.note = "too short"
         return side
     grays = [f if f.ndim == 2 else cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames]
-    side.brightness = float(np.mean([g.mean() for g in grays]))
+    means = [float(g.mean()) for g in grays]
+    side.brightness = float(np.mean(means))
     side.texture = float(np.mean([g.std() for g in grays]))
-    if side.brightness < FLAT_BRIGHTNESS or side.texture < FLAT_TEXTURE:
+    # Sides that are not a shot in motion are not judged: a title on black, a flash, a fade.
+    if side.brightness < FLAT_BRIGHTNESS or float(np.mean([np.median(g) for g in grays])) < DARK_MEDIAN:
+        side.note = "dark or a card"
+    elif side.texture < FLAT_TEXTURE:
+        side.note = "flat field"
+    elif max(means) > FLASH_WHITE or max(abs(b - a) for a, b in zip(means[:-1], means[1:])) > FLASH_STEP:
+        side.note = "flash"
+    elif abs(means[-1] - means[0]) > FADE_DELTA:
+        side.note = "fade"
+    if side.note:
         side.flat = True
         return side
+    # Repeated frames (24 fps footage conformed to 30 or 60, frame-doubled generations) carry no
+    # motion. Left in, they drop out of the averages and the speed comes out too high by the
+    # conform ratio; taken out, the remaining pairs span more time, so the rate is scaled down.
+    diffs = [float(np.abs(b.astype(np.int16) - a.astype(np.int16)).mean()) for a, b in zip(grays[:-1], grays[1:])]
+    live = float(np.percentile(diffs, 80))
+    dup_below = min(DUP_DIFF, DUP_REL * live)
+    if live > DUP_LIVE and min(diffs) < dup_below:
+        uniq = [grays[0]] + [g for g, d in zip(grays[1:], diffs) if d >= dup_below]
+        side.dup_ratio = 1.0 - (len(uniq) - 1) / (len(grays) - 1)
+        fps = fps * (len(uniq) - 1) / (len(grays) - 1)
+        grays = uniq
     pairs = [r for r in (_pair_motion(a, b) for a, b in zip(grays[:-1], grays[1:])) if r]
     if len(pairs) < MIN_PAIRS:
         side.flat = True
+        side.note = "no texture"
         return side
     k = fps / pairs[0]["w"]                       # px/frame -> frame widths / s
     side.pairs = len(pairs)
     side.pan_x = float(np.mean([p["tx"] for p in pairs])) * k
     side.pan_y = float(np.mean([p["ty"] for p in pairs])) * k
     side.zoom_per_s = float(np.mean([p["zoom"] for p in pairs])) * fps
+    if abs(side.zoom_per_s) > EFFECT_ZOOM:
+        side.flat = True
+        side.note = "fast zoom or effect"
+        return side
+    side.cam_coherence = _coherence([(p["tx"], p["ty"]) for p in pairs])
     side.camera_label = camera_label(side.pan_x, side.pan_y, side.zoom_per_s)
     side.energy = float(np.mean([p["energy"] for p in pairs])) * k
     side.share = float(np.mean([p["share"] for p in pairs]))
@@ -325,6 +451,8 @@ def measure_side(frames: list, fps: float) -> SideMotion:
         side.vx = sum(p["vx"] * p["n_sel"] for p in sub) / wsum * k
         side.vy = sum(p["vy"] * p["n_sel"] for p in sub) / wsum * k
         side.speed = math.hypot(side.vx, side.vy)
+        side.subj_coherence = _coherence([(p["vx"], p["vy"]) for p in sub])
+        side.spread = float(math.hypot(np.std([p["cx"] for p in sub]), np.std([p["cy"] for p in sub])))
     side.set_travel()
     return side
 
@@ -346,8 +474,15 @@ def judge(a: SideMotion, b: SideMotion) -> str:
         return "cut into motion"
     if a.travel > 0 and b.travel > 0:
         cos = (a.travel_x * b.travel_x + a.travel_y * b.travel_y) / (a.travel * b.travel)
+        if cos < COS_SAME and a.kind != b.kind:
+            # A camera move against a subject move: world direction and screen direction
+            # disagree by construction, so neither a flip nor a turn can be claimed.
+            return "mixed motion"
         if cos <= COS_OPPOSITE:
-            return "direction flip"
+            # A flip is only called on two clear, coherent moves. Slow drift and the flicker
+            # of generated footage point every way at once and are not a screen direction.
+            strong = min(a.travel, b.travel) >= FLIP_MIN_SPEED and a.steady and b.steady
+            return "direction flip" if strong else "weak opposite motion"
         if cos < COS_SAME:
             return "direction turns"
     ratio = b.pace / a.pace if a.pace > 0 else float("inf")
@@ -363,6 +498,14 @@ def eye_trace(a: SideMotion, b: SideMotion, size: tuple) -> tuple[Optional[float
     w, h = size
     d = math.hypot((a.cx - b.cx) * w, (a.cy - b.cy) * h) / math.hypot(w, h)
     label = "eye stays" if d < EYE_STAYS else ("eye moves" if d <= EYE_JUMPS else "eye jumps")
+    if label == "eye jumps":
+        # Only two real subjects make an eye jump: big enough, holding their place across
+        # the window, and not a sliver at the frame edge (parallax, smoke, a title fading in).
+        def target(s: SideMotion) -> bool:
+            return (s.share >= EYE_MIN_SHARE and s.spread <= SUBJECT_MAX_SPREAD
+                    and EYE_EDGE <= s.cx <= 1 - EYE_EDGE and EYE_EDGE <= s.cy <= 1 - EYE_EDGE)
+        if not (target(a) and target(b)):
+            label = "eye unsure"
     return d, label
 
 
@@ -376,6 +519,12 @@ def build_cut(index: int, t: float, a: SideMotion, b: SideMotion, size: tuple) -
 # --------------------------------------------------------------------------- #
 
 
+def group_bursts(cuts: list[float], gap: float = BURST_GAP) -> list[tuple[float, float, int]]:
+    """Scene-detect hits closer than `gap` are one flash or effect (see core.highlights)."""
+    from core.highlights import group_bursts as _g
+    return _g(cuts, gap)
+
+
 def analyze(path: str, cuts: Optional[list[float]] = None, win: float = DEF_WIN,
             _keep_frames: Optional[list] = None) -> list[CutMotion]:
     """Measure motion on both sides of every cut. `cuts` in seconds, scene-detected if None."""
@@ -383,15 +532,44 @@ def analyze(path: str, cuts: Optional[list[float]] = None, win: float = DEF_WIN,
         cuts = cuts_from_media(path)
     cap, fps, _n = _open(path)
     nwin = max(MIN_PAIRS + 1, round(win * fps))
+    groups = group_bursts(cuts)
     out: list[CutMotion] = []
+    vfr = is_vfr(path)
     try:
-        for i, t in enumerate(cuts, 1):
-            idx = int(round(t * fps))
-            a_fr = _read_range(cap, idx - 1 - nwin, nwin + 1)   # last one = frame before the cut
-            b_fr = _read_range(cap, idx, nwin + 1)              # first one = frame after the cut
+        for i, (t0, t1, n) in enumerate(groups, 1):
+            if vfr:
+                # Frame index is not time * fps here: read by timestamp, one side at a time.
+                lo = groups[i - 2][1] if i > 1 else 0.0
+                hi = groups[i][0] if i < len(groups) else float("inf")
+                sa = _read_span(cap, max(lo, t0 - win - 0.06), t0 - 1e-3)
+                sb = _read_span(cap, t1 - 1e-3, min(hi, t1 + win + 0.06))
+                size = (sa[0][1].shape[1], sa[0][1].shape[0]) if sa else (ANALYSIS_WIDTH, 180)
+                cm = build_cut(i, t0, measure_side([f for _, f in sa[:-1]], _side_fps(sa, fps)),
+                               measure_side([f for _, f in sb[1:]], _side_fps(sb, fps)), size)
+                if n > 1:
+                    cm.burst, cm.t_end = n, t1
+                    cm.verdict, cm.eye_distance, cm.eye_label = "flash or effect", None, None
+                out.append(cm)
+                if _keep_frames is not None:
+                    _keep_frames.append((sa[-1][1] if sa else None, sb[0][1] if sb else None))
+                continue
+            idx0, idx1 = int(round(t0 * fps)), int(round(t1 * fps))
+            # A window never reaches into the neighbouring shot: a 0.3 s shot is measured on
+            # its own frames or not at all (flow across a second cut is noise, not motion).
+            a_start = idx0 - 1 - nwin
+            if i > 1:
+                a_start = max(a_start, int(round(groups[i - 2][1] * fps)) + 1)
+            b_count = nwin + 1
+            if i < len(groups):
+                b_count = min(b_count, int(round(groups[i][0] * fps)) - 1 - idx1)
+            a_fr = _read_range(cap, a_start, idx0 - a_start) if idx0 > a_start else []
+            b_fr = _read_range(cap, idx1, b_count) if b_count > 0 else []
             # the frame next to the cut on each side is for the sheet, not for the numbers
             size = (a_fr[0].shape[1], a_fr[0].shape[0]) if a_fr else (ANALYSIS_WIDTH, 180)
-            cm = build_cut(i, t, measure_side(a_fr[:-1], fps), measure_side(b_fr[1:], fps), size)
+            cm = build_cut(i, t0, measure_side(a_fr[:-1], fps), measure_side(b_fr[1:], fps), size)
+            if n > 1:
+                cm.burst, cm.t_end = n, t1
+                cm.verdict, cm.eye_distance, cm.eye_label = "flash or effect", None, None
             out.append(cm)
             if _keep_frames is not None:
                 _keep_frames.append((a_fr[-1] if a_fr else None, b_fr[0] if b_fr else None))
@@ -415,7 +593,7 @@ def travel_glyph(tx: float, ty: float) -> str:
 
 def _side_text(s: SideMotion) -> str:
     if s.flat:
-        return "flat"
+        return f"flat ({s.note})" if s.note else "flat"
     cam = s.camera_label
     if cam != "static":
         if cam in ("push in", "pull out"):
@@ -431,11 +609,17 @@ def format_report(cuts: list[CutMotion]) -> str:
     lines = []
     for c in cuts:
         eye = f" | {c.eye_label} {c.eye_distance:.2f}" if c.eye_label else ""
+        burst = f" ({c.burst} hits to {c.t_end:.2f}s)" if c.burst > 1 else ""
         lines.append(
             f"cut {c.index} @ {c.t:.2f}s  A: {_side_text(c.a)} -> B: {_side_text(c.b)}"
-            f"  | {c.verdict}{eye}"
+            f"  | {c.verdict}{burst}{eye}"
         )
-    return "\n".join(lines) if lines else "no cuts"
+    if not lines:
+        return "no cuts"
+    flagged = [c for c in cuts if c.flagged]
+    lines.append(f"flagged: {len(flagged)} of {len(cuts)}"
+                 + ("  @ " + ", ".join(f"{c.t:.2f}s" for c in flagged) if flagged else ""))
+    return "\n".join(lines)
 
 
 def to_json(cuts: list[CutMotion]) -> str:
@@ -451,7 +635,7 @@ def _draw_side(img, s: SideMotion) -> None:
     cv2, _ = _deps()
     h, w = img.shape[:2]
     if s.flat:
-        cv2.putText(img, "flat", (6, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, f"flat: {s.note}" if s.note else "flat", (6, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1, cv2.LINE_AA)
         return
     cv2.putText(img, s.camera_label, (6, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 160, 0), 1, cv2.LINE_AA)
     start = (int(s.cx * w), int(s.cy * h)) if s.cx is not None else (w // 2, h // 2)
@@ -501,12 +685,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--sheet", help="write a contact sheet jpg here")
     a = ap.parse_args(argv)
-    cuts = [float(x) for x in a.cuts.split(",") if x.strip()] if a.cuts else cuts_from_media(a.video, a.threshold)
+    # --cuts "" is an explicit empty list (the caller already looked and found a single shot)
+    cuts = ([float(x) for x in a.cuts.split(",") if x.strip()] if a.cuts is not None
+            else cuts_from_media(a.video, a.threshold))
     keep: list = []
     res = analyze(a.video, cuts, a.win, _keep_frames=keep if a.sheet else None)
     print(to_json(res) if a.json else format_report(res))
     if a.sheet:
-        print("sheet:", contact_sheet(res, keep, a.sheet), file=sys.stderr)
+        # A single shot has nothing to draw: say so instead of crashing the caller (0.8.10).
+        if any(fa is not None and fb is not None for fa, fb in keep):
+            print("sheet:", contact_sheet(res, keep, a.sheet), file=sys.stderr)
+        else:
+            print("sheet: skipped, no cuts to draw", file=sys.stderr)
     return 0
 
 

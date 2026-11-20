@@ -216,9 +216,46 @@ def test_select_highlights() -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def test_edit_points() -> None:
+    """0.8.10: one cut list for every tool - a flash counts once, a dip to black counts."""
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    from core.highlights import dip_cuts, edit_points, group_bursts, scene_cuts
+
+    g = group_bursts([5.0, 12.0, 12.04, 12.13, 20.0])
+    check("burst of hits is one event", g == [(5.0, 5.0, 1), (12.0, 12.13, 3), (20.0, 20.0, 1)], str(g))
+    check("6-frame shots are real cuts, not a burst",
+          [x[2] for x in group_bursts([1.6, 1.84, 2.08])] == [1, 1, 1])
+    if not shutil.which("ffmpeg"):
+        print("  SKIP  ffmpeg missing: dip and flash clips not built")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        base = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
+        src = lambda name, dur: ["-f", "lavfi", "-i", f"{name}=size=320x180:rate=25:duration={dur}"]  # noqa: E731
+        dip = os.path.join(d, "dip.mp4")
+        subprocess.run(base + src("testsrc2", 2) + src("smptebars", 2) + [
+            "-filter_complex", "[0:v]fade=t=out:st=1.5:d=0.5[a];[1:v]fade=t=in:st=0:d=0.5[b];[a][b]concat=n=2:v=1[v]",
+            "-map", "[v]", "-pix_fmt", "yuv420p", dip], check=True)
+        hard = scene_cuts(dip)
+        dips = dip_cuts(dip, hard)
+        check("a dip to black has no hard cut", hard == [], str(hard))
+        check("the dip is found near 2.0s", len(dips) == 1 and abs(dips[0] - 2.0) < 0.3, str(dips))
+        check("edit_points includes the dip", len(edit_points(dip)) == 1, str(edit_points(dip)))
+        flash = os.path.join(d, "flash.mp4")
+        subprocess.run(base + src("testsrc2", 2) + [
+            "-vf", "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(n,25,26)'",
+            "-pix_fmt", "yuv420p", flash], check=True)
+        pts = edit_points(flash)
+        check("a two-frame flash is at most one edit point", len(pts) <= 1, f"{scene_cuts(flash)} -> {pts}")
+
+
 def main() -> int:
     test_score_windows()
     test_select_highlights()
+    test_edit_points()
     print(f"\n{_p} passed, {_f} failed")
     return 0 if _f == 0 else 1
 

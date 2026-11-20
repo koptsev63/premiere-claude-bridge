@@ -457,6 +457,59 @@ def scene_cuts(path: str, *, threshold: float = DEF_SCENE_THRESH) -> list[float]
     return sorted(set(times))
 
 
+BURST_GAP = 0.15            # s: scene-detect hits closer than this (under 4 frames) are one flash, not edits
+DIP_MIN_SEC = 0.06          # a black span at least this long between shots is a dip to black
+DIP_NEAR_HARD = 0.3         # a dip this close to a hard cut is that cut, not a second one
+
+
+def group_bursts(cuts: list[float], gap: float = BURST_GAP) -> list[tuple[float, float, int]]:
+    """Merge scene-detect hits closer than `gap` into one event: (first, last, count).
+
+    A white flash, a strobe or a glitch transition makes the detector fire several times
+    within a few frames. That is one event for the viewer and none of it is a cut to judge.
+    """
+    out: list[tuple[float, float, int]] = []
+    for t in sorted(cuts):
+        if out and t - out[-1][1] < gap:
+            out[-1] = (out[-1][0], t, out[-1][2] + 1)
+        else:
+            out.append((t, t, 1))
+    return out
+
+
+def dip_cuts(path: str, hard: list[float] | None = None) -> list[float]:
+    """Midpoints of dips to black that the scene detector did not see as cuts.
+
+    `select=gt(scene,..)` needs a jump between two frames; a fade out and back in has none,
+    so an edit joined by dips reads as one long shot. ffmpeg blackdetect finds the black
+    spans; a span that already has a hard cut next to it (a title card on black) is skipped.
+    Cross-dissolves stay invisible to both - say so wherever the cut count is reported.
+    """
+    cmd = ["ffmpeg", "-nostdin", "-i", path, "-vf", f"blackdetect=d={DIP_MIN_SEC}:pix_th=0.10",
+           "-an", "-f", "null", "-"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    hard = hard or []
+    dur_m = re.search(r"Duration: (\d+):(\d+):([0-9.]+)", r.stderr or "")
+    dur = (int(dur_m.group(1)) * 3600 + int(dur_m.group(2)) * 60 + float(dur_m.group(3))) if dur_m else None
+    out: list[float] = []
+    for m in re.finditer(r"black_start:([0-9.]+) black_end:([0-9.]+)", r.stderr or ""):
+        b0, b1 = float(m.group(1)), float(m.group(2))
+        if b0 < 0.1 or (dur is not None and b1 > dur - 0.1):
+            continue                                  # fade in at the head, fade out at the tail
+        if any(b0 - DIP_NEAR_HARD <= h <= b1 + DIP_NEAR_HARD for h in hard):
+            continue
+        out.append(round((b0 + b1) / 2, 3))
+    return out
+
+
+def edit_points(path: str, *, threshold: float = DEF_SCENE_THRESH) -> list[float]:
+    """The cut list every measuring tool should share: hard cuts with flash bursts merged to
+    their first hit, plus dips to black. One list, so rhythm and motion judge the same edit."""
+    hard = scene_cuts(path, threshold=threshold)
+    merged = [g[0] for g in group_bursts(hard)]
+    return sorted(set(merged + dip_cuts(path, hard)))
+
+
 def _snap_to_cuts(
     start: float,
     end: float,

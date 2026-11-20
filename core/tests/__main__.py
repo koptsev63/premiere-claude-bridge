@@ -6,6 +6,7 @@ Aggregates per-module main() return codes. No pytest dependency.
 from __future__ import annotations
 
 import sys
+import types
 
 from core.tests import (
     test_adapters,
@@ -16,15 +17,15 @@ from core.tests import (
     test_concrete_adapters,
     test_conform,
     test_cutlist,
+    test_defects,
     test_denoise,
     test_drt_audit,
     test_ducking,
-    test_hits,
-    test_xmeml,
     test_highlights,
     test_hits,
     test_library,
     test_loudness,
+    test_media_gate,
     test_motion,
     test_overlays,
     test_pk_runner,
@@ -34,6 +35,7 @@ from core.tests import (
     test_render,
     test_resolve_run,
     test_review_loop,
+    test_rhythm_gate,
     test_ripple,
     test_screen_comp,
     test_shotmatch,
@@ -95,7 +97,26 @@ MODULES = [
     test_taste,
     # motion at cuts (November 2026)
     test_motion,
+    # media gate, rhythm gate, defects a viewer sees (November 2026)
+    test_media_gate,
+    test_defects,
 ]
+
+
+def _rhythm_gate_main() -> int:
+    """test_rhythm_gate has no main() of its own (its `main` is the gate CLI): run its test_ functions."""
+    try:
+        for name in sorted(vars(test_rhythm_gate)):
+            fn = getattr(test_rhythm_gate, name)
+            if name.startswith("test_") and callable(fn):
+                fn()
+    except SystemExit as e:
+        return 1 if e.code else 0
+    print(f"rhythm_gate: {test_rhythm_gate._passed} passed")
+    return 0
+
+
+MODULES.append(types.SimpleNamespace(__name__=test_rhythm_gate.__name__, main=_rhythm_gate_main))
 
 
 def main() -> int:

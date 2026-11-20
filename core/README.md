@@ -199,15 +199,62 @@ python -m core.motion VIDEO.mp4 --sheet sheet.jpg   # report + contact sheet
 python -m core.motion VIDEO.mp4 --cuts 5.24,9.36 --json
 ```
 
-Per cut: `action continues`, `direction turns` (travel vectors 60-120 degrees apart), `direction flip` (warning), `cut on stop`,
-`cut into motion`, `still to still`, `speed jump`, `flat` (black or textureless
-side, not judged), plus `eye stays / moves / jumps` from the distance between
+Per cut: `action continues`, `direction turns` (travel vectors 60-120 degrees apart), `direction flip` (flag), `cut on stop`,
+`cut into motion`, `still to still`, `speed jump`, `flat` (a side that is not a shot in
+motion and is not judged; the report says why: dark or a card, flat field, flash, fade,
+fast zoom or effect, too short), plus `eye stays / moves / jumps` from the distance between
 the subject centroids. `pan_x > 0` means the image moves right; the label
 ("pan right") is about the camera, so it is the opposite sign. Speeds are in
 frame widths per second. Every threshold is a constant at the top of the
-module. Boundaries: flow needs texture, a subject that fills the frame is
-read as the camera, the subject is a motion blob and not a person, thresholds
-are not field-calibrated. Tests: `python -m core.tests.test_motion` (synthetic).
+module. The report ends with `flagged: N of M @ times`; only `direction flip`
+and `eye jumps` are flags.
+
+What a flag means since 0.8.10. The first version was audited by eye on six real
+edits: 14 flagged cuts, none of them a bump a viewer would feel. The flags came from
+the shimmer of generated footage, titles fading in and out, flash frames, smoke and
+parallax taken for a subject, and windows that ran across a second cut. So:
+
+- scene-detect hits under 4 frames apart are one `flash or effect`, not cuts;
+- a window never crosses into the neighbouring shot;
+- `direction flip` needs both sides at 0.10 fw/s or faster and moving one way
+  across the window; slower opposite motion is reported as `weak opposite motion`;
+- a camera move against a subject move is `mixed motion`, never a flip;
+- `eye jumps` needs a subject of 5% of the frame or more on both sides, holding its
+  place, off the frame edge, and 0.42 of the diagonal apart; otherwise `eye unsure`;
+- repeated frames (24 fps footage on a 60 fps timeline) are taken out before the
+  speed is computed; variable frame rate files are read by timestamp.
+
+Checked against cuts built to be wrong (a shot continued by its own mirror image):
+3 of 3 with clear horizontal motion are flagged; mirrored motion slower than
+0.10 fw/s is not. That is the trade: a flag is now rare and worth opening the sheet for.
+
+Boundaries: flow needs texture, a subject that fills the frame is
+read as the camera, the subject is a motion blob and not a person, cross-dissolves
+are invisible to the cut detector (dips to black are found), and the thresholds come
+from one audit, not a corpus. Tests: `python -m core.tests.test_motion` (synthetic).
+
+## Defects a viewer sees
+
+Every measurement above can pass on a video the director still rejects. `core/defects.py`
+looks for the five things he rejected most that a machine can see, in one ffmpeg pass:
+
+```bash
+python -m core.defects VIDEO.mp4              # report, exit 1 on a FAIL
+python -m core.defects VIDEO.mp4 --cuts 5.24,9.36 --json
+```
+
+| check | what it finds | level |
+|---|---|---|
+| freeze | picture stops for 0.4 s or more on live footage (a title or logo on a flat card is a note) | fail |
+| repeat | two shots whose middle frames have the same dHash | warn |
+| stutter | 10-70% of a moving shot's frames are repeats (24 fps on a 60 fps timeline) | warn, fail when a third of the shots do it |
+| geometry | pixels not square: anamorphic storage on a standard frame warns, anything else fails; variable frame rate warns | fail / warn |
+| audio end | last 50 ms above -45 dBFS: the sound is cut off | warn |
+
+Boundaries: it sees what is in the file, not what should have been there. A near-still
+generated shot is not a freeze, a picture stretched before encoding has square pixels,
+a flash shot is not stutter. Faces, lip sync and likeness are not measured at all.
+Tests: `python -m core.tests.test_defects` (clips built with ffmpeg lavfi).
 
 ## Editor rules from a live cut (Denis, 16.11.2026)
 

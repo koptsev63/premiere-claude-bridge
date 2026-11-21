@@ -190,12 +190,78 @@ def test_texture_mask() -> None:
 
 def test_eye_trace() -> None:
     a = SideMotion(cx=0.5, cy=0.5)
-    near, mid, far = SideMotion(cx=0.55, cy=0.5), SideMotion(cx=0.75, cy=0.5), SideMotion(cx=0.05, cy=0.9)
+    a.share = 0.1
+    near, mid = SideMotion(cx=0.55, cy=0.5), SideMotion(cx=0.75, cy=0.5)
+    a2, far = SideMotion(cx=0.85, cy=0.2, share=0.1), SideMotion(cx=0.15, cy=0.85, share=0.1)
     size = (320, 180)
     check("eye stays", eye_trace(a, near, size)[1] == "eye stays")
     check("eye moves", eye_trace(a, mid, size)[1] == "eye moves", str(eye_trace(a, mid, size)))
-    check("eye jumps", eye_trace(a, far, size)[1] == "eye jumps", str(eye_trace(a, far, size)))
+    check("eye jumps", eye_trace(a2, far, size)[1] == "eye jumps", str(eye_trace(a2, far, size)))
     check("no centroid, no eye trace", eye_trace(a, SideMotion(), size) == (None, None))
+    # 0.8.10: a far blob is an eye jump only between two real subjects
+    small = SideMotion(cx=0.15, cy=0.85, share=0.03)
+    check("far but tiny blob (a title fading in): unsure", eye_trace(a2, small, size)[1] == "eye unsure")
+    edge = SideMotion(cx=0.03, cy=0.85, share=0.1)
+    check("far blob on the frame edge (parallax): unsure", eye_trace(a2, edge, size)[1] == "eye unsure")
+    loose = SideMotion(cx=0.15, cy=0.85, share=0.1, spread=0.3)
+    check("far blob that wanders (smoke): unsure", eye_trace(a2, loose, size)[1] == "eye unsure")
+
+
+def flicker_frames(seed: int = 21) -> list:
+    """Generated-footage shimmer: a patch that twitches left and right, going nowhere."""
+    bg = _texture(W, H, seed)
+    sq = np.clip(_texture(60, 60, 22).astype(int) + 60, 0, 255).astype(np.uint8)
+    out = []
+    for i in range(N):
+        f = bg.copy()
+        x = 130 + (3 if i % 2 else -3)
+        f[60:120, x:x + 60] = sq
+        out.append(f)
+    return out
+
+
+def test_not_judged() -> None:
+    """0.8.10, from an eyes-on audit of 14 flags (0 real): what must NOT be flagged."""
+    right = side(subject_frames(4))
+    fl = side(flicker_frames())
+    check("flicker has low coherence", fl.cx is None or fl.subj_coherence < 0.6 or not fl.moving,
+          f"coh={fl.subj_coherence:.2f} speed={fl.speed:.2f}")
+    check("flicker against a real move is not a flip", judge(right, fl) != "direction flip", judge(right, fl))
+    slow_r = SideMotion(cx=0.5, cy=0.5, share=0.1, vx=0.06, speed=0.06)
+    slow_l = SideMotion(cx=0.5, cy=0.5, share=0.1, vx=-0.06, speed=0.06)
+    slow_r.set_travel(); slow_l.set_travel()
+    check("slow drift both ways: weak, not a flip", judge(slow_r, slow_l) == "weak opposite motion", judge(slow_r, slow_l))
+    check("camera move against subject move: mixed, not a flip",
+          judge(side(pan_frames(3)), side(subject_frames(4))) == "mixed motion",
+          judge(side(pan_frames(3)), side(subject_frames(4))))
+    card = [np.zeros((H, W), np.uint8) for _ in range(N)]
+    for f in card:
+        f[80:100, 100:220] = 255                                   # white title on black
+    c = side(card)
+    check("title on black is a card, not judged", c.flat and c.note == "dark or a card", c.note)
+    fade = [np.clip(f.astype(int) * (1 - i / N), 0, 255).astype(np.uint8) for i, f in enumerate(subject_frames(4))]
+    check("fade out is not judged", side(fade).flat and side(fade).note in ("fade", "dark or a card"), side(fade).note)
+    flash = subject_frames(4)
+    flash[4] = np.full((H, W), 250, np.uint8)
+    check("flash frame is not judged", side(flash).flat and side(flash).note == "flash", side(flash).note)
+    check("too short side says so", side(subject_frames(4)[:2]).note == "too short")
+
+
+def test_duplicated_frames() -> None:
+    """24 fps footage on a 60 fps timeline: repeated frames must not inflate the speed."""
+    base = side(subject_frames(4))
+    doubled = measure_side([f for f in subject_frames(4) for _ in (0, 1)], FPS * 2)
+    check("frame-doubled side has the same speed", abs(doubled.speed - base.speed) < 0.2 * base.speed,
+          f"{doubled.speed:.3f} vs {base.speed:.3f}")
+    check("frame-doubled side reports the repeats", 0.4 < doubled.dup_ratio < 0.6, f"{doubled.dup_ratio:.2f}")
+    check("clean side reports none", base.dup_ratio == 0.0)
+
+
+def test_bursts() -> None:
+    from core.motion import group_bursts
+    g = group_bursts([5.0, 12.0, 12.04, 12.13, 12.21, 20.0])
+    check("flash burst is one event", g == [(5.0, 5.0, 1), (12.0, 12.21, 4), (20.0, 20.0, 1)], str(g))
+    check("normal cuts stay apart", group_bursts([1.0, 1.5, 2.0]) == [(1.0, 1.0, 1), (1.5, 1.5, 1), (2.0, 2.0, 1)])
 
 
 def test_report_and_sheet() -> None:
@@ -204,12 +270,37 @@ def test_report_and_sheet() -> None:
     cm = build_cut(1, 3.2, side(pan_frames(-3)), side(subject_frames(4)), (W, H))
     line = format_report([cm])
     check("report line", line.startswith("cut 1 @ 3.20s") and "pan right" in line and cm.verdict in line, line)
+    check("report ends with the flag count", line.splitlines()[-1].startswith("flagged: "), line.splitlines()[-1])
     with tempfile.TemporaryDirectory() as d:
         import cv2
         fr = cv2.cvtColor(subject_frames(4)[0], cv2.COLOR_GRAY2BGR)
         out = contact_sheet([cm], [(fr, fr)], os.path.join(d, "s.jpg"))
         img = cv2.imread(out)
         check("sheet written", img is not None and img.shape[1] == 2 * W + 4, str(None if img is None else img.shape))
+
+
+def test_cli_single_shot() -> None:
+    """A file with no cuts and --sheet must exit 0 and write no sheet (it used to raise)."""
+    import contextlib
+    import io
+    import os
+    import tempfile
+
+    import cv2
+
+    from core.motion import main as motion_main
+    with tempfile.TemporaryDirectory() as d:
+        vid, sheet = os.path.join(d, "one.mp4"), os.path.join(d, "s.jpg")
+        vw = cv2.VideoWriter(vid, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (W, H))
+        for f in pan_frames(-2) + pan_frames(-2):
+            vw.write(cv2.cvtColor(f, cv2.COLOR_GRAY2BGR))
+        vw.release()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = motion_main([vid, "--sheet", sheet])
+        check("single shot exits 0", rc == 0, str(rc))
+        check("single shot says no cuts", "no cuts" in out.getvalue(), out.getvalue())
+        check("single shot writes no sheet", not os.path.exists(sheet) and "skipped" in err.getvalue(), err.getvalue())
 
 
 def main() -> int:
@@ -222,11 +313,16 @@ def main() -> int:
     print("--- verdicts ---")
     test_verdicts()
     test_eye_trace()
+    print("--- not judged ---")
+    test_not_judged()
+    test_duplicated_frames()
+    test_bursts()
     print("--- travel + texture ---")
     test_travel()
     test_texture_mask()
     print("--- report ---")
     test_report_and_sheet()
+    test_cli_single_shot()
     print(f"\n{_p} passed, {_f} failed")
     return 0 if _f == 0 else 1
 

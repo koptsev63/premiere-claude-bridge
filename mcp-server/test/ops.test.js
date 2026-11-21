@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import * as ops from "../lib/ops.js";
+import { freeBytes, COPY_RESERVE_BYTES } from "../lib/mediagate.js";
 
 // A fake Premiere: answers each body by what it is for, records the calls.
 function fake(answers) {
@@ -48,7 +49,11 @@ test("getInOut: sequence in/out wins over the clip span", async () => {
 
 const ffmpeg = (() => { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return true; } catch { return false; } })();
 
-test("importMedia: VP9 is refused before Premiere, with the ffmpeg command; convert=true imports the copy", { skip: !ffmpeg && "ffmpeg missing" }, async () => {
+// The convert path refuses to write a copy when the disk is under its reserve; that is the gate working,
+// not a test failure (seen on a 96% full disk: 3.4 GB free for a minute, test red, then green again).
+const lowDisk = freeBytes(tmpdir()) < COPY_RESERVE_BYTES + 1024 ** 3;
+
+test("importMedia: VP9 is refused before Premiere, with the ffmpeg command; convert=true imports the copy", { skip: (!ffmpeg && "ffmpeg missing") || (lowDisk && "disk under the copy reserve") }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "ops-"));
   try {
     const vp9 = join(dir, "web.webm");

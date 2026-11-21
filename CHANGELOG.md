@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.8.10] - 2026-11-20 - the measurements were audited against a viewer
+
+Three days of real use, then an audit. An editor looked at every cut the motion
+tool had flagged on six real edits: 14 flags, none of them a bump a viewer would
+feel. In the same days four videos passed every measurement and were still
+rejected by the director, for things nothing measured: a frozen frame, a shot
+used twice, stutter, a squeezed picture. This release fixes both sides: flags
+that cried wolf, and defects nobody looked for.
+
+### Added
+- `core.defects` (new): defects a viewer sees. Freeze on live picture (a title
+  or logo held on a flat card is fine; a freeze that runs into a cut is named as
+  "segment longer than its source clip"), the same shot used twice (dHash),
+  stutter from repeated frames (24 fps footage on a 30 or 60 fps timeline),
+  pixels that are not square (anamorphic storage that lands on a standard frame
+  is a warning, anything else fails), audio cut off at the end of the file.
+  One ffmpeg pass, about 1-4 s per minute of 1080p. CLI:
+  `python -m core.defects VIDEO [--cuts ...] [--json]`, exit 1 on a FAIL.
+- `core.highlights.edit_points()`: one cut list for every tool. A burst of
+  scene-detect hits under 4 frames apart (flash, strobe, glitch) is one event,
+  and a dip to black counts as a cut (`dip_cuts`, ffmpeg blackdetect).
+  Cross-dissolves are still invisible to detection; the tools now say so.
+- `core.rhythm_gate`: `--cuts` (judge the same cuts as the other tools),
+  `--fps` read from the media file by default, and a warning instead of a quiet
+  pass when a file longer than 20 s shows no hard cuts.
+
+### Changed
+- `core.motion`, recalibrated on the audit:
+  - a window never crosses into the neighbouring shot (0.3 s shots were
+    measured across a second cut);
+  - sides that are not a shot in motion are not judged and say why: dark or a
+    title card, flat field, flash, fade, fast zoom or effect, too short;
+  - `direction flip` needs both sides at 0.10 frame widths per second or
+    faster, moving one way across the window; slower opposite motion is
+    `weak opposite motion`; a camera move against a subject move is
+    `mixed motion`;
+  - `eye jumps` needs a subject of 5% of the frame on both sides, holding its
+    place, off the frame edge, 0.42 of the diagonal apart (was 0.35);
+    otherwise `eye unsure`;
+  - repeated frames are taken out before speed is computed (a 24 to 60 fps
+    conform used to read 2.5x too fast); variable frame rate files are read
+    by timestamp (frame index is not time x fps there);
+  - the report ends with `flagged: N of M @ times`.
+  On the six audited edits: 20 flags before, 0 after. On cuts built to be wrong
+  (a shot continued by its mirror image): 3 of 3 with clear motion are flagged.
+- `core.loudness --check`: a FAIL now says what closes the gap (gain if the
+  peak has headroom, the limiter if it does not) and the command. The gate
+  itself is unchanged.
+
+### Fixed
+- `core.motion --sheet` on a file with no cuts raised `RuntimeError` instead
+  of reporting "no cuts" (13 crashed acceptance runs in three days).
+- `core.tests`: `test_rhythm_gate`, `test_media_gate` and `test_defects` are
+  now part of `python -m core.tests`; a duplicated import is gone.
+- `mcp-server` test for the VP9 copy no longer fails when the disk is under
+  the copy reserve (that is the gate working).
+
 ## [0.8.9] - 2026-11-17 - motion at the cuts
 
 The editing brain saw stills, not motion. A cut on movement, a kept screen

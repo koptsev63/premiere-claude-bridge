@@ -7,9 +7,9 @@
 [![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](#status)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-![Real session: one prompt, Claude assembles a vertical reel in Premiere Pro](docs/demo/reel-session.gif)
+![Claude builds, measures, fixes and grades a 40-second cut in Premiere Pro](docs/demo/full-pipeline.gif)
 
-*Real session, no cuts: one request in Claude, and the bridge imports the clips, builds the vertical sequence, lays the shots on the timeline and adds markers and captions. [Watch the mp4](docs/demo/reel-session.mp4).*
+*Recorded live in Premiere Pro and replayed at speed: 41 tool calls in three minutes. Claude imports 16 shots and a music track, lays the shots on the beat as colour-coded blocks, mixes the sound, exports and measures the result. Two gates fail: loudness is at -18 LUFS and two cuts miss the hit by under three frames. It fixes both in the timeline and measures again until every gate passes. Then it grades with Lumetri, keyframes a push-in and builds a 9:16 reel with captions and a 15-second teaser. The Premiere window is the raw recording; the log panel on the left and the step captions were added in the edit. [Watch the mp4 with sound](docs/demo/full-pipeline.mp4).*
 
 ## Install in one sentence
 
@@ -100,7 +100,13 @@ Same release: `core/shotmatch.py` pulls camera, AI and drone shots to one colour
 
 ## Demo
 
-The clip at the top of this page is a real 23-second session: a vertical reel assembled from one request. Below, the same thing as text:
+The clip at the top of this page is one session from an empty project to a measured export. A shorter one, with no cuts: a vertical reel assembled from one request in 23 seconds.
+
+![Real session: one prompt, Claude assembles a vertical reel in Premiere Pro](docs/demo/reel-session.gif)
+
+*One request in Claude, and the bridge imports the clips, builds the vertical sequence, lays the shots on the timeline and adds markers and captions. [Watch the mp4](docs/demo/reel-session.mp4).*
+
+The same kind of session as text:
 
 ```
 You:    "Open Premiere. Import all .MTS from ~/Desktop/Footage/.

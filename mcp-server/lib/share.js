@@ -41,7 +41,7 @@ import { gzipSync } from "node:zlib";
 import * as JR from "./journal.js";
 import { snapshotFromProject, readProjectXml } from "./prproj.js";
 import * as RS from "./drp.js";
-import { LOCAL_ONLY_KEYS } from "./origin.js";
+import { LOCAL_ONLY_KEYS, SERVICE_DIRS } from "./origin.js";
 
 export const HOME = process.env.PREMIERE_BRIDGE_HOME || join(homedir(), ".premiere-bridge");
 export const ENDPOINT = (process.env.PREMIERE_SHARE_URL || "https://bridge.204-168-219-232.sslip.io").replace(/\/+$/, "");
@@ -235,7 +235,7 @@ export function anonymize(value, salt, key = "") {
 
 function projectDirs(root = JR.JOURNAL_ROOT) {
   if (!existsSync(root)) return [];
-  return readdirSync(root).map((n) => join(root, n)).filter((d) => { try { return statSync(d).isDirectory(); } catch { return false; } });
+  return readdirSync(root).filter((n) => !SERVICE_DIRS.includes(n)).map((n) => join(root, n)).filter((d) => { try { return statSync(d).isDirectory(); } catch { return false; } });
 }
 
 // New decisions (events.jsonl past the line we stopped at) and the current

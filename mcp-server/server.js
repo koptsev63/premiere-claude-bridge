@@ -158,13 +158,15 @@ const server = new McpServer({
 });
 
 // From here on, edits made through this bridge are logged (lib/aiactions.js).
-try { aiLog.markTrackingStarted(); } catch (e) { log("AI action log not started:", e.message); }
+try { aiLog.startTracking(); } catch (e) { log("AI action log not started:", e.message); }
+
+const clientInfo = () => server.server.getClientVersion();
 
 // Every tool counts as "in progress" for the port hand-over check.
 function tool(name, description, schema, handler) {
   server.tool(name, description, schema, async (args) => {
     activeTools++;
-    try { return await aiLog.trackTool(name, args, { run: runJsx, clientInfo: () => server.server.getClientVersion() }, () => handler(args)); }
+    try { return await aiLog.trackTool(name, args, { run: runJsx, clientInfo }, () => handler(args)); }
     catch (e) { return err(e.message); }
     finally { activeTools--; }
   });
@@ -273,7 +275,7 @@ tool(
   },
   async ({ code }) => {
     const prepared = prepareEvalCode(code);
-    return ok(parseResult(await callPanel("evalRaw", [prepared.code])));
+    return ok(parseResult(await aiLog.runEval(code, prepared.code, { call: (body) => callPanel("evalRaw", [body]), clientInfo })));
   }
 );
 

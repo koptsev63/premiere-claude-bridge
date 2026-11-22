@@ -534,6 +534,86 @@ return { project: p.name, sequence: s ? s.name : null, sequenceID: s ? s.sequenc
 `;
 }
 
+// ---- the light timeline read around an AI call ------------------------------
+// Only what a diff needs: clip name, media path and four times. A media path is
+// asked once per project item. A read that runs past `limit` ms stops and says
+// so (complete: false), because the panel blocks Premiere while it runs.
+const STATE_READER = `
+function __bstRead(limit) {
+  var p = app.project;
+  if (!p) return null;
+  var t0 = new Date().getTime(), paths = {}, act = p.activeSequence;
+  var res = { project: p.name, active: act ? act.sequenceID : null, ids: [], seqs: {}, complete: true };
+  var list = p.sequences;
+  for (var i = 0; i < list.numSequences; i++) {
+    var s = list[i], tb = Number(s.timebase);
+    var row = { name: s.name, sequenceID: s.sequenceID, fps: tb > 0 ? 254016000000 / tb : 25, markers: s.markers.numMarkers, video: [], audio: [] };
+    var key = [row.name, row.markers];
+    for (var g = 0; g < 2; g++) {
+      var kind = g ? "audio" : "video", coll = g ? s.audioTracks : s.videoTracks;
+      for (var ti = 0; ti < coll.numTracks; ti++) {
+        var clips = coll[ti].clips, n = clips.numItems, out = [];
+        key.push("#" + kind + ti);
+        for (var ci = 0; ci < n; ci++) {
+          if ((ci & 31) === 0 && new Date().getTime() - t0 > limit) { res.complete = false; return res; }
+          var c = clips[ci], pi = null, id = null;
+          try { pi = c.projectItem; id = pi ? pi.nodeId : null; } catch (e0) {}
+          if (id !== null && paths[id] === undefined) { try { paths[id] = pi.getMediaPath ? pi.getMediaPath() : ""; } catch (e1) { paths[id] = ""; } }
+          var r = { name: c.name, path: id === null ? "" : paths[id], start: c.start.seconds, end: c.end.seconds, inPoint: c.inPoint.seconds, outPoint: c.outPoint.seconds };
+          key.push(r.name, r.path, r.start, r.end, r.inPoint, r.outPoint);
+          out.push(r);
+        }
+        row[kind].push({ kind: kind, index: ti, clipCount: n, clips: out });
+      }
+    }
+    row.key = key.join("|");
+    res.ids.push(row.sequenceID);
+    res.seqs[row.sequenceID] = row;
+  }
+  return res;
+}
+function __bstRows(st, only) {
+  var out = [];
+  for (var i = 0; i < st.ids.length; i++) {
+    var id = st.ids[i], q = st.seqs[id];
+    if (only && !only[id]) continue;
+    out.push({ name: q.name, sequenceID: q.sequenceID, fps: q.fps, markers: q.markers, video: q.video, audio: q.audio });
+  }
+  return out;
+}
+function __bstChanges(b, a) {
+  var diff = {}, i, id;
+  for (i = 0; i < b.ids.length; i++) { id = b.ids[i]; if (!a.seqs[id] || a.seqs[id].key !== b.seqs[id].key) diff[id] = 1; }
+  for (i = 0; i < a.ids.length; i++) { id = a.ids[i]; if (!b.seqs[id]) diff[id] = 1; }
+  return { project: a.project, before: __bstRows(b, diff), after: __bstRows(a, diff) };
+}
+`;
+
+// Every sequence, for tools that take several panel calls.
+export function timelineStateJsx({ limitMs = 5000 } = {}) {
+  return `${STATE_READER}
+var st = __bstRead(${Number(limitMs)});
+if (!st) return { error: "No project open" };
+if (!st.complete) return { error: "timeline read over the limit", complete: false };
+return { project: st.project, active: st.active, complete: true, sequences: __bstRows(st, null) };
+`;
+}
+
+// Run a pr_eval_jsx body between two reads in ONE script. Premiere's interface
+// waits while a script runs, so nothing else can land between the reads. The
+// body stays on the first line, so an error's line number is the one the
+// caller expects. The answer carries the script's own value as a string.
+export function trackedEvalJsx(body, { limitMs = 2000, read = true } = {}) {
+  return `var __bt = ${read ? `__bstSafe(${Number(limitMs)})` : "null"}, __bv, __bs, __bf = false; try { __bv = (function(){ ${body} })(); __bs = (typeof __bv === 'undefined') ? '' : (typeof __bv === 'string' ? __bv : JSON.stringify(__bv)); } catch (__be) { __bf = true; __bs = JSON.stringify({ error: __be.toString(), line: __be.line }); }
+${STATE_READER}
+function __bstSafe(limit) { try { return __bstRead(limit); } catch (e) { return null; } }
+var __bo = { __bridge_tracked: 1, value: __bs, threw: __bf, complete: false };
+if (__bt && __bt.complete) { var __ba = __bstSafe(${Number(limitMs)}); if (__ba && __ba.complete && __ba.project === __bt.project) { var __bc = __bstChanges(__bt, __ba); __bo.complete = true; __bo.project = __bc.project; __bo.before = __bc.before; __bo.after = __bc.after; } else { __bo.project = __bt.project; } }
+else if (__bt) { __bo.project = __bt.project; __bo.overLimit = true; }
+return __bo;
+`;
+}
+
 // One snapshot of every sequence in the project: the editor's journal
 // reads these over time and diffs them. Compact rows, seconds, media paths.
 export function snapshotJsx({ onlyOpen } = {}) {

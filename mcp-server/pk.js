@@ -317,14 +317,6 @@ export async function typed(cmd, argv) {
 const TYPED = new Set(["ping", "status", "dialog", "probe", "import", "make-seq", "motion", "motion-keys", "markers", "list-markers",
   "open", "activate", "timeline", "inout", "delete-seq", "move", "ls", "build", "save", "journal", "share", "update"]);
 
-// The sequence a typed edit names, if it names one.
-export function pkSequence(cmd, argv) {
-  const { opts, positional } = parseArgs(argv);
-  if (cmd === "make-seq") return opts.name || null;
-  if (cmd === "delete-seq") return positional[0] || null;
-  return typeof opts.seq === "string" ? opts.seq : null;
-}
-
 export async function main(argv) {
   const [cmd, arg] = argv;
   if (cmd === "targets") {
@@ -337,7 +329,7 @@ export async function main(argv) {
     if (cmd === "build" && rest[0] === "--spec" && rest[1] && !rest[1].trim().startsWith("{")) rest = ["--spec", fs.readFileSync(rest[1], "utf8"), ...rest.slice(2)];
     try {
       const out = aiLog.PK_EDIT_COMMANDS.has(cmd)
-        ? await aiLog.trackCli(cmd, pkSequence(cmd, rest), { run: runBody }, () => typed(cmd, rest))
+        ? await aiLog.trackCli(cmd, { run: runBody }, () => typed(cmd, rest))
         : await typed(cmd, rest);
       console.log(JSON.stringify(out, null, 1));
       return out && (out.ok === false || out.error) ? 1 : 0;
@@ -359,7 +351,7 @@ export async function main(argv) {
     return 2;
   }
   const out = aiLog.PK_EDIT_COMMANDS.has(cmd)
-    ? await aiLog.trackCli(cmd, null, { run: runBody }, () => evalJSX(jsx))
+    ? await aiLog.trackCli(cmd, { run: runBody }, () => evalJSX(jsx))
     : await evalJSX(jsx);
   console.log(typeof out === "string" ? out : JSON.stringify(out));
   // evalScript reports any ExtendScript failure as this literal string.

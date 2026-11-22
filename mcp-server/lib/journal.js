@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, append
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { attributeEvents, isTrackedHost, originMarkdown, originReport, readActions, trackingSince } from "./origin.js";
+import { attributeEvents, originContext, originMarkdown, originReport } from "./origin.js";
 
 export const JOURNAL_ROOT = process.env.PREMIERE_JOURNAL_DIR || join(homedir(), ".premiere-bridge", "journal");
 
@@ -203,13 +203,24 @@ export function eventRows(diff, meta = {}) {
 
 // A diff with each edit's origin, for showing. A copy: what record() writes to
 // events.jsonl stays without these fields, because that file is what gets shared.
-export function attributeDiff(dir, diff) {
-  const { actions } = readActions(dir);
-  const opts = { since: trackingSince(dir), trackedHost: isTrackedHost(dir) };
-  return { ...diff, sequences: diff.sequences.map((s) => ({ ...s, events: s.events.map((e) => {
-    const [a] = attributeEvents([{ t: diff.to, sequence: s.sequence, sequenceID: s.sequenceID, ...e, from_t: diff.from }], actions, opts);
-    return { ...e, origin: a.origin, origin_reason: a.origin_reason, action_ids: a.action_ids };
-  }) })) };
+// The action log sits in <root>/<project>: a journal kept anywhere else cannot
+// say an edit did not come through the bridge.
+const isOwnFolder = (dir, project) => !!project && basename(dir) === slug(project);
+
+export function attributeDiff(dir, diff, project) {
+  try {
+    const { actions, since, trackedHost, oldSessions } = originContext(dir, { ownFolder: isOwnFolder(dir, project ?? latestSnapshot(dir)?.project) });
+    const opts = { since, trackedHost, oldSessions };
+    return { ...diff, sequences: diff.sequences.map((s) => ({ ...s, events: s.events.map((e) => {
+      const [a] = attributeEvents([{ t: diff.to, sequence: s.sequence, sequenceID: s.sequenceID, ...e, from_t: diff.from }], actions, opts);
+      return { ...e, origin: a.origin, origin_reason: a.origin_reason, action_ids: a.action_ids };
+    }) })) };
+  } catch { return diff; } // a report of origins must never break the journal itself
+}
+
+function safeOrigin(dir, events, latest) {
+  try { return originReport(dir, events, latest, { ownFolder: isOwnFolder(dir, latest?.project) }); }
+  catch { return null; }
 }
 
 // ---- the hand report -------------------------------------------------------
@@ -292,7 +303,7 @@ export function report(dir) {
     project: latest ? latest.project : null,
     shapes: latest ? latest.sequences.map(sequenceShape) : [],
     hand: handReport(events, files),
-    origin: originReport(dir, events, latest),
+    origin: safeOrigin(dir, events, latest),
   };
 }
 

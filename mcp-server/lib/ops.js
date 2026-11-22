@@ -270,7 +270,7 @@ export async function journalSnapshot(run, { dir, note, source = "live" } = {}) 
   if (note) snap.note = note;
   const d = dir || JR.journalDir(snap.project);
   const r = JR.record(d, snap, { source });
-  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(JR.attributeDiff(d, r.diff)) : null };
+  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(JR.attributeDiff(d, r.diff, snap.project)) : null };
 }
 
 function summarizeDiff(diff) {
@@ -313,7 +313,7 @@ export function journalDiff({ dir, project, a, b } = {}) {
   const files = JR.listSnapshots(d);
   if (files.length < 2 && !(a && b)) throw new BridgeError(`journal diff: fewer than two snapshots in ${d}`);
   const A = JR.loadSnapshot(a || files[files.length - 2]), B = JR.loadSnapshot(b || files[files.length - 1]);
-  return JR.attributeDiff(d, JR.diffSnapshots(A, B));
+  return JR.attributeDiff(d, JR.diffSnapshots(A, B), B.project);
 }
 
 export function journalList({ dir, project } = {}) {

@@ -19,6 +19,7 @@ import {
 import * as ops from "./lib/ops.js";
 import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
+import * as aiLog from "./lib/aiactions.js";
 import http from "node:http";
 
 // 0.8.5: read from package.json; a hand-typed number stayed 0.8.3 in the 0.8.4 release
@@ -156,11 +157,14 @@ const server = new McpServer({
   version: VERSION,
 });
 
+// From here on, edits made through this bridge are logged (lib/aiactions.js).
+try { aiLog.markTrackingStarted(); } catch (e) { log("AI action log not started:", e.message); }
+
 // Every tool counts as "in progress" for the port hand-over check.
 function tool(name, description, schema, handler) {
   server.tool(name, description, schema, async (args) => {
     activeTools++;
-    try { return await handler(args); }
+    try { return await aiLog.trackTool(name, args, { run: runJsx, clientInfo: () => server.server.getClientVersion() }, () => handler(args)); }
     catch (e) { return err(e.message); }
     finally { activeTools--; }
   });

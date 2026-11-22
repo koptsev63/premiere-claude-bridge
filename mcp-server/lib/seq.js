@@ -523,6 +523,17 @@ return { saved: true, returned: r, path: p.path, name: p.name };
 `;
 }
 
+// The project and one sequence (by name or id, default the active one) with
+// its marker count: the light read around a marker or Motion tool call.
+export function actionContextJsx({ seq } = {}) {
+  return `${LIB}
+var p = app.project;
+if (!p) return { error: "No project open" };
+var s = __seq(${S(seq || "")});
+return { project: p.name, sequence: s ? s.name : null, sequenceID: s ? s.sequenceID : null, markers: s ? s.markers.numMarkers : null };
+`;
+}
+
 // One snapshot of every sequence in the project: the editor's journal
 // reads these over time and diffs them. Compact rows, seconds, media paths.
 export function snapshotJsx({ onlyOpen } = {}) {

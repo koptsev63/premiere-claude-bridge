@@ -270,11 +270,11 @@ export async function journalSnapshot(run, { dir, note, source = "live" } = {}) 
   if (note) snap.note = note;
   const d = dir || JR.journalDir(snap.project);
   const r = JR.record(d, snap, { source });
-  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(r.diff) : null };
+  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(JR.attributeDiff(d, r.diff)) : null };
 }
 
 function summarizeDiff(diff) {
-  return { from: diff.from, to: diff.to, count: diff.count, sequences: diff.sequences.map((s) => ({ sequence: s.sequence, events: s.events.map((e) => ({ type: e.type, kind: e.kind, name: e.name, start: e.start, frames: e.frames, parts: e.parts })) })) };
+  return { from: diff.from, to: diff.to, count: diff.count, sequences: diff.sequences.map((s) => ({ sequence: s.sequence, events: s.events.map((e) => ({ type: e.type, kind: e.kind, name: e.name, start: e.start, frames: e.frames, parts: e.parts, origin: e.origin, origin_reason: e.origin_reason })) })) };
 }
 
 // Import .prproj files (or a folder of autosaves) in time order.
@@ -313,7 +313,7 @@ export function journalDiff({ dir, project, a, b } = {}) {
   const files = JR.listSnapshots(d);
   if (files.length < 2 && !(a && b)) throw new BridgeError(`journal diff: fewer than two snapshots in ${d}`);
   const A = JR.loadSnapshot(a || files[files.length - 2]), B = JR.loadSnapshot(b || files[files.length - 1]);
-  return JR.diffSnapshots(A, B);
+  return JR.attributeDiff(d, JR.diffSnapshots(A, B));
 }
 
 export function journalList({ dir, project } = {}) {

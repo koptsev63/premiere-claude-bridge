@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, append
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
+import { attributeEvents, isTrackedHost, originMarkdown, originReport, readActions, trackingSince } from "./origin.js";
 
 export const JOURNAL_ROOT = process.env.PREMIERE_JOURNAL_DIR || join(homedir(), ".premiere-bridge", "journal");
 
@@ -200,6 +201,17 @@ export function eventRows(diff, meta = {}) {
   return rows;
 }
 
+// A diff with each edit's origin, for showing. A copy: what record() writes to
+// events.jsonl stays without these fields, because that file is what gets shared.
+export function attributeDiff(dir, diff) {
+  const { actions } = readActions(dir);
+  const opts = { since: trackingSince(dir), trackedHost: isTrackedHost(dir) };
+  return { ...diff, sequences: diff.sequences.map((s) => ({ ...s, events: s.events.map((e) => {
+    const [a] = attributeEvents([{ t: diff.to, sequence: s.sequence, sequenceID: s.sequenceID, ...e, from_t: diff.from }], actions, opts);
+    return { ...e, origin: a.origin, origin_reason: a.origin_reason, action_ids: a.action_ids };
+  }) })) };
+}
+
 // ---- the hand report -------------------------------------------------------
 
 function quantile(sorted, q) {
@@ -280,6 +292,7 @@ export function report(dir) {
     project: latest ? latest.project : null,
     shapes: latest ? latest.sequences.map(sequenceShape) : [],
     hand: handReport(events, files),
+    origin: originReport(dir, events, latest),
   };
 }
 
@@ -306,6 +319,7 @@ export function reportMarkdown(r) {
     if (s.gapsV1) L.push(`- gaps on V1: ${s.gapsV1}`);
     L.push(`- tracks used: V ${s.videoTracksUsed}, A ${s.audioTracksUsed}`);
   }
+  if (r.origin) { L.push(""); L.push(originMarkdown(r.origin)); }
   return L.join("\n");
 }
 

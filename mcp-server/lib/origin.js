@@ -23,7 +23,7 @@ export const TRACKING_FILE = ".ai-tracking.json";
 export const LOCAL_ONLY_KEYS = ["origin", "origin_reason", "action_ids", "fate", "client", "client_version", "model", "channel", "caller", "effects"];
 
 const EPS = 0.005; // seconds: both sides are rounded to 3 decimals, a frame is at least 8 ms
-const CLOCK_MARGIN_MS = 2000; // autosave times are whole seconds
+const WHOLE_SECOND_MS = 1000; // an autosave time is cut to whole seconds: the file may hold up to a second more
 
 // ---- storage ---------------------------------------------------------------
 
@@ -168,9 +168,11 @@ function touches(row, fx) {
 const baseline = (r) => (typeof r.from_t === "string" ? r.from_t : typeof r.from === "string" ? r.from : null);
 const seqMatch = (ref, e) => !!ref && (ref === e.sequence || ref === e.sequenceID);
 
-function inWindow(a, fromMs, toMs) {
+// A call that ended before the starting snapshot is already part of it.
+function inWindow(a, fromMs, toMs, toIso) {
   const start = Date.parse(a.t_start || a.t), end = Date.parse(a.settle_until || a.t);
-  return end >= fromMs - CLOCK_MARGIN_MS && start <= toMs + CLOCK_MARGIN_MS;
+  const slack = /:\d{2}(\.000)?Z$/.test(toIso) ? WHOLE_SECOND_MS : 0;
+  return end >= fromMs && start <= toMs + slack;
 }
 
 function attributeOne(row, actions, sinceMs, trackedHost) {
@@ -180,7 +182,7 @@ function attributeOne(row, actions, sinceMs, trackedHost) {
   if (Number.isNaN(fromMs) || Number.isNaN(toMs)) return verdict("unresolved", sinceMs == null ? "before_tracking" : "no_baseline");
   if (sinceMs == null || fromMs < sinceMs) return verdict("unresolved", "before_tracking");
 
-  const near = actions.filter((a) => inWindow(a, fromMs, toMs));
+  const near = actions.filter((a) => inWindow(a, fromMs, toMs, row.t));
   const fx = [];
   for (const a of near) for (const e of a.effects || []) if (seqMatch(e.sequenceID, row) || seqMatch(e.sequence, row)) fx.push({ ...e, _action: a.id });
   const used = explain(row, fx);
@@ -206,8 +208,8 @@ export function attributeEvents(rows, actions, { since = null, trackedHost = tru
 export const isTrackedHost = (dir) => !/\.resolve$/.test(basename(dir));
 
 // ---- what became of an AI edit ---------------------------------------------
-// Judged by the source fragment, so a later ripple that only shifts a clip
-// along the timeline does not count as a change to it.
+// Judged by the source fragment and the clip's length, so a later ripple that
+// only shifts a clip along the timeline does not count as a change to it.
 
 export function fateOf(row, latest) {
   if (!latest || row.type === "markers" || row.type === "sequence_removed") return null;
@@ -221,7 +223,8 @@ export function fateOf(row, latest) {
   const wanted = stateAfter(row);
   const asState = (c) => ({ track: c.track, start: num(c.start), end: num(c.end), in: num(c.inPoint), out: num(c.outPoint) });
   const hasSource = wanted.in != null;
-  const exact = clips.some((c) => { const s = asState(c); return hasSource ? same(s.in, wanted.in) && same(s.out, wanted.out) : same(s.start, wanted.start) && same(s.end, wanted.end); });
+  const length = (s) => (s.start == null || s.end == null ? null : s.end - s.start);
+  const exact = clips.some((c) => { const s = asState(c); return hasSource ? same(s.in, wanted.in) && same(s.out, wanted.out) && same(length(s), length(wanted)) : same(s.start, wanted.start) && same(s.end, wanted.end); });
   const near = clips.some((c) => { const s = asState(c); return hasSource ? sourceOverlaps(s, wanted) : overlaps(s, wanted); });
   if (row.type === "removed") return exact || near ? "changed" : "kept"; // the removed material came back
   if (exact) return "kept";

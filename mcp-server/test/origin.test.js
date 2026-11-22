@@ -64,6 +64,21 @@ test("an AI call whose effect is unknown makes edits in its window unresolved", 
   assert.equal(late.origin, "not_via_bridge", "outside the window of the call");
 });
 
+test("a call that ended before the starting snapshot is already in it and does not touch later edits", () => {
+  const next = [A, B, clip("c.mp4", 10, 12, 30, 32)];
+  const placed = action("setup", 0, effectsOf([A, B], [A, B, C]), { t_start: T(0, 58), t: T(0, 59) });
+  assert.equal(attr(rowsOf([A, B, C], next), [placed])[0].origin, "not_via_bridge");
+});
+
+test("an autosave time is cut to whole seconds: a call in that last second still counts", () => {
+  const next = [A, clip("b.mp4", 4.4, 10, 20.4, 26), C];
+  const eff = effectsOf([A, B, C], next);
+  const inside = action("a", 10, eff, { t_start: "2026-11-22T10:10:00.400Z", t: "2026-11-22T10:10:00.700Z" });
+  assert.equal(attr(rowsOf([A, B, C], next), [inside])[0].origin, "via_bridge_ai");
+  const live = rowsOf([A, B, C], next).map((r) => ({ ...r, t: "2026-11-22T10:10:00.123Z" }));
+  assert.equal(attr(live, [inside])[0].origin, "not_via_bridge", "a live snapshot has an exact time");
+});
+
 test("a pk.js edit has an unknown caller: unresolved, scoped to its sequence", () => {
   const next = [A, clip("b.mp4", 4.4, 10, 20.4, 26), C];
   const cli = (sequence) => action("p1", 5, null, { channel: "pk_cli", caller: "unknown", tool: "pk eval", sequence });
@@ -119,6 +134,7 @@ test("fate of an AI edit: kept (even if rippled), changed, removed", () => {
   assert.equal(O.fateOf(row, snap(T(20), [A, clip("b.mp4", 4.4, 10, 20.4, 26), C])), "kept");
   assert.equal(O.fateOf(row, snap(T(20), [A, clip("b.mp4", 7, 12.6, 20.4, 26), C])), "kept", "only shifted by a ripple");
   assert.equal(O.fateOf(row, snap(T(20), [A, clip("b.mp4", 4.4, 9, 20.4, 25), C])), "changed");
+  assert.equal(O.fateOf(row, snap(T(20), [A, clip("b.mp4", 4.4, 9.8, 20.4, 26), C])), "changed", "same source window, shorter on the timeline");
   assert.equal(O.fateOf(row, snap(T(20), [A, C])), "removed");
   assert.equal(O.fateOf(row, { sequences: [] }), "removed");
   const gone = { type: "removed", kind: "video", track: 0, sequence: "S", sequenceID: "sid", name: "b.mp4", path: "/m/b.mp4", start: 4, end: 10, inPoint: 20, outPoint: 26 };

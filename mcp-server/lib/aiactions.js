@@ -122,8 +122,8 @@ export async function trackTool(name, args, { run, clientInfo, root = JR.JOURNAL
 // pk.js can be run by a person or by an AI through a shell, and the bridge
 // cannot tell which. Its edits are logged as "something happened here, caller
 // unknown", so they stay unresolved instead of reading as "not via the bridge".
+// It never starts tracking: only a running server of this version can vouch for that.
 export async function trackCli(command, sequence, { run, root = JR.JOURNAL_ROOT, now = () => new Date() }, fn) {
-  await quiet(() => mark(root));
   const started = now();
   const ctx = await quiet(() => readState(run, "markers", null));
   let out, thrown = null;

@@ -292,7 +292,7 @@ test("pk.js: an edit is logged with an unknown caller, its answer untouched", as
     assert.deepEqual(out, { created: 1 });
     const [a] = logged(root);
     assert.equal(a.channel, "pk_cli"); assert.equal(a.caller, "unknown"); assert.equal(a.effects, null); assert.equal(a.sequence, "S");
-    assert.ok(existsSync(join(root, O.TRACKING_FILE)));
+    assert.ok(!existsSync(join(root, O.TRACKING_FILE)), "only the server starts tracking");
     assert.equal(pkSequence("make-seq", ["--name", "N"]), "N");
     assert.equal(pkSequence("delete-seq", ["D"]), "D");
     assert.equal(pkSequence("markers", ["--seq", "M"]), "M");

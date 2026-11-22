@@ -19,9 +19,9 @@ export const ORIGINS = ["via_bridge_ai", "not_via_bridge", "unresolved"];
 export const ACTIONS_FILE = "ai-actions.jsonl";
 export const UNROUTED_FILE = ".unrouted-ai-actions.jsonl"; // the project could not be asked: counts for every project
 export const TRACKING_FILE = ".ai-tracking.json";
-export const OPEN_DIR = ".open-ai-actions"; // one file per call in progress: left behind, it means the call may still have landed
-export const SERVERS_DIR = ".ai-servers"; // one empty file per running server of this version
-export const SERVICE_DIRS = [OPEN_DIR, SERVERS_DIR]; // live in the journal root, are not projects
+// Plain files, never folders: a bridge of an older version takes every folder in the journal root for a project.
+export const OPEN_PREFIX = ".ai-open-"; // one file per call in progress: left behind, it means the call may still have landed
+export const SERVER_PREFIX = ".ai-server-"; // one empty file per running server of this version
 export const OLD_SESSIONS_FILE = ".ai-old-sessions.json"; // bridge sessions running code that does not log
 // Keys that must never leave the machine, even if a row ever carries them.
 export const LOCAL_ONLY_KEYS = ["origin", "origin_reason", "action_ids", "fate", "client", "client_version", "model", "channel", "caller", "effects"];
@@ -55,25 +55,24 @@ export function appendUnrouted(root, action) {
 }
 
 export function openAction(root, row) {
-  mkdirSync(join(root, OPEN_DIR), { recursive: true });
-  writeFileSync(join(root, OPEN_DIR, `${row.id}.json`), JSON.stringify(row));
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, `${OPEN_PREFIX}${row.id}.json`), JSON.stringify(row));
 }
 
 export function closeAction(root, id) {
-  try { unlinkSync(join(root, OPEN_DIR, `${id}.json`)); } catch {}
+  try { unlinkSync(join(root, `${OPEN_PREFIX}${id}.json`)); } catch {}
 }
 
 function readOpen(root) {
-  const d = join(root, OPEN_DIR);
   let names;
-  try { names = readdirSync(d).filter((f) => f.endsWith(".json")); } catch { return []; }
+  try { names = readdirSync(root).filter((f) => f.startsWith(OPEN_PREFIX) && f.endsWith(".json")); } catch { return []; }
   return names.flatMap((f) => {
-    const file = join(d, f);
+    const file = join(root, f);
     try {
       const a = JSON.parse(readFileSync(file, "utf8"));
       if (validAction(a)) return [{ ...a, t: a.t_start, effects: null, sequence: null, sequenceID: null, open: true }];
     } catch {}
-    try { const t = statSync(file).mtime.toISOString(); return [{ id: f.slice(0, -5), tool: "unknown", scope: "structure", channel: "mcp", t_start: t, t, effects: null, sequence: null, sequenceID: null, open: true }]; }
+    try { const t = statSync(file).mtime.toISOString(); return [{ id: f.slice(OPEN_PREFIX.length, -5), tool: "unknown", scope: "structure", channel: "mcp", t_start: t, t, effects: null, sequence: null, sequenceID: null, open: true }]; }
     catch { return []; } // the call finished while this was being read
   });
 }

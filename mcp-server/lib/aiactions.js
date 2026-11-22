@@ -20,7 +20,7 @@ import { promisify } from "node:util";
 import { isReadOnlyJsx } from "./evalcode.js";
 import * as J from "./seq.js";
 import * as JR from "./journal.js";
-import { appendAction, appendUnrouted, closeAction, markTrackingStarted as mark, openAction, readOldSessions, SERVERS_DIR, writeOldSessions } from "./origin.js";
+import { appendAction, appendUnrouted, closeAction, markTrackingStarted as mark, openAction, readOldSessions, SERVER_PREFIX, writeOldSessions } from "./origin.js";
 
 // atomic     pr_eval_jsx: logged by runEval, inside one script
 // structure  may change clips or sequences: read the timeline around it
@@ -87,17 +87,17 @@ const serverKey = (s) => `${s.pid}-${s.started}`;
 export async function registerServer(root, { list = listBridgeServers, pid = process.pid } = {}) {
   const me = (await list()).find((s) => s.pid === pid);
   if (!me) return;
-  mkdirSync(join(root, SERVERS_DIR), { recursive: true });
-  writeFileSync(join(root, SERVERS_DIR, serverKey(me)), "");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, SERVER_PREFIX + serverKey(me)), "");
 }
 
 export async function noteOldSessions(root, { list = listBridgeServers, now = () => new Date(), pid = process.pid } = {}) {
   const running = await list();
   const nowMs = now().getTime();
   let known;
-  try { known = new Set(readdirSync(join(root, SERVERS_DIR))); } catch { known = new Set(); }
+  try { known = new Set(readdirSync(root).filter((f) => f.startsWith(SERVER_PREFIX)).map((f) => f.slice(SERVER_PREFIX.length))); } catch { known = new Set(); }
   const alive = new Set(running.map(serverKey));
-  for (const k of known) if (!alive.has(k)) { try { unlinkSync(join(root, SERVERS_DIR, k)); } catch {} }
+  for (const k of known) if (!alive.has(k)) { try { unlinkSync(join(root, SERVER_PREFIX + k)); } catch {} }
   const old = running.filter((s) => s.pid !== pid && !known.has(serverKey(s)) && nowMs - s.started >= YOUNG_PROCESS_MS);
   const rows = readOldSessions(root);
   const keyOf = (r) => `${r.pid}-${Date.parse(r.started)}`;

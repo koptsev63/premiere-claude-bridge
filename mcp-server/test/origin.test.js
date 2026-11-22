@@ -358,7 +358,7 @@ test("a read-only eval goes to Premiere unchanged and logs nothing", async () =>
     const sent = [];
     const out = await AI.runEval("app.project.name", "BODY", { call: async (b) => { sent.push(b); return "x.prproj"; }, root });
     assert.equal(out, "x.prproj"); assert.deepEqual(sent, ["BODY"]);
-    assert.ok(!existsSync(join(root, O.OPEN_DIR)) && !existsSync(join(root, "x")));
+    assert.deepEqual(readdirSync(root), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -374,7 +374,7 @@ test("an editing eval: same answer, exact effect, its code is not stored, the un
     assert.equal(a.tool, "pr_eval_jsx"); assert.equal(a.client, "claude-code"); assert.equal(a.ok, true);
     assert.equal(a.effects.length, 1); assert.equal(a.effects[0].name, "b.mp4"); assert.equal(a.effects[0].end, 9);
     assert.ok(!readFileSync(join(root, "x", O.ACTIONS_FILE), "utf8").includes("setEnd"), "the code of the call is not stored");
-    assert.deepEqual(existsSync(join(root, O.OPEN_DIR)) ? readdirSync(join(root, O.OPEN_DIR)) : [], []);
+    assert.deepEqual(readdirSync(root).filter((f) => f.startsWith(O.OPEN_PREFIX)), [], "the call is closed");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -537,10 +537,22 @@ test("while a bridge session of older code runs, an unlogged edit is unresolved"
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("service folders in the journal root are not sent as projects", () => {
+test("service files in the journal root are never folders, so no bridge version takes them for projects", async () => {
   const root = tempRoot();
   try {
-    for (const d of O.SERVICE_DIRS) { mkdirSync(join(root, d), { recursive: true }); writeFileSync(join(root, d, "events.jsonl"), '{"t":"2026-11-22T10:00:00.000Z","type":"leak"}\n'); }
-    assert.doesNotMatch(JSON.stringify(S.collect({ done: {} }, { root })), /leak/);
+    O.markTrackingStarted(root);
+    O.openAction(root, { v: 1, id: "a_x", t_start: T(1), tool: "pr_eval_jsx", scope: "structure", channel: "mcp" });
+    await AI.registerServer(root, { list: async () => [{ pid: 7, started: 1000 }], pid: 7 });
+    await AI.noteOldSessions(root, { list: async () => [{ pid: 7, started: 1000 }, { pid: 8, started: 1000 }], now: () => new Date(T(1)), pid: 7 });
+    O.appendUnrouted(root, action("u", 1, null));
+    assert.ok(readdirSync(root).length >= 4);
+    assert.deepEqual(readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()), []);
+    assert.deepEqual(S.collect({ salt: "s" }, { root }).marks, {});
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the test suite's real server processes are kept away from the real journal", () => {
+  const src = readFileSync(new URL("./port.test.js", import.meta.url), "utf8");
+  assert.match(src, /PREMIERE_JOURNAL_DIR: join\(sandbox/);
+  assert.match(src, /PREMIERE_BRIDGE_HOME: join\(sandbox/);
 });

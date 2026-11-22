@@ -548,25 +548,21 @@ function __bstRead(limit) {
   for (var i = 0; i < list.numSequences; i++) {
     var s = list[i], tb = Number(s.timebase);
     var row = { name: s.name, sequenceID: s.sequenceID, fps: tb > 0 ? 254016000000 / tb : 25, markers: s.markers.numMarkers, video: [], audio: [] };
-    var key = [row.name, row.markers];
     for (var g = 0; g < 2; g++) {
       var kind = g ? "audio" : "video", coll = g ? s.audioTracks : s.videoTracks;
       for (var ti = 0; ti < coll.numTracks; ti++) {
         var clips = coll[ti].clips, n = clips.numItems, out = [];
-        key.push("#" + kind + ti);
         for (var ci = 0; ci < n; ci++) {
           if ((ci & 31) === 0 && new Date().getTime() - t0 > limit) { res.complete = false; return res; }
           var c = clips[ci], pi = null, id = null;
           try { pi = c.projectItem; id = pi ? pi.nodeId : null; } catch (e0) {}
           if (id !== null && paths[id] === undefined) { try { paths[id] = pi.getMediaPath ? pi.getMediaPath() : ""; } catch (e1) { paths[id] = ""; } }
           var r = { name: c.name, path: id === null ? "" : paths[id], start: c.start.seconds, end: c.end.seconds, inPoint: c.inPoint.seconds, outPoint: c.outPoint.seconds };
-          key.push(r.name, r.path, r.start, r.end, r.inPoint, r.outPoint);
-          out.push(r);
+          out[ci] = r;
         }
         row[kind].push({ kind: kind, index: ti, clipCount: n, clips: out });
       }
     }
-    row.key = key.join("|");
     res.ids.push(row.sequenceID);
     res.seqs[row.sequenceID] = row;
   }
@@ -581,9 +577,25 @@ function __bstRows(st, only) {
   }
   return out;
 }
+function __bstSame(x, y) {
+  if (x.name !== y.name || x.markers !== y.markers) return false;
+  for (var g = 0; g < 2; g++) {
+    var kind = g ? "audio" : "video", tx = x[kind], ty = y[kind];
+    if (tx.length !== ty.length) return false;
+    for (var t = 0; t < tx.length; t++) {
+      var cx = tx[t].clips, cy = ty[t].clips;
+      if (cx.length !== cy.length) return false;
+      for (var i = 0; i < cx.length; i++) {
+        var p = cx[i], q = cy[i];
+        if (p.start !== q.start || p.end !== q.end || p.inPoint !== q.inPoint || p.outPoint !== q.outPoint || p.name !== q.name || p.path !== q.path) return false;
+      }
+    }
+  }
+  return true;
+}
 function __bstChanges(b, a) {
   var diff = {}, i, id;
-  for (i = 0; i < b.ids.length; i++) { id = b.ids[i]; if (!a.seqs[id] || a.seqs[id].key !== b.seqs[id].key) diff[id] = 1; }
+  for (i = 0; i < b.ids.length; i++) { id = b.ids[i]; if (!a.seqs[id] || !__bstSame(b.seqs[id], a.seqs[id])) diff[id] = 1; }
   for (i = 0; i < a.ids.length; i++) { id = a.ids[i]; if (!b.seqs[id]) diff[id] = 1; }
   return { project: a.project, before: __bstRows(b, diff), after: __bstRows(a, diff) };
 }

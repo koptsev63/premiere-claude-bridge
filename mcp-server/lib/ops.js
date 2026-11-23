@@ -40,13 +40,13 @@ export async function status(run, { pingPort } = {}) {
     await rememberBaseline().catch(() => {}); // a responsive Premiere: remember its windows for the next dialog check
     return { connected: true, waitingForClick: false, ...p };
   } catch (e) {
-    const diag = await diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000 }) });
+    const diag = await diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000, probe: true }) });
     return { connected: false, waitingForClick: diag.blocked, reason: e.message, diagnosis: diag };
   }
 }
 
 export async function dialogCheck(run, { pingPort } = {}) {
-  return diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000 }) });
+  return diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000, probe: true }) });
 }
 
 export function probe(paths, { start, end } = {}) {
@@ -260,17 +260,37 @@ export { MIN_FREE_BYTES, rememberBaseline };
 
 import * as JR from "./journal.js";
 import { snapshotFromProject } from "./prproj.js";
+import { markVerified } from "./origin.js";
 import { readdirSync, statSync } from "node:fs";
 import { join as pjoin, extname as pext } from "node:path";
 
-export async function journalSnapshot(run, { dir, note, source = "live" } = {}) {
-  const snap = must(await run(J.snapshotJsx({}), { timeoutMs: IMPORT_TIMEOUT_MS }), "journal snapshot");
+export const SNAPSHOT_LIMIT_MS = 20_000;
+
+// The script stops itself at limitMs; the wait here is longer, so the bridge
+// never gives up on a script that is still running.
+export async function journalSnapshot(run, { dir, note, source = "live", limitMs = SNAPSHOT_LIMIT_MS } = {}) {
+  const asked = new Date();
+  let res = await run(J.snapshotJsx({ limitMs }), { timeoutMs: Math.max(IMPORT_TIMEOUT_MS, limitMs + 30_000) });
+  if (typeof res === "string") { try { res = JSON.parse(res); } catch {} }
+  if (res && res.error === "snapshot over the limit") throw snapshotOverLimit(limitMs, res.rows);
+  const snap = must(res, "journal snapshot");
   snap.t = new Date().toISOString();
   snap.source = source;
   if (note) snap.note = note;
   const d = dir || JR.journalDir(snap.project);
   const r = JR.record(d, snap, { source });
+  // Nothing changed: the timeline equalled the last snapshot when this read was asked for (lib/origin.js markVerified).
+  if (!r.saved && source === "live") { try { const latest = JR.latestSnapshot(d); if (latest && latest.hash === r.hash) markVerified(d, latest.t, asked); } catch {} }
   return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(JR.attributeDiff(d, r.diff, snap.project)) : null };
+}
+
+export function snapshotOverLimit(limitMs, rows) {
+  return new BridgeError({
+    error: `No live snapshot: the project is too big, or Premiere is too slow right now, to read within ${Math.round(limitMs / 1000)} s ` +
+      `(stopped after ${rows ?? "?"} clips). Nothing was saved. The journal can be read from the saved project file instead: ` +
+      "save the project, then run `node pk.js journal import <file.prproj>`.",
+    complete: false, rows: rows ?? null, limitMs,
+  });
 }
 
 function summarizeDiff(diff) {

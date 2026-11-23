@@ -6,8 +6,10 @@
 //
 // Cost: a pr_eval_jsx that only reads touches nothing extra. One that may edit
 // runs between two light reads inside a single script, so nothing else can land
-// between them. On a project too big to read within the limit the call runs
-// unread and its effect is logged as unknown.
+// between them. Each read stops at its limit: the active sequence first, the
+// others while time is left. The call always runs; what was not read is logged
+// as such (partial_read, seqs_read), and a sequence that did not fit is not
+// tried again for a while.
 //
 // Local only: see lib/origin.js. The code of a pr_eval_jsx call is not stored.
 
@@ -49,14 +51,25 @@ export const NOT_TIMELINE_TOOLS = new Set([
 ]);
 
 const STATE_TIMEOUT_MS = 20_000;
-const STATE_LIMIT_MS = 5_000; // a tool of several panel calls
-const EVAL_READ_LIMIT_MS = 2_000; // one read inside a pr_eval_jsx: Premiere waits for it
-const BIG_PROJECT_PAUSE_MS = 5 * 60 * 1000; // after a read over the limit, do not try again for a while
+const STATE_LIMIT_MS = 1_000; // a tool of several panel calls: only the sequences it is asked to touch
+// One read inside a pr_eval_jsx: Premiere waits for it. A call runs between two
+// reads, and an edit should not wait more than about 1 s because of the
+// marking: 2 x 350 ms leaves room for the call and for the one clip row a read
+// may run past its limit (a row is about 11 hops, up to 183 ms when Premiere is
+// in its slow, one-frame-per-hop regime; measured on 26.0.2).
+export const EVAL_READ_LIMIT_MS = readLimit(process.env.PREMIERE_BRIDGE_ORIGIN_READ_MS);
+const BIG_PROJECT_PAUSE_MS = 5 * 60 * 1000; // a sequence that did not fit in a read is not tried again for a while
 const CONTEXT_TIMEOUT_MS = 5_000;
 const SCAN_EVERY_MS = 60_000;
 const YOUNG_PROCESS_MS = 15_000; // a server this new may not have registered itself yet
 
 const DEFAULT_ROOT = join(homedir(), ".premiere-bridge", "journal");
+
+export function readLimit(value) {
+  const n = Number(value);
+  if (value == null || value === "" || !Number.isFinite(n)) return 350;
+  return Math.min(5000, Math.max(50, n));
+}
 
 export const markTrackingStarted = (root = JR.JOURNAL_ROOT) => mark(root);
 
@@ -127,9 +140,9 @@ export function startTracking(root = JR.JOURNAL_ROOT) {
 
 // ---- reading around a call ---------------------------------------------------
 
-async function readState(run, scope, seq) {
+async function readState(run, scope, seq, targets) {
   const structure = scope === "structure";
-  const res = await run(structure ? J.timelineStateJsx({ limitMs: STATE_LIMIT_MS }) : J.actionContextJsx({ seq }), { timeoutMs: structure ? STATE_TIMEOUT_MS : CONTEXT_TIMEOUT_MS });
+  const res = await run(structure ? J.timelineStateJsx({ limitMs: STATE_LIMIT_MS, ...targets }) : J.actionContextJsx({ seq }), { timeoutMs: structure ? STATE_TIMEOUT_MS : CONTEXT_TIMEOUT_MS });
   if (!res || typeof res !== "object" || res.error) return null;
   return structure && !Array.isArray(res.sequences) ? null : res;
 }
@@ -146,13 +159,22 @@ function markerEffects(before, after) {
 }
 
 // A tool of several panel calls leaves Premiere free between them. What changed
-// in a sequence it was not asked to touch is somebody else's edit.
+// in a sequence it was not asked to touch is somebody else's edit, so only its
+// targets are read. No target known: every sequence, as before.
+function targetsOf(name, args) {
+  if (name === "pr_import_captions") return { only: [], active: true };
+  let only = [];
+  if (name === "pr_make_sequence" || name === "pr_delete_sequence") only = [args?.name];
+  else if (name === "pr_build_sequences") only = (args?.spec?.sequences || []).map((s) => s.name);
+  only = only.filter((x) => typeof x === "string" && x);
+  return only.length ? { only } : null;
+}
+
+// The read after the call: the same names, and for captions the sequence that was active before.
+const targetsAfter = (name, targets, before) => (name === "pr_import_captions" ? { only: [before.active] } : targets);
+
 function onlyItsSequences(name, args, before, effects) {
-  let targets = [];
-  if (name === "pr_make_sequence" || name === "pr_delete_sequence") targets = [args?.name];
-  else if (name === "pr_build_sequences") targets = (args?.spec?.sequences || []).map((s) => s.name);
-  else if (name === "pr_import_captions") targets = [before?.active];
-  targets = targets.filter(Boolean);
+  const targets = (name === "pr_import_captions" ? [before?.active] : targetsOf(name, args)?.only || []).filter(Boolean);
   if (!targets.length) return effects;
   return effects.filter((e) => targets.includes(e.sequence) || targets.includes(e.sequenceID));
 }
@@ -172,12 +194,26 @@ const clipNames = (effects) => [...new Set((effects || []).filter((e) => e.kind 
 const seqNames = (effects) => [...new Set((effects || []).map((e) => e.sequence).filter(Boolean))];
 
 const textOf = (result) => result?.content?.map((c) => c.text || "").join(" ") || "";
-// The call never reached Premiere, so there is nothing to log.
-const unreachable = (thrown, result) => /panel not connected|nothing is listening|no ".*" panel|debugger socket failed/i.test(thrown?.message || textOf(result));
+// The call never reached Premiere, so there is nothing to log. PANEL_BUSY: the
+// bridge did not send it, because Premiere still runs an abandoned script.
+const unreachable = (thrown, result) => thrown?.code === "PANEL_BUSY" || /panel not connected|nothing is listening|no ".*" panel|debugger socket failed|Nothing new was sent/i.test(thrown?.message || textOf(result));
 
 // ---- pr_eval_jsx -------------------------------------------------------------
 
-const bigProjectUntil = new Map(); // journal root -> time to try reading again
+const pausedSeqs = new Map(); // journal root -> Map(sequenceID -> time to try reading it again)
+
+function paused(root, t) {
+  const m = pausedSeqs.get(root);
+  if (!m) return [];
+  for (const [id, until] of m) if (until <= t) m.delete(id);
+  return [...m.keys()];
+}
+
+function pause(root, ids, until) {
+  if (!ids?.length) return;
+  if (!pausedSeqs.has(root)) pausedSeqs.set(root, new Map());
+  for (const id of ids) pausedSeqs.get(root).set(id, until);
+}
 
 function envelope(raw) {
   if (typeof raw !== "string" || !raw.startsWith("{")) return null;
@@ -190,16 +226,20 @@ export async function runEval(source, prepared, { call, clientInfo, root = JR.JO
 
   const id = newId(), started = now();
   await quiet(() => openAction(root, { v: 1, id, t_start: started.toISOString(), tool: "pr_eval_jsx", scope: "structure", channel: "mcp" }));
-  const read = now().getTime() >= (bigProjectUntil.get(root) || 0);
+  const skip = paused(root, now().getTime());
   let raw, thrown = null;
-  try { raw = await call(J.trackedEvalJsx(prepared, { limitMs: EVAL_READ_LIMIT_MS, read })); } catch (e) { thrown = e; }
+  try { raw = await call(J.trackedEvalJsx(prepared, { limitMs: EVAL_READ_LIMIT_MS, skip })); } catch (e) { thrown = e; }
   const env = thrown ? null : envelope(raw);
   const neverRan = thrown ? unreachable(thrown) : !env && /^\{"error":"SyntaxError/.test(String(raw));
 
   if (!neverRan) await quiet(async () => {
     let effects = null;
-    if (env?.overLimit) bigProjectUntil.set(root, now().getTime() + BIG_PROJECT_PAUSE_MS);
-    if (env?.complete) effects = structuralEffects({ sequences: env.before }, { sequences: env.after });
+    // Cut while Premiere was slow (one frame per property read) says nothing about the sequence's size: try again next time.
+    if (Array.isArray(env?.over) && !env.slow) pause(root, env.over, now().getTime() + BIG_PROJECT_PAUSE_MS);
+    const compared = Array.isArray(env?.read) ? env.read : [];
+    // Only the sequences read on both sides are compared. Nothing compared: unknown.
+    if (env && (env.complete || compared.length)) effects = structuralEffects({ sequences: env.before || [] }, { sequences: env.after || [] });
+    const partial = effects !== null && !env.complete;
     const ended = now();
     const info = await quiet(() => clientInfo?.());
     const failed = !!thrown || !env || !!env.threw;
@@ -210,6 +250,7 @@ export async function runEval(source, prepared, { call, clientInfo, root = JR.JO
       model: "unknown", // MCP does not tell the server which model is calling
       ok: !failed, project: env?.project || null, sequence: null, sequenceID: null,
       sequences: seqNames(effects), clips: clipNames(effects), effects,
+      ...(effects !== null ? { seqs_read: compared } : {}), ...(partial ? { partial_read: true } : {}),
     }, env?.project || null, root);
   });
   closeAction(root, id);
@@ -228,7 +269,9 @@ export async function trackTool(name, args, { run, clientInfo, root = JR.JOURNAL
   const seq = typeof args?.seq === "string" ? args.seq : null;
   const id = newId(), started = now();
   if (scope !== "appearance") await quiet(() => openAction(root, { v: 1, id, t_start: started.toISOString(), tool: name, scope, channel: "mcp" }));
-  const before = await quiet(() => readState(run, scope, seq));
+  const targets = scope === "structure" ? targetsOf(name, args) : null;
+  let before = await quiet(() => readState(run, scope, seq, targets));
+  if (before && name === "pr_import_captions" && !before.active) before = null; // no active sequence: nothing to aim the reads at
 
   let result, thrown = null;
   try { result = await handler(); } catch (e) { thrown = e; }
@@ -240,7 +283,7 @@ export async function trackTool(name, args, { run, clientInfo, root = JR.JOURNAL
     if (scope === "appearance") {
       effects = []; // cannot change clips or their timing, whether it worked or not
     } else if (before && !timedOutCall) { // a failed call may have done part of its work: the diff shows which part
-      const after = await quiet(() => readState(run, scope, seq));
+      const after = await quiet(() => readState(run, scope, seq, targets && targetsAfter(name, targets, before)));
       if (after) {
         if (scope === "structure") effects = onlyItsSequences(name, args, before, structuralEffects(before, after));
         else { effects = markerEffects(before, after); unscoped = before.sequenceID !== after.sequenceID; }

@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, extname, basename } from "node:path";
 import { z } from "zod";
 import { PanelPort } from "./lib/port.js";
+import { PanelQueue } from "./lib/panelqueue.js";
 import { prepareEvalCode } from "./lib/evalcode.js";
 import { resolveEffect, normalizeName, EN_TO_LOCAL } from "./lib/effects.js";
 import { exportPresetProblem } from "./lib/presets.js";
@@ -34,6 +35,8 @@ const PANEL_WAIT_MS = Number(process.env.PREMIERE_BRIDGE_PANEL_WAIT_MS || 8000);
 let panelSocket = null;
 let activeTools = 0; // tool calls in progress: while > 0 we do not hand the port over
 const pending = new Map();
+const abandoned = new PanelQueue(); // timed out here, still running in Premiere
+let sendSeq = 0; // order of sending: an answer proves that everything sent before it has finished
 
 function log(...args) {
   const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
@@ -46,7 +49,7 @@ const port = new PanelPort({
   version: VERSION,
   log,
   onConnection: attachConnectionHandler,
-  isBusy: () => activeTools > 0 || pending.size > 0,
+  isBusy: () => activeTools > 0 || pending.size > 0 || !!abandoned.busy(), // an abandoned script still runs: do not hand the port over
 });
 
 function attachConnectionHandler(ws) {
@@ -54,6 +57,7 @@ function attachConnectionHandler(ws) {
   if (panelSocket && panelSocket !== ws) {
     log("Replacing previous panel socket");
     try { panelSocket.close(); } catch {}
+    abandoned.reset();
   }
   panelSocket = ws;
   sendShareState(ws);
@@ -67,16 +71,17 @@ function attachConnectionHandler(ws) {
     if (msg.type === "share-exclude") { onPanelExclude(ws, msg.exclude); return; }
     if (!msg.id) return;
     const p = pending.get(msg.id);
-    if (!p) return;
+    if (!p) { abandoned.answered(msg.id); return; } // a late answer: nobody waits for it
     clearTimeout(p.timer);
     pending.delete(msg.id);
+    abandoned.answeredAfter(p.seq); // it ran, so whatever was sent before it has finished
     if (msg.ok) p.resolve(msg.result);
     else p.reject(new Error(msg.error || "Unknown panel error"));
   });
 
   ws.on("close", () => {
     log("CEP panel disconnected");
-    if (panelSocket === ws) panelSocket = null;
+    if (panelSocket === ws) { panelSocket = null; abandoned.reset(); }
   });
 
   ws.on("error", (e) => log("WS client error:", e.message));
@@ -116,18 +121,21 @@ async function ensurePanel() {
   );
 }
 
-async function callPanel(fn, args = [], { timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+// probe: true goes through even while an abandoned script runs (the dialog check).
+async function callPanel(fn, args = [], { timeoutMs = REQUEST_TIMEOUT_MS, probe = false } = {}) {
+  abandoned.check({ probe });
   const sock = await ensurePanel();
   return new Promise((resolve, reject) => {
-    const id = randomUUID();
+    const id = randomUUID(), seq = ++sendSeq, sentAt = Date.now();
     const timer = setTimeout(() => {
       pending.delete(id);
+      abandoned.timedOut(id, fn, sentAt, seq);
       reject(Object.assign(
         new Error(`Panel request "${fn}" timed out after ${timeoutMs}ms`),
         { code: "PANEL_TIMEOUT" }
       ));
     }, timeoutMs);
-    pending.set(id, { resolve, reject, timer });
+    pending.set(id, { resolve, reject, timer, seq });
     sock.send(JSON.stringify({ id, fn, args }));
   });
 }
@@ -439,7 +447,16 @@ tool(
   "pr_dialog_check",
   "Is Premiere waiting for a click? A modal window (e.g. 'Создать эпизод', 'Несоответствие медиаданных') blocks every script: the bridge times out while the panel's debug port still answers. Returns blocked:true, the on-screen windows that look like a dialog, and a Russian message saying which button to press. Safe: looks, never clicks.",
   {},
-  async () => ok(await ops.dialogCheck(runJsx, { pingPort: cefPortAlive }))
+  async () => {
+    const d = await ops.dialogCheck(runJsx, { pingPort: cefPortAlive });
+    const b = abandoned.busy();
+    if (b) { // a script the bridge stopped waiting for is still inside Premiere: a window is only one of the two reasons
+      d.runningScript = { fn: b.fn, ageSec: b.ageSec };
+      d.message = `Мост отправил скрипт ${b.ageSec} с назад и перестал его ждать (${b.fn}), Premiere его ещё не закончил. ` +
+        "Если в Premiere открыто окно с кнопками, нажмите нужную. Если окна нет, Premiere просто занят этим скриптом: новые команды пойдут, когда он закончится.";
+    }
+    return ok(d);
+  }
 );
 
 tool(
@@ -631,7 +648,8 @@ tool(
 tool(
   "pr_journal_snapshot",
   "The editor's journal: take one snapshot of every sequence (tracks, clips with start/end/in/out, media paths; structure only, no frames) and diff it against the previous snapshot into editing decisions (trim_head, trim_tail, move, slip, split, speed, added, removed). Stored under ~/.premiere-bridge/journal/<project>/. Unchanged project = nothing saved. Use pk.js `journal watch` for a continuous log, `journal import` for Premiere's Auto-Save folder.",
-  { dir: z.string().optional().describe("Journal folder (default: ~/.premiere-bridge/journal/<project>)"), note: z.string().optional() },
+  { dir: z.string().optional().describe("Journal folder (default: ~/.premiere-bridge/journal/<project>)"), note: z.string().optional(),
+    limitMs: z.number().int().min(1000).max(120000).optional().describe("Stop reading after this many ms (default 20000); over it nothing is saved") },
   async (a) => withDialogHint(() => ops.journalSnapshot(runJsx, a))
 );
 

@@ -190,8 +190,9 @@ test("privacy: the journal file and the outgoing payload are the same with and w
 });
 
 test("privacy: even a row that carries origin fields loses them before sending", () => {
-  const out = S.anonymize({ type: "move", origin: "via_bridge_ai", origin_reason: "x", action_ids: ["a"], fate: "kept", client: "c", model: "m", channel: "mcp", caller: "unknown", effects: [{ a: 1 }] }, "salt");
+  const out = S.anonymize({ type: "move", origin: "via_bridge_ai", origin_reason: "x", action_ids: ["a"], fate: "kept", client: "c", model: "m", channel: "mcp", caller: "unknown", effects: [{ a: 1 }], seqs_read: ["sid"], partial_read: true }, "salt");
   assert.deepEqual(out, { type: "move" });
+  for (const k of ["seqs_read", "partial_read"]) assert.ok(O.LOCAL_ONLY_KEYS.includes(k), k);
 });
 
 // A fake Premiere: answers the two read scripts from a state the fake tool changes.
@@ -390,18 +391,20 @@ test("an eval that throws after a partial edit answers as before and logs the pa
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a project too big to read in time: the edit still runs, effect unknown, no more reads for a while", async () => {
+test("a sequence too big to read in time: the edit still runs, effect unknown, that sequence is not read for a while", async () => {
   const root = tempRoot();
   try {
-    const wait = () => { const e = Date.now() + 3; while (Date.now() < e); };
+    // about 1 ms per clip row: Premiere at its fast pace, so the cut is about the sequence's size
+    const wait = () => { const e = performance.now() + 0.1; while (performance.now() < e); };
     const many = Array.from({ length: 2000 }, (_, i) => clip(`m${i}.mp4`, i, i + 1, 0, 1));
     const P = fakePremiere(many, { delay: wait });
     const sent = [];
     const call = async (b) => { sent.push(b); return P.call(b); };
     assert.equal(await AI.runEval(EDIT, prepareEvalCode(EDIT).code, { call, root }), "done");
     assert.equal(logged(root)[0].effects, null);
+    assert.equal(logged(root)[0].project, "x.prproj", "the row still lands in the project's log");
     assert.equal(await AI.runEval(EDIT, prepareEvalCode(EDIT).code, { call, root }), "done");
-    assert.match(sent[1], /^var __bt = null/);
+    assert.match(sent[1], /^var __bt = __bstSafe\(\{ limit: \d+, skip: \{"sid": 1\} \}\)/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

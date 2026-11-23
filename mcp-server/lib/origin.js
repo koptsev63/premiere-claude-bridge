@@ -23,8 +23,9 @@ export const TRACKING_FILE = ".ai-tracking.json";
 export const OPEN_PREFIX = ".ai-open-"; // one file per call in progress: left behind, it means the call may still have landed
 export const SERVER_PREFIX = ".ai-server-"; // one empty file per running server of this version
 export const OLD_SESSIONS_FILE = ".ai-old-sessions.json"; // bridge sessions running code that does not log
+export const VERIFIED_FILE = "ai-verified.json"; // in a project folder: when the timeline was last seen equal to a snapshot
 // Keys that must never leave the machine, even if a row ever carries them.
-export const LOCAL_ONLY_KEYS = ["origin", "origin_reason", "action_ids", "fate", "client", "client_version", "model", "channel", "caller", "effects"];
+export const LOCAL_ONLY_KEYS = ["origin", "origin_reason", "action_ids", "fate", "client", "client_version", "model", "channel", "caller", "effects", "seqs_read", "partial_read"];
 
 const EPS = 0.005; // seconds: both sides are rounded to 3 decimals, a frame is at least 8 ms
 const WHOLE_SECOND_MS = 1000; // an autosave time is cut to whole seconds: the file may hold up to a second more
@@ -75,6 +76,28 @@ function readOpen(root) {
     try { const t = statSync(file).mtime.toISOString(); return [{ id: f.slice(OPEN_PREFIX.length, -5), tool: "unknown", scope: "structure", channel: "mcp", t_start: t, t, effects: null, sequence: null, sequenceID: null, open: true }]; }
     catch { return []; } // the call finished while this was being read
   });
+}
+
+// A live snapshot that found nothing changed proves the timeline still equalled
+// the last saved snapshot at that moment. Whatever an AI call did before it had
+// been undone by then, so that call cannot explain an edit found later.
+// One entry per saved snapshot: { <snapshot time>: <last time seen unchanged> }.
+export function readVerified(dir) {
+  try {
+    const m = JSON.parse(readFileSync(join(dir, VERIFIED_FILE), "utf8"));
+    return m && typeof m === "object" && !Array.isArray(m) ? m : {};
+  } catch { return {}; }
+}
+
+export function markVerified(dir, snapshotT, at = new Date()) {
+  if (typeof snapshotT !== "string" || !snapshotT) return;
+  const seen = new Date(at).toISOString(), m = readVerified(dir);
+  if (m[snapshotT] && m[snapshotT] >= seen) return;
+  m[snapshotT] = seen;
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, VERIFIED_FILE), tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(m));
+  renameSync(tmp, file);
 }
 
 export function readOldSessions(root) {
@@ -147,7 +170,7 @@ export function readActions(dir) {
 // a journal kept outside <root>/<project>: the action log is not there.
 export function originContext(dir, { ownFolder = true } = {}) {
   const { actions, unreadable } = readActions(dir);
-  return { actions, unreadable, since: ownFolder ? trackingSince(dir) : null, trackedHost: isTrackedHost(dir), oldSessions: readOldSessions(dirname(dir)) };
+  return { actions, unreadable, since: ownFolder ? trackingSince(dir) : null, trackedHost: isTrackedHost(dir), oldSessions: readOldSessions(dirname(dir)), verified: readVerified(dir) };
 }
 
 // ---- matching --------------------------------------------------------------
@@ -259,7 +282,7 @@ function inWindow(a, fromMs, toMs, toIso) {
   return end >= fromMs && start <= toMs + slack;
 }
 
-function attributeOne(row, actions, sinceMs, trackedHost, oldSessions) {
+function attributeOne(row, actions, sinceMs, trackedHost, oldSessions, verified) {
   const verdict = (origin, origin_reason = null, used = []) => ({ ...row, origin, origin_reason, action_ids: [...new Set(used)] });
   if (!trackedHost) return verdict("unresolved", "host_not_tracked");
   const base = baseline(row), fromMs = base ? Date.parse(base) : NaN, toMs = Date.parse(row.t);
@@ -267,13 +290,18 @@ function attributeOne(row, actions, sinceMs, trackedHost, oldSessions) {
   if (sinceMs == null || fromMs < sinceMs) return verdict("unresolved", "before_tracking");
   if (fromMs > toMs) return verdict("unresolved", "no_baseline"); // two snapshots compared newest first
 
-  const near = actions.filter((a) => inWindow(a, fromMs, toMs, row.t));
+  // The timeline was seen unchanged after the starting snapshot: the window starts there.
+  const seenMs = verified && verified[base] ? Date.parse(verified[base]) : NaN;
+  const winFrom = seenMs > fromMs && seenMs <= toMs ? seenMs : fromMs;
+  const near = actions.filter((a) => inWindow(a, winFrom, toMs, row.t));
   const fx = [];
   for (const a of near) for (const e of a.effects || []) if (sameSeq(e, row)) fx.push({ ...e, _action: a.id });
   const used = explain(row, fx);
   if (used) return verdict("via_bridge_ai", null, used.map((f) => f._action));
 
-  const blind = near.filter((a) => a.effects == null && ((!a.sequence && !a.sequenceID) || sameSeq(a, row)));
+  // A call that read only some sequences cannot vouch for the others.
+  const unread = (a) => a.partial_read === true && !(row.sequenceID && Array.isArray(a.seqs_read) && a.seqs_read.includes(row.sequenceID));
+  const blind = near.filter((a) => (a.effects == null && ((!a.sequence && !a.sequenceID) || sameSeq(a, row))) || unread(a));
   if (blind.length) {
     const reason = blind.some((a) => a.channel !== "pk_cli" && !a.damaged) ? "ai_action_effect_unknown" : blind.some((a) => a.damaged) ? "action_log_damaged" : "cli_caller_unknown";
     return verdict("unresolved", reason, blind.filter((a) => !a.damaged).map((a) => a.id));
@@ -285,10 +313,10 @@ function attributeOne(row, actions, sinceMs, trackedHost, oldSessions) {
 }
 
 // Rows with origin added. A copy: the journal itself is never changed.
-export function attributeEvents(rows, actions, { since = null, trackedHost = true, oldSessions = [] } = {}) {
+export function attributeEvents(rows, actions, { since = null, trackedHost = true, oldSessions = [], verified = null } = {}) {
   const sinceMs = since ? Date.parse(since) : null;
   const ordered = [...actions].sort((a, b) => String(a.t_start || a.t).localeCompare(String(b.t_start || b.t)));
-  return rows.map((r) => attributeOne(r, ordered, sinceMs, trackedHost, oldSessions));
+  return rows.map((r) => attributeOne(r, ordered, sinceMs, trackedHost, oldSessions, verified));
 }
 
 // A Resolve project's edits go through other adapters that do not log yet.
@@ -344,8 +372,8 @@ const pct = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
 export const ORIGIN_NOTE = "not_via_bridge means no logged bridge call touched the edit. It does not prove a person made it: another AI tool used outside the bridge lands there too. via_bridge_ai says how an edit reached the timeline, not who decided to keep it.";
 
 export function originReport(dir, events, latest, { ownFolder = true } = {}) {
-  const { actions, unreadable, since, trackedHost, oldSessions } = originContext(dir, { ownFolder });
-  const rows = attributeEvents(events, actions, { since, trackedHost, oldSessions });
+  const { actions, unreadable, since, trackedHost, oldSessions, verified } = originContext(dir, { ownFolder });
+  const rows = attributeEvents(events, actions, { since, trackedHost, oldSessions, verified });
   const counts = Object.fromEntries(ORIGINS.map((o) => [o, 0]));
   const unresolvedReasons = {}, fate = { kept: 0, changed: 0, removed: 0, notApplicable: 0 };
   for (const r of rows) {
@@ -370,6 +398,7 @@ export function originReport(dir, events, latest, { ownFolder = true } = {}) {
       changedTimeline: calls.filter((a) => (a.effects || []).length > 0).length,
       effectUnknown: calls.filter((a) => a.effects == null).length,
       notVisibleInDiff: calls.filter((a) => a.scope === "appearance").length,
+      partlyRead: calls.filter((a) => a.partial_read === true).length,
       unreadableLines: unreadable, byTool, clients, models,
     },
     note: ORIGIN_NOTE,
@@ -397,7 +426,7 @@ export function originMarkdown(o) {
   L.push(`- unresolved: ${o.counts.unresolved} (${o.shares.unresolved}%)`);
   for (const [k, v] of Object.entries(o.unresolvedReasons).sort((a, b) => b[1] - a[1])) L.push(`  - ${REASON_WORDS[k] || k}: ${v}`);
   if (o.counts.via_bridge_ai) L.push(`- what became of AI edits: kept ${o.aiFate.kept}, changed later ${o.aiFate.changed}, removed ${o.aiFate.removed}${o.aiFate.notApplicable ? `, not applicable ${o.aiFate.notApplicable}` : ""}`);
-  if (o.actions.logged) L.push(`- AI calls logged: ${o.actions.logged} (changed the timeline ${o.actions.changedTimeline}, effect unknown ${o.actions.effectUnknown}, motion or effects not visible in a diff ${o.actions.notVisibleInDiff})`);
+  if (o.actions.logged) L.push(`- AI calls logged: ${o.actions.logged} (changed the timeline ${o.actions.changedTimeline}, effect unknown ${o.actions.effectUnknown}${o.actions.partlyRead > 0 ? `, read only in part ${o.actions.partlyRead}` : ""}, motion or effects not visible in a diff ${o.actions.notVisibleInDiff})`);
   L.push("");
   L.push(`Note: ${o.note}`);
   return L.join("\n");

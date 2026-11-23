@@ -72,6 +72,7 @@ import { wrapBodyForEvalScript } from "./lib/evalcode.js";
 import * as ops from "./lib/ops.js";
 import * as share from "./lib/share.js";
 import * as upd from "./lib/update.js";
+import * as aiLog from "./lib/aiactions.js";
 const PKG_VERSION = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -327,7 +328,9 @@ export async function main(argv) {
     let rest = argv.slice(1);
     if (cmd === "build" && rest[0] === "--spec" && rest[1] && !rest[1].trim().startsWith("{")) rest = ["--spec", fs.readFileSync(rest[1], "utf8"), ...rest.slice(2)];
     try {
-      const out = await typed(cmd, rest);
+      const out = aiLog.PK_EDIT_COMMANDS.has(cmd)
+        ? await aiLog.trackCli(cmd, { run: runBody }, () => typed(cmd, rest))
+        : await typed(cmd, rest);
       console.log(JSON.stringify(out, null, 1));
       return out && (out.ok === false || out.error) ? 1 : 0;
     } catch (e) {
@@ -347,7 +350,9 @@ export async function main(argv) {
     console.log(usage());
     return 2;
   }
-  const out = await evalJSX(jsx);
+  const out = aiLog.PK_EDIT_COMMANDS.has(cmd)
+    ? await aiLog.trackCli(cmd, { run: runBody }, () => evalJSX(jsx))
+    : await evalJSX(jsx);
   console.log(typeof out === "string" ? out : JSON.stringify(out));
   // evalScript reports any ExtendScript failure as this literal string.
   return out === "EvalScript error." ? 1 : 0;

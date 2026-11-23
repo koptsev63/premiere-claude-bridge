@@ -523,23 +523,222 @@ return { saved: true, returned: r, path: p.path, name: p.name };
 `;
 }
 
-// One snapshot of every sequence in the project: the editor's journal
-// reads these over time and diffs them. Compact rows, seconds, media paths.
-export function snapshotJsx({ onlyOpen } = {}) {
+// The project and one sequence (by name or id, default the active one) with
+// its marker count: the light read around a marker or Motion tool call.
+export function actionContextJsx({ seq } = {}) {
   return `${LIB}
 var p = app.project;
 if (!p) return { error: "No project open" };
+var s = __seq(${S(seq || "")});
+return { project: p.name, sequence: s ? s.name : null, sequenceID: s ? s.sequenceID : null, markers: s ? s.markers.numMarkers : null };
+`;
+}
+
+// ---- the light timeline read around an AI call ------------------------------
+// Only what a diff needs: clip name, media path and four times. A media path is
+// asked once per project item. Every property read is a hop to Premiere's UI
+// thread (0.05 ms to one 60 Hz frame, measured on 26.0.2), and the panel blocks
+// Premiere while it runs, so the read is bounded: the deadline is checked
+// before every sequence, track and clip row, and a sequence cut by it is
+// dropped whole (its id goes to `over`).
+//
+// o = { limit, skip, only, active, want, known }
+//   default  the active sequence first, the others in project order only while
+//            less than half of the limit is used; ids in `skip` are not read,
+//            and a skipped active sequence means nothing is read
+//   only     just these ids or exact names (plus the active one when `active`),
+//            in that order; the others are not read and not missing
+//   want     the read after a call: the ids in `want`, plus every sequence not
+//            in `known` (the listing before)
+// The answer: project (always), active, listed (the listing of sequences is
+// complete), read (ids read whole, in order), seqs (id -> row), all (listed
+// ids), complete (listed and nothing left unread), over (ids cut by the deadline),
+// rows and ms (clip rows read and time spent when a sequence was cut: under 0.2
+// rows per ms means Premiere was in its slow regime, not that the sequence is big).
+export const STATE_READER = `
+function __bstSeq(s, id, end, paths) {
+  var tb = Number(s.timebase);
+  var row = { name: s.name, sequenceID: id, fps: tb > 0 ? 254016000000 / tb : 25, markers: s.markers.numMarkers, video: [], audio: [] };
+  for (var g = 0; g < 2; g++) {
+    if (new Date().getTime() > end) return null;
+    var kind = g ? "audio" : "video", coll = g ? s.audioTracks : s.videoTracks, nt = coll.numTracks;
+    for (var ti = 0; ti < nt; ti++) {
+      if (new Date().getTime() > end) return null;
+      var clips = coll[ti].clips, n = clips.numItems, out = [];
+      for (var ci = 0; ci < n; ci++) {
+        if (new Date().getTime() > end) return null;
+        var c = clips[ci], pi = null, nid = null;
+        try { pi = c.projectItem; nid = pi ? pi.nodeId : null; } catch (e0) {}
+        if (nid !== null && paths[nid] === undefined) { try { paths[nid] = pi.getMediaPath ? pi.getMediaPath() : ""; } catch (e1) { paths[nid] = ""; } }
+        out[ci] = { name: c.name, path: nid === null ? "" : paths[nid], start: c.start.seconds, end: c.end.seconds, inPoint: c.inPoint.seconds, outPoint: c.outPoint.seconds };
+        paths.__rows++;
+      }
+      row[kind].push({ kind: kind, index: ti, clipCount: n, clips: out });
+    }
+  }
+  return row;
+}
+function __bstRead(o) {
+  var p = app.project;
+  if (!p) return null;
+  var t0 = new Date().getTime(), end = t0 + o.limit, paths = { __rows: 0 }, missing = false, i, k;
+  var res = { project: p.name, active: null, listed: false, complete: false, all: {}, read: [], seqs: {}, over: [], rows: 0, ms: 0 };
+  var act = p.activeSequence, aid = act ? act.sequenceID : null;
+  res.active = aid;
+  if (!o.only && !o.want && aid !== null && o.skip && o.skip[aid]) return res;
+  var list = p.sequences, n = list.numSequences, items = [];
+  for (i = 0; i < n; i++) {
+    if (new Date().getTime() > end) return res;
+    var s = list[i], it = { s: s, id: s.sequenceID };
+    if (o.only) it.name = s.name;
+    items.push(it);
+    res.all[it.id] = 1;
+  }
+  res.listed = true;
+  var order = [];
+  if (o.only) {
+    var want = (o.active && aid !== null) ? [aid] : [], taken = {};
+    for (k = 0; k < o.only.length; k++) want.push(o.only[k]);
+    for (k = 0; k < want.length; k++) for (i = 0; i < items.length; i++) if (!taken[i] && (items[i].id === want[k] || items[i].name === want[k])) { taken[i] = 1; order.push(items[i]); }
+  } else {
+    for (k = 0; k < 2; k++) for (i = 0; i < items.length; i++) {
+      var q = items[i];
+      if ((q.id === aid) !== (k === 0)) continue;
+      if (o.want ? (o.want[q.id] || (o.known && !o.known[q.id])) : !(o.skip && o.skip[q.id])) order.push(q);
+      else missing = true;
+    }
+  }
+  for (k = 0; k < order.length; k++) {
+    var x = order[k], now = new Date().getTime();
+    if (now > end || (!o.only && !o.want && x.id !== aid && now - t0 >= o.limit / 2)) { missing = true; break; }
+    var row = __bstSeq(x.s, x.id, end, paths);
+    if (!row) { res.over.push(x.id); missing = true; res.rows = paths.__rows; res.ms = new Date().getTime() - t0; break; }
+    res.read.push(x.id);
+    res.seqs[x.id] = row;
+  }
+  res.complete = !missing;
+  return res;
+}
+function __bstRows(st, only) {
+  var out = [];
+  for (var i = 0; i < st.read.length; i++) {
+    var id = st.read[i], q = st.seqs[id];
+    if (only && !only[id]) continue;
+    out.push({ name: q.name, sequenceID: q.sequenceID, fps: q.fps, markers: q.markers, video: q.video, audio: q.audio });
+  }
+  return out;
+}
+function __bstSame(x, y) {
+  if (x.name !== y.name || x.markers !== y.markers) return false;
+  for (var g = 0; g < 2; g++) {
+    var kind = g ? "audio" : "video", tx = x[kind], ty = y[kind];
+    if (tx.length !== ty.length) return false;
+    for (var t = 0; t < tx.length; t++) {
+      var cx = tx[t].clips, cy = ty[t].clips;
+      if (cx.length !== cy.length) return false;
+      for (var i = 0; i < cx.length; i++) {
+        var p = cx[i], q = cy[i];
+        if (p.start !== q.start || p.end !== q.end || p.inPoint !== q.inPoint || p.outPoint !== q.outPoint || p.name !== q.name || p.path !== q.path) return false;
+      }
+    }
+  }
+  return true;
+}
+// Only sequences read on both sides are compared, plus a sequence that was not
+// listed before (added) and one read before that a complete listing after no
+// longer has (removed).
+function __bstChanges(b, a) {
+  var diff = {}, read = [], i, id;
+  for (i = 0; i < b.read.length; i++) {
+    id = b.read[i];
+    if (a.seqs[id]) { read.push(id); if (!__bstSame(b.seqs[id], a.seqs[id])) diff[id] = 1; }
+    else if (a.listed && !a.all[id]) { read.push(id); diff[id] = 1; }
+  }
+  for (i = 0; i < a.read.length; i++) { id = a.read[i]; if (!b.seqs[id] && b.listed && !b.all[id]) { read.push(id); diff[id] = 1; } }
+  return { project: a.project, read: read, before: __bstRows(b, diff), after: __bstRows(a, diff) };
+}
+`;
+
+const jsList = (xs) => `[${(xs || []).map(S).join(", ")}]`;
+const jsSet = (xs) => `{${(xs || []).map((x) => `${S(x)}: 1`).join(", ")}}`;
+
+// For tools that take several panel calls: every sequence, or with `only` /
+// `active` just the ones the tool is asked to touch. A target that does not
+// exist is a complete read of "absent".
+export function timelineStateJsx({ limitMs = 5000, only, active = false } = {}) {
+  const targeted = (only && only.length) || active;
+  return `${STATE_READER}
+var st = __bstRead({ limit: ${Number(limitMs)}, only: ${targeted ? jsList(only) : "null"}, active: ${!!active} });
+if (!st) return { error: "No project open" };
+if (!st.complete) return { error: "timeline read over the limit", complete: false, project: st.project, over: st.over };
+return { project: st.project, active: st.active, complete: true, read: st.read, sequences: __bstRows(st, null) };
+`;
+}
+
+// Run a pr_eval_jsx body between two reads in ONE script. Premiere's interface
+// waits while a script runs, so nothing else can land between the reads. The
+// body stays on the first line, so an error's line number is the one the
+// caller expects. The answer carries the script's own value as a string.
+// The read after the call reads what the read before completed, plus the
+// sequences that were not listed before.
+export function trackedEvalJsx(body, { limitMs = 350, skip = [] } = {}) {
+  const L = Number(limitMs);
+  return `var __bt = __bstSafe({ limit: ${L}, skip: ${jsSet(skip)} }), __bv, __bs, __bf = false; try { __bv = (function(){ ${body} })(); __bs = (typeof __bv === 'undefined') ? '' : (typeof __bv === 'string' ? __bv : JSON.stringify(__bv)); } catch (__be) { __bf = true; __bs = JSON.stringify({ error: __be.toString(), line: __be.line }); }
+${STATE_READER}
+function __bstSafe(o) { try { return __bstRead(o); } catch (e) { return null; } }
+var __bo = { __bridge_tracked: 1, value: __bs, threw: __bf, complete: false, read: [], over: [], slow: false };
+function __bstSlow(r) { return r.over.length > 0 && r.rows < r.ms * 0.2; }
+if (__bt) {
+  __bo.project = __bt.project;
+  __bo.over = __bt.over;
+  if (__bstSlow(__bt)) __bo.slow = true;
+  if (__bt.listed) {
+    var __ba = __bstSafe({ limit: ${L}, want: __bt.seqs, known: __bt.all });
+    if (__ba) {
+      for (var __bi = 0; __bi < __ba.over.length; __bi++) __bo.over.push(__ba.over[__bi]);
+      if (__bstSlow(__ba)) __bo.slow = true;
+      if (__ba.project === __bt.project) { var __bc = __bstChanges(__bt, __ba); __bo.read = __bc.read; __bo.complete = __bt.complete && __ba.complete; __bo.before = __bc.before; __bo.after = __bc.after; }
+    }
+  }
+}
+return __bo;
+`;
+}
+
+// One snapshot of every sequence in the project: the editor's journal
+// reads these over time and diffs them. Compact rows, seconds, media paths.
+// Bounded: the deadline is checked before every clip, and a snapshot over it
+// is not returned at all (a part of a project would diff as removals).
+export function snapshotJsx({ onlyOpen, limitMs = 20000 } = {}) {
+  return `${LIB}
+var p = app.project;
+if (!p) return { error: "No project open" };
+var __end = new Date().getTime() + ${Number(limitMs)}, __rows = 0, __over = false;
+function __snapTracks(coll, kind) {
+  var out = [];
+  for (var i = 0; i < coll.numTracks && !__over; i++) {
+    var t = coll[i], clips = [], n = t.clips.numItems;
+    for (var j = 0; j < n; j++) {
+      if (new Date().getTime() > __end) { __over = true; break; }
+      clips.push(__clipRow(t.clips[j]));
+      __rows++;
+    }
+    out.push({ kind: kind, index: i, name: t.name || "", clipCount: clips.length, clips: clips });
+  }
+  return out;
+}
 var list = p.sequences, seqs = [];
 var act = p.activeSequence;
-for (var i = 0; i < list.numSequences; i++) {
+for (var i = 0; i < list.numSequences && !__over; i++) {
   var s = list[i];
   var info = __seqInfo(s);
   info.active = !!(act && act.sequenceID === s.sequenceID);
-  info.video = __tracks(s.videoTracks, "video");
-  info.audio = __tracks(s.audioTracks, "audio");
+  info.video = __snapTracks(s.videoTracks, "video");
+  info.audio = __snapTracks(s.audioTracks, "audio");
   try { var ip = s.getInPointAsTime().seconds, op = s.getOutPointAsTime().seconds; if (ip >= 0 && op > 0) { info.inPoint = ip; info.outPoint = op; } } catch (e) {}
   seqs.push(info);
 }
+if (__over) return { error: "snapshot over the limit", complete: false, rows: __rows };
 return { project: p.name, projectPath: p.path, sequences: seqs, activeSequence: act ? act.name : null };
 `;
 }

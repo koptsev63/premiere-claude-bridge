@@ -41,6 +41,7 @@ import { gzipSync } from "node:zlib";
 import * as JR from "./journal.js";
 import { snapshotFromProject, readProjectXml } from "./prproj.js";
 import * as RS from "./drp.js";
+import { LOCAL_ONLY_KEYS } from "./origin.js";
 
 export const HOME = process.env.PREMIERE_BRIDGE_HOME || join(homedir(), ".premiere-bridge");
 export const ENDPOINT = (process.env.PREMIERE_SHARE_URL || "https://bridge.204-168-219-232.sslip.io").replace(/\/+$/, "");
@@ -197,7 +198,8 @@ export function isExcluded(project, home = HOME) {
 
 // Strings allowed through as they are: enum-like fields and timestamps.
 const KEEP_STRING = new Set(["type", "kind", "item", "source", "t", "from_t", "to_t", "unit"]);
-const DROP = new Set(["file", "path", "comment", "comments", "note", "projectPath", "mediaPath", "hash"]);
+// LOCAL_ONLY_KEYS: where an edit came from stays on this machine (lib/origin.js).
+const DROP = new Set(["file", "path", "comment", "comments", "note", "projectPath", "mediaPath", "hash", ...LOCAL_ONLY_KEYS]);
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
 
 // The only file extensions that go out: a known media type, never the tail of a free-text name ("Mr.Smith").

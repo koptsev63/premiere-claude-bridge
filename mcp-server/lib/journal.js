@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, append
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
+import { attributeEvents, originContext, originMarkdown, originReport } from "./origin.js";
 
 export const JOURNAL_ROOT = process.env.PREMIERE_JOURNAL_DIR || join(homedir(), ".premiere-bridge", "journal");
 
@@ -51,15 +52,38 @@ export function saveSnapshot(dir, snap) {
   mkdirSync(join(dir, "snapshots"), { recursive: true });
   const hash = contentHash(snap);
   const st = stamp(snap.t || Date.now());
-  const earlier = listSnapshots(dir).filter((f) => basename(f) < st);
-  const previous = earlier.length ? { ...loadSnapshot(earlier[earlier.length - 1]), file: earlier[earlier.length - 1] } : null;
+  // File names carry whole seconds. A snapshot saved in the same second is not
+  // newer than this one: left out, the comparison went to the one before it,
+  // and a change made in between was dropped or an edit showed up as "nothing changed".
+  const earlier = listSnapshots(dir).filter((f) => basename(f) < st + "~");
+  const prevFile = newestOf(earlier, snap.t);
+  const previous = prevFile ? { ...loadSnapshot(prevFile), file: prevFile } : null;
   if (previous && previous.hash === hash) return { saved: false, hash, previous, file: previous.file };
-  const file = join(dir, "snapshots", `${st}-${hash}.json`);
-  if (existsSync(file)) return { saved: false, hash, previous, file };
+  let file = join(dir, "snapshots", `${st}-${hash}.json`);
+  // The same content twice within one second with another state in between
+  // (A, B, A): the name is taken by the first A, and this one is still a change.
+  for (let n = 2; existsSync(file); n++) file = join(dir, "snapshots", `${st}-${hash}-${n}.json`);
   writeFileSync(file, JSON.stringify({ ...snap, hash }));
   const latest = latestSnapshot(dir);
   writeFileSync(join(dir, "latest.json"), JSON.stringify({ file: latest.file, hash: latest.hash, t: latest.t }));
   return { saved: true, hash, previous, file };
+}
+
+// The newest of a sorted list of snapshot files. Files of the same second sort
+// by their hash, so among those the time inside decides (and, with `notAfter`,
+// one taken later than that moment is passed over).
+function newestOf(files, notAfter) {
+  if (!files.length) return null;
+  const last = files[files.length - 1];
+  const second = basename(last).split("-")[0];
+  const same = files.filter((f) => basename(f).split("-")[0] === second);
+  if (same.length === 1) return last;
+  const limit = notAfter ? new Date(notAfter).toISOString() : null;
+  const timed = same.map((f) => { try { return { f, t: String(loadSnapshot(f).t || "") }; } catch { return { f, t: "" }; } }).sort((a, b) => a.t.localeCompare(b.t));
+  const fit = limit ? timed.filter((x) => x.t <= limit) : timed;
+  if (fit.length) return fit[fit.length - 1].f;
+  const before = files.filter((f) => basename(f).split("-")[0] < second);
+  return before.length ? newestOf(before) : timed[0].f;
 }
 
 export function listSnapshots(dir) {
@@ -73,9 +97,8 @@ export function loadSnapshot(file) {
 }
 
 export function latestSnapshot(dir) {
-  const files = listSnapshots(dir);
-  if (!files.length) return null;
-  const file = files[files.length - 1];
+  const file = newestOf(listSnapshots(dir));
+  if (!file) return null;
   const snap = loadSnapshot(file);
   return { ...snap, file };
 }
@@ -200,6 +223,28 @@ export function eventRows(diff, meta = {}) {
   return rows;
 }
 
+// A diff with each edit's origin, for showing. A copy: what record() writes to
+// events.jsonl stays without these fields, because that file is what gets shared.
+// The action log sits in <root>/<project>: a journal kept anywhere else cannot
+// say an edit did not come through the bridge.
+const isOwnFolder = (dir, project) => !!project && basename(dir) === slug(project);
+
+export function attributeDiff(dir, diff, project) {
+  try {
+    const { actions, since, trackedHost, oldSessions, verified } = originContext(dir, { ownFolder: isOwnFolder(dir, project ?? latestSnapshot(dir)?.project) });
+    const opts = { since, trackedHost, oldSessions, verified };
+    return { ...diff, sequences: diff.sequences.map((s) => ({ ...s, events: s.events.map((e) => {
+      const [a] = attributeEvents([{ t: diff.to, sequence: s.sequence, sequenceID: s.sequenceID, ...e, from_t: diff.from }], actions, opts);
+      return { ...e, origin: a.origin, origin_reason: a.origin_reason, action_ids: a.action_ids };
+    }) })) };
+  } catch { return diff; } // a report of origins must never break the journal itself
+}
+
+function safeOrigin(dir, events, latest) {
+  try { return originReport(dir, events, latest, { ownFolder: isOwnFolder(dir, latest?.project) }); }
+  catch { return null; }
+}
+
 // ---- the hand report -------------------------------------------------------
 
 function quantile(sorted, q) {
@@ -280,6 +325,7 @@ export function report(dir) {
     project: latest ? latest.project : null,
     shapes: latest ? latest.sequences.map(sequenceShape) : [],
     hand: handReport(events, files),
+    origin: safeOrigin(dir, events, latest),
   };
 }
 
@@ -306,6 +352,7 @@ export function reportMarkdown(r) {
     if (s.gapsV1) L.push(`- gaps on V1: ${s.gapsV1}`);
     L.push(`- tracks used: V ${s.videoTracksUsed}, A ${s.audioTracksUsed}`);
   }
+  if (r.origin) { L.push(""); L.push(originMarkdown(r.origin)); }
   return L.join("\n");
 }
 

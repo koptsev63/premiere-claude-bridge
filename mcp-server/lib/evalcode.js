@@ -160,3 +160,99 @@ export function wrapBodyForEvalScript(body) {
     " catch(e){ return JSON.stringify({error: e.toString(), line: e.line}); } })()"
   );
 }
+
+// ---- is this script only reading? -------------------------------------------
+// A script that cannot change the timeline needs no timeline read around it.
+// This is an allowlist: anything not recognised counts as a possible edit, so
+// a mistake here costs speed and never hides an edit.
+
+const READ_PROPS = new Set(`
+  app project projects activeSequence sequences numSequences rootItem children numItems name path type nodeId treePath parent
+  sequenceID videoTracks audioTracks numTracks clips transitions start end duration inPoint outPoint seconds ticks mediaType
+  projectItem components properties displayName matchName markers numMarkers getFirstMarker getNextMarker comments guid
+  getMediaPath getInPoint getOutPoint getInPointAsTime getOutPointAsTime getPlayerPosition getSettings getSelection isSelected
+  isSequence isOffline isAdjustmentLayer isSpeedReversed getSpeed disabled isMuted isLocked id getValue getColorValue
+  isTimeVarying getKeys timebase frameSizeHorizontal frameSizeVertical videoFrameRate videoFrameWidth videoFrameHeight
+  videoPixelAspectRatio audioSampleRate version build getProjectMetadata getXMPMetadata getFootageInterpretation
+  length push join slice indexOf lastIndexOf charAt charCodeAt substring substr replace split match search toString toFixed
+  toLowerCase toUpperCase concat sort reverse floor ceil round abs min max pow sqrt stringify parse getTime toISOString
+`.split(/\s+/).filter(Boolean));
+const SAFE_CALLS = new Set(["String", "Number", "Boolean", "parseInt", "parseFloat", "isNaN", "isFinite"]);
+const SAFE_NEW = new Set(["Date", "Array", "Object", "String", "Number", "RegExp"]);
+const CALL_WORDS = new Set(["if", "for", "while", "switch", "catch", "function", "return", "typeof", "void", "in", "instanceof", "throw", "case", "else", "do"]);
+const NEVER = new Set(["eval", "Function", "delete", "with", "qe"]);
+const ASSIGN = new Set(["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", ">>>="]);
+const PUNCT = [">>>=", "===", "!==", ">>>", "<<=", ">>=", "==", "!=", "<=", ">=", "&&", "||", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>"];
+
+function tokens(src) {
+  const out = [];
+  const n = src.length;
+  let i = 0;
+  const regexMayStart = () => { const p = out[out.length - 1]; return !p || (p.k === "w" ? REGEX_AFTER_WORD.has(p.v) : p.k === "p" && ![")", "]", "}"].includes(p.v)); };
+  while (i < n) {
+    const ch = src[i];
+    if (/\s/.test(ch)) { i++; continue; }
+    if (ch === "/" && src[i + 1] === "/") { while (i < n && src[i] !== "\n" && src[i] !== "\r") i++; continue; }
+    if (ch === "/" && src[i + 1] === "*") { const e = src.indexOf("*/", i + 2); i = e < 0 ? n : e + 2; continue; }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i++;
+      while (i < n && src[i] !== ch) { if (src[i] === "\\") i++; i++; }
+      if (i >= n) return null;
+      i++; out.push({ k: "s" }); continue;
+    }
+    if (ch === "/" && regexMayStart()) {
+      let inClass = false;
+      i++;
+      while (i < n) {
+        const c = src[i];
+        if (c === "\\") { i += 2; continue; }
+        if (c === "\n") return null;
+        if (c === "[") inClass = true; else if (c === "]") inClass = false; else if (c === "/" && !inClass) break;
+        i++;
+      }
+      if (i >= n) return null;
+      i++;
+      while (i < n && /[a-z]/i.test(src[i])) i++;
+      out.push({ k: "r" }); continue;
+    }
+    if (/[A-Za-z_$]/.test(ch)) { let j = i + 1; while (j < n && /[\w$]/.test(src[j])) j++; out.push({ k: "w", v: src.slice(i, j) }); i = j; continue; }
+    if (/[0-9]/.test(ch)) { let j = i + 1; while (j < n && /[\w.]/.test(src[j])) j++; out.push({ k: "n" }); i = j; continue; }
+    const p = PUNCT.find((x) => src.startsWith(x, i)) || ch;
+    out.push({ k: "p", v: p });
+    i += p.length;
+  }
+  return out;
+}
+
+export function isReadOnlyJsx(code) {
+  const t = tokens(String(code || ""));
+  if (!t || !t.length) return false;
+  const isP = (x, v) => !!x && x.k === "p" && x.v === v;
+  const declared = new Set();
+  t.forEach((x, i) => { if (x.k === "w" && x.v === "function" && t[i + 1]?.k === "w") declared.add(t[i + 1].v); });
+  const parens = [];
+  for (let i = 0; i < t.length; i++) {
+    const x = t[i], prev = t[i - 1], next = t[i + 1];
+    const writes = !!next && next.k === "p" && ASSIGN.has(next.v);
+    if (x.k === "w") {
+      if (isP(prev, ".")) {
+        if (!READ_PROPS.has(x.v) || writes || isP(next, "++") || isP(next, "--")) return false;
+        continue;
+      }
+      if (NEVER.has(x.v)) return false;
+      if (writes && declared.has(x.v)) return false;
+      if (prev?.k === "w" && prev.v === "new" && !SAFE_NEW.has(x.v)) return false;
+      if (isP(next, "(") && x.v !== "new" && !CALL_WORDS.has(x.v) && !declared.has(x.v) && !SAFE_CALLS.has(x.v) && !(prev?.k === "w" && prev.v === "new") && !(prev?.k === "w" && prev.v === "function")) return false;
+    } else if (x.k === "p") {
+      if (x.v === "(") parens.push(next?.k === "w" && next.v === "function");
+      else if (x.v === ")") { const wrapsFunction = parens.pop(); if (isP(next, "(") && !wrapsFunction) return false; }
+      else if (x.v === "]") { if (isP(next, "(") || writes || isP(next, "++") || isP(next, "--")) return false; }
+      else if (x.v === "++" || x.v === "--") {
+        const after = prev?.k === "w" && !isP(t[i - 2], ".");
+        const before = next?.k === "w" && !isP(t[i + 2], ".") && !isP(t[i + 2], "[");
+        if (!after && !before) return false;
+      }
+    }
+  }
+  return true;
+}

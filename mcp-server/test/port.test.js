@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import net from "node:net";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import WebSocket from "ws";
@@ -14,6 +17,9 @@ const SERVER = fileURLToPath(new URL("../server.js", import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const cleanups = [];
 after(async () => { for (const c of cleanups.reverse()) await c(); });
+// These are real server processes: they must never write to the real journal or share state.
+const sandbox = mkdtempSync(join(tmpdir(), "port-test-"));
+cleanups.push(() => rmSync(sandbox, { recursive: true, force: true }));
 
 function freePort() {
   return new Promise((resolve) => {
@@ -28,7 +34,7 @@ async function startBridge(port) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER],
-    env: { ...process.env, PREMIERE_BRIDGE_PORT: String(port), PREMIERE_BRIDGE_PANEL_WAIT_MS: "3000" },
+    env: { ...process.env, PREMIERE_BRIDGE_PORT: String(port), PREMIERE_BRIDGE_PANEL_WAIT_MS: "3000", PREMIERE_JOURNAL_DIR: join(sandbox, "journal"), PREMIERE_BRIDGE_HOME: join(sandbox, "home"), PREMIERE_BRIDGE_AUTO_UPDATE: "0", PREMIERE_SHARE_URL: "http://127.0.0.1:9", PREMIERE_PREFS_DIR: join(sandbox, "empty"), RESOLVE_PREFS_DIR: join(sandbox, "empty") },
     stderr: "pipe",
   });
   const client = new Client({ name: "port-test", version: "0" });

@@ -40,13 +40,13 @@ export async function status(run, { pingPort } = {}) {
     await rememberBaseline().catch(() => {}); // a responsive Premiere: remember its windows for the next dialog check
     return { connected: true, waitingForClick: false, ...p };
   } catch (e) {
-    const diag = await diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000 }) });
+    const diag = await diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000, probe: true }) });
     return { connected: false, waitingForClick: diag.blocked, reason: e.message, diagnosis: diag };
   }
 }
 
 export async function dialogCheck(run, { pingPort } = {}) {
-  return diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000 }) });
+  return diagnose({ pingPort, pingScript: () => run("return 1;", { timeoutMs: 3000, probe: true }) });
 }
 
 export function probe(paths, { start, end } = {}) {
@@ -260,21 +260,41 @@ export { MIN_FREE_BYTES, rememberBaseline };
 
 import * as JR from "./journal.js";
 import { snapshotFromProject } from "./prproj.js";
+import { markVerified } from "./origin.js";
 import { readdirSync, statSync } from "node:fs";
 import { join as pjoin, extname as pext } from "node:path";
 
-export async function journalSnapshot(run, { dir, note, source = "live" } = {}) {
-  const snap = must(await run(J.snapshotJsx({}), { timeoutMs: IMPORT_TIMEOUT_MS }), "journal snapshot");
+export const SNAPSHOT_LIMIT_MS = 20_000;
+
+// The script stops itself at limitMs; the wait here is longer, so the bridge
+// never gives up on a script that is still running.
+export async function journalSnapshot(run, { dir, note, source = "live", limitMs = SNAPSHOT_LIMIT_MS } = {}) {
+  const asked = new Date();
+  let res = await run(J.snapshotJsx({ limitMs }), { timeoutMs: Math.max(IMPORT_TIMEOUT_MS, limitMs + 30_000) });
+  if (typeof res === "string") { try { res = JSON.parse(res); } catch {} }
+  if (res && res.error === "snapshot over the limit") throw snapshotOverLimit(limitMs, res.rows);
+  const snap = must(res, "journal snapshot");
   snap.t = new Date().toISOString();
   snap.source = source;
   if (note) snap.note = note;
   const d = dir || JR.journalDir(snap.project);
   const r = JR.record(d, snap, { source });
-  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(r.diff) : null };
+  // Nothing changed: the timeline equalled the last snapshot when this read was asked for (lib/origin.js markVerified).
+  if (!r.saved && source === "live") { try { const latest = JR.latestSnapshot(d); if (latest && latest.hash === r.hash) markVerified(d, latest.t, asked); } catch {} }
+  return { dir: d, project: snap.project, sequences: snap.sequences.length, ...r, diff: r.diff ? summarizeDiff(JR.attributeDiff(d, r.diff, snap.project)) : null };
+}
+
+export function snapshotOverLimit(limitMs, rows) {
+  return new BridgeError({
+    error: `No live snapshot: the project is too big, or Premiere is too slow right now, to read within ${Math.round(limitMs / 1000)} s ` +
+      `(stopped after ${rows ?? "?"} clips). Nothing was saved. The journal can be read from the saved project file instead: ` +
+      "save the project, then run `node pk.js journal import <file.prproj>`.",
+    complete: false, rows: rows ?? null, limitMs,
+  });
 }
 
 function summarizeDiff(diff) {
-  return { from: diff.from, to: diff.to, count: diff.count, sequences: diff.sequences.map((s) => ({ sequence: s.sequence, events: s.events.map((e) => ({ type: e.type, kind: e.kind, name: e.name, start: e.start, frames: e.frames, parts: e.parts })) })) };
+  return { from: diff.from, to: diff.to, count: diff.count, sequences: diff.sequences.map((s) => ({ sequence: s.sequence, events: s.events.map((e) => ({ type: e.type, kind: e.kind, name: e.name, start: e.start, frames: e.frames, parts: e.parts, origin: e.origin, origin_reason: e.origin_reason })) })) };
 }
 
 // Import .prproj files (or a folder of autosaves) in time order.
@@ -313,7 +333,7 @@ export function journalDiff({ dir, project, a, b } = {}) {
   const files = JR.listSnapshots(d);
   if (files.length < 2 && !(a && b)) throw new BridgeError(`journal diff: fewer than two snapshots in ${d}`);
   const A = JR.loadSnapshot(a || files[files.length - 2]), B = JR.loadSnapshot(b || files[files.length - 1]);
-  return JR.diffSnapshots(A, B);
+  return JR.attributeDiff(d, JR.diffSnapshots(A, B), B.project);
 }
 
 export function journalList({ dir, project } = {}) {
